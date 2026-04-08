@@ -226,8 +226,6 @@ export default function About() {
             </Link>
           </Text>
         </Stack>
-        <Divider my="4" borderColor="whiteAlpha.160" />
-        <Text color={subTextColor}>这部分会继续保留，不会因为做成你自己的维护版就把原来的贡献信息抹掉。</Text>
       </Section>
     </Stack>
   );
