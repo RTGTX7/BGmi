@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+_refs
+scripts
+docker-data
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.log
+BGmi/.bgmi
+BGmi-frontend/node_modules
+BGmi-frontend/dist

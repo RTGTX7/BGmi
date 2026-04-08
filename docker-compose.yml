@@ -1,0 +1,29 @@
+services:
+  bgmi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rtgtx/bgmi-custom:latest
+    container_name: bgmi-custom
+    init: true
+    ports:
+      - "${BGMI_PORT:-8899}:8899"
+    environment:
+      TZ: ${TZ:-America/Toronto}
+      BGMI_ADMIN_TOKEN: ${BGMI_ADMIN_TOKEN:-change-me}
+      BGMI_SAVE_PATH: ${BGMI_SAVE_PATH:-/data/bangumi}
+      BGMI_TMP_PATH: ${BGMI_TMP_PATH:-/data/tmp}
+      BGMI_HTTP_PORT: 8899
+      BGMI_HTTP_ADDRESS: 0.0.0.0
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    volumes:
+      - ./docker-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8899/api/index >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    gpus: all
