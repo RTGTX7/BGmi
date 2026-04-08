@@ -65,7 +65,7 @@ export default function ExternalPlayer({ url }: { url: string }) {
           <ModalCloseButton />
           <ModalBody pb={4}>
             <Text mb="3" fontSize="sm" opacity="0.8">
-              拖动下面这个链接卡片到 mpv 窗口即可播放。
+              拖动下面这个链接卡片到本地播放器窗口即可播放。
             </Text>
             <Box
               p="3"
@@ -79,7 +79,7 @@ export default function ExternalPlayer({ url }: { url: string }) {
               userSelect="none"
             >
               <Text fontSize="sm" fontWeight="bold" mb="2">
-                拖动此链接到 mpv
+                拖动此链接到播放器
               </Text>
               <Link href={url} isExternal wordBreak="break-all" fontSize="sm">
                 {url}
