@@ -1,6 +1,5 @@
 import {
   Box,
-  Divider,
   Heading,
   Link,
   SimpleGrid,
@@ -11,24 +10,10 @@ import {
   WrapItem,
 } from '@chakra-ui/react';
 import type { ReactNode } from 'react';
-
 import { useBangumi } from '~/hooks/use-bangumi';
 import { useColorMode } from '~/hooks/use-color-mode';
 
 const CUSTOM_VERSION = 'RTGTX7 定制版 1.0.0';
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Box rounded="xl" borderWidth="1px" borderColor="whiteAlpha.160" bg="whiteAlpha.060" p="4">
-      <Text fontSize="xs" color="whiteAlpha.700" letterSpacing="0.12em">
-        {label}
-      </Text>
-      <Text mt="2" fontSize="lg" fontWeight="bold" color="gray.50">
-        {value}
-      </Text>
-    </Box>
-  );
-}
 
 function FeatureTag({
   children,
@@ -53,41 +38,31 @@ function FeatureTag({
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <Box rounded="2xl" borderWidth="1px" borderColor="whiteAlpha.160" bg="whiteAlpha.060" p={{ base: '5', md: '6' }}>
-      <Heading size="lg" color="gray.50">
-        {title}
-      </Heading>
-      <Box mt="4">{children}</Box>
-    </Box>
-  );
-}
-
 export default function About() {
   const { data } = useBangumi();
   const { colorMode } = useColorMode();
-  const pageBg = colorMode === 'dark' ? '#1b2230' : '#1f2736';
-  const titleColor = colorMode === 'dark' ? 'orange.50' : 'orange.100';
-  const linkColor = colorMode === 'dark' ? 'orange.300' : 'orange.200';
-  const textColor = colorMode === 'dark' ? 'gray.100' : 'gray.50';
-  const subTextColor = colorMode === 'dark' ? 'gray.300' : 'gray.200';
+  const isDark = colorMode === 'dark';
+  const pageBg = isDark ? '#1b2230' : 'white';
+  const pageBorder = isDark ? 'whiteAlpha.200' : 'blackAlpha.100';
+  const sectionBg = isDark ? 'whiteAlpha.060' : 'white';
+  const sectionBorder = isDark ? 'whiteAlpha.160' : 'blackAlpha.100';
+  const titleColor = isDark ? 'orange.50' : 'gray.800';
+  const versionColor = isDark ? 'orange.100' : 'orange.500';
+  const linkColor = isDark ? 'orange.300' : 'orange.500';
+  const textColor = isDark ? 'gray.100' : 'gray.700';
+  const subTextColor = isDark ? 'gray.300' : 'gray.600';
+  const statLabelColor = isDark ? 'whiteAlpha.700' : 'gray.500';
+  const statValueColor = isDark ? 'gray.50' : 'gray.800';
 
   return (
     <Stack spacing="6" color={textColor}>
-      <Box rounded="2xl" borderWidth="1px" borderColor="whiteAlpha.200" bg={pageBg} p={{ base: '6', md: '8' }}>
+      <Box rounded="2xl" borderWidth="1px" borderColor={pageBorder} bg={pageBg} p={{ base: '6', md: '8' }}>
         <Stack spacing="4">
           <Box>
             <Heading size="2xl" color={titleColor}>
               BGmi {data?.version ?? '4.5.1'}
             </Heading>
-            <Text mt="3" fontSize="xl" fontWeight="semibold" color="orange.100">
+            <Text mt="3" fontSize="xl" fontWeight="semibold" color={versionColor}>
               {CUSTOM_VERSION}
             </Text>
           </Box>
@@ -100,12 +75,36 @@ export default function About() {
       </Box>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing="4">
-        <StatCard label="后端版本" value={data?.version ? `BGmi ${data.version}` : 'BGmi'} />
-        <StatCard label="前端版本" value={`BGmi Frontend ${import.meta.env.VITE_APP_VERSION}`} />
-        <StatCard label="定制版本" value={CUSTOM_VERSION} />
+        <Box rounded="xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p="4">
+          <Text fontSize="xs" color={statLabelColor} letterSpacing="0.12em">
+            后端版本
+          </Text>
+          <Text mt="2" fontSize="lg" fontWeight="bold" color={statValueColor}>
+            {data?.version ? `BGmi ${data.version}` : 'BGmi'}
+          </Text>
+        </Box>
+        <Box rounded="xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p="4">
+          <Text fontSize="xs" color={statLabelColor} letterSpacing="0.12em">
+            前端版本
+          </Text>
+          <Text mt="2" fontSize="lg" fontWeight="bold" color={statValueColor}>
+            {`BGmi Frontend ${import.meta.env.VITE_APP_VERSION}`}
+          </Text>
+        </Box>
+        <Box rounded="xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p="4">
+          <Text fontSize="xs" color={statLabelColor} letterSpacing="0.12em">
+            定制版本
+          </Text>
+          <Text mt="2" fontSize="lg" fontWeight="bold" color={statValueColor}>
+            {CUSTOM_VERSION}
+          </Text>
+        </Box>
       </SimpleGrid>
 
-      <Section title="有什么特性？">
+      <Box rounded="2xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p={{ base: '5', md: '6' }}>
+        <Heading size="lg" color={titleColor}>
+          有什么特性？
+        </Heading>
         <Stack spacing="4" color={textColor}>
           <Box>
             <Text as="span" mr="2">
@@ -168,9 +167,12 @@ export default function About() {
           <Text>• 支持按需 HLS、NVIDIA GPU 优先转码、转码进度显示与 48 小时缓存回收。</Text>
           <Text>• 支持拖拽当前播放链接到本地播放器窗口，不限于某一个播放器。</Text>
         </Stack>
-      </Section>
+      </Box>
 
-      <Section title="项目来源">
+      <Box rounded="2xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p={{ base: '5', md: '6' }}>
+        <Heading size="lg" color={titleColor}>
+          项目来源
+        </Heading>
         <Stack spacing="3" color={subTextColor}>
           <Text>当前版本基于官方 BGmi 持续维护，保留原项目骨架与历史贡献信息，同时对播放器、字幕和远程播放链路做了定制增强。</Text>
           <Text>
@@ -186,9 +188,12 @@ export default function About() {
             </Link>
           </Text>
         </Stack>
-      </Section>
+      </Box>
 
-      <Section title="致谢">
+      <Box rounded="2xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p={{ base: '5', md: '6' }}>
+        <Heading size="lg" color={titleColor}>
+          致谢
+        </Heading>
         <Stack spacing="3" color={textColor}>
           <Text>
             • 萌番组
@@ -209,9 +214,12 @@ export default function About() {
             </Link>
           </Text>
         </Stack>
-      </Section>
+      </Box>
 
-      <Section title="贡献保留">
+      <Box rounded="2xl" borderWidth="1px" borderColor={sectionBorder} bg={sectionBg} p={{ base: '5', md: '6' }}>
+        <Heading size="lg" color={titleColor}>
+          贡献保留
+        </Heading>
         <Stack spacing="3" color={textColor}>
           <Text>
             BGmi Creator -
@@ -226,7 +234,7 @@ export default function About() {
             </Link>
           </Text>
         </Stack>
-      </Section>
+      </Box>
     </Stack>
   );
 }

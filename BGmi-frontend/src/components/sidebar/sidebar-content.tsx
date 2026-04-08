@@ -19,8 +19,6 @@ import SidebarNavItem from './sidebar-nav-item';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 
-import LOGO from '../../assets/logo.jpg';
-
 export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () => void }) => {
   const { colorMode, toggleColorMode } = useColorMode();
 
@@ -30,7 +28,7 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
   return (
     <Box as="nav" pos="fixed" top="0" left="0" h="full" borderRightWidth="1px" w="60" {...props}>
       <Flex px="6" py="6" alignItems="center">
-        <Image src={LOGO} width="42px" height="42px" borderRadius="50%" alt="logo" placeholder="empty" />
+        <Image src="/logo.png" width="42px" height="42px" borderRadius="50%" alt="logo" placeholder="empty" />
         <Text fontSize="2xl" ml="4" fontWeight="semibold">
           BGmi
         </Text>
