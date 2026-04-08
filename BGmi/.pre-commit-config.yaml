@@ -1,0 +1,35 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+        exclude: \.rst$
+
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-docstring-first
+
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: \.vbs$
+
+      - id: mixed-line-ending
+        args: [--fix=crlf]
+        files: \.vbs$
+
+      - id: check-json
+      - id: check-added-large-files # check for file bigger than 500kb
+      - id: check-yaml
+      - id: debug-statements
+      - id: fix-encoding-pragma
+        args: [--remove]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.6
+    hooks:
+      - id: ruff
+
+  - repo: https://github.com/psf/black
+    rev: 25.11.0
+    hooks:
+      - id: black

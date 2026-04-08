@@ -1,0 +1,20 @@
+version: '3'
+
+dotenv:
+  - .env
+
+tasks:
+  default:
+    cmds:
+      - task --list-all
+    silent: true
+
+  bump:
+    vars:
+      VERSION:
+        sh: yq '.project.version' pyproject.toml
+    cmds:
+      - uv lock
+      - git add pyproject.toml uv.lock
+      - 'git commit -m "release: {{.VERSION}}"'
+      - 'git tag "v{{.VERSION}}" -m "v{{.VERSION}}"'

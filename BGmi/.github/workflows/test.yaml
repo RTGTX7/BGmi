@@ -1,0 +1,60 @@
+name: test
+
+on:
+  schedule:
+    - cron: "1 1 1 * *" # monthly
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - renovate/**
+      - deepsource-*
+  pull_request: {}
+  merge_group:
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ format('{0}-latest', matrix.os) }}
+    strategy:
+      matrix:
+        python: ["3.10", "3.14"]
+        os: [macos, windows, ubuntu]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          activate-environment: true
+          python-version: ${{ matrix.python }}
+
+      - run: uv sync --locked
+
+      - name: test
+        run: |
+          set -ex
+          coverage run -a -m bgmi install
+          bgmi --help
+          coverage run -a -m pytest tests --cache-requests --ignore=tests/downloader
+
+      - run: coverage xml --omit templates/download_xml.generated.py
+      - uses: codecov/codecov-action@v5
+        with:
+          flags: app,front
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+
+  test-all-pass:
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'OK'

@@ -139,3 +139,7 @@ Thumbs.db
 htmlcov/
 test-data/
 downloads/
+BGmi/.bgmi/
+_refs/
+BGmi-frontend/node_modules/
+BGmi-frontend/dist/

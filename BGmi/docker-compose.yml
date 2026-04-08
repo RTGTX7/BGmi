@@ -1,0 +1,14 @@
+services:
+  bgmi:
+    build:
+      context: .
+    container_name: bgmi
+    ports:
+      - "8899:8899"
+    environment:
+      BGMI_ADMIN_TOKEN: change-me
+      BGMI_SAVE_PATH: /data/bangumi
+      BGMI_TMP_PATH: /data/tmp
+    volumes:
+      - ./docker-data:/data
+    restart: unless-stopped

@@ -1,0 +1,121 @@
+import datetime
+import os
+from collections import defaultdict
+
+from icalendar import Calendar, Event, Todo
+
+from bgmi.config import cfg
+from bgmi.front.base import BaseHandler
+from bgmi.lib.constants import BANGUMI_UPDATE_TIME
+from bgmi.lib.models import Download, Followed
+
+
+class BangumiHandler(BaseHandler):
+    def get(self, _: str = "") -> None:
+        if not _:
+            entries = []
+            if cfg.save_path.exists():
+                for path in sorted(cfg.save_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+                    suffix = "/" if path.is_dir() else ""
+                    entries.append(
+                        f'<li><a href="/bangumi/{path.name}{suffix}">{path.name}{suffix}</a></li>'
+                    )
+
+            self.set_header("Content-Type", "text/html; charset=utf-8")
+            self.write("<h1>BGmi Files</h1>")
+            self.write(f"<p>Current save path: <code>{cfg.save_path}</code></p>")
+            self.write("<ul>")
+            self.write("".join(entries) if entries else "<li>(empty)</li>")
+            self.write("</ul>")
+            self.finish()
+            return
+
+        if os.environ.get("DEV"):  # pragma: no cover
+            with open(os.path.join(cfg.save_path, _), "rb") as f:
+                self.write(f.read())
+                self.finish()
+        else:
+            self.set_header("Content-Type", "text/html")
+            self.write("<h1>BGmi HTTP Service</h1>")
+            self.write(
+                "<pre>Please modify your web server configure file\n"
+                f"to server this path to '{cfg.save_path}'.\n"
+                "e.g.\n\n"
+                "...\n"
+                "autoindex on;\n"
+                "location /bangumi {\n"
+                f"    alias {cfg.save_path};\n"
+                "}\n"
+                "...\n\n"
+                "If you want to use Tornado to serve static files, please enable\n"
+                "<code>[http]</code>"
+                "<code>serve_static_files = true</code></pre>"
+            )
+            self.finish()
+
+
+class RssHandler(BaseHandler):
+    def get(self) -> None:
+        data = Download.get_all_downloads()
+        self.set_header("Content-Type", "text/xml")
+        self.render("templates/download.xml", data=data)
+
+
+class CalendarHandler(BaseHandler):
+    def get(self) -> None:
+        type_ = self.get_argument("type", None)
+
+        cal = Calendar()
+        cal.add("prodid", "-//BGmi Followed Bangumi Calendar//bangumi.ricterz.me//")
+        cal.add("version", "2.0")
+
+        data = Followed.get_all_followed()
+        data.extend(self.patch_list)
+
+        if type_ is None:
+            bangumi = defaultdict(list)
+
+            for j in data:
+                bangumi[BANGUMI_UPDATE_TIME.index(j["update_time"]) + 1].append(j["bangumi_name"])
+
+            weekday = datetime.datetime.now().weekday()
+            for i, k in enumerate(range(weekday, weekday + 7)):
+                if k % 7 in bangumi:
+                    for v in bangumi[k % 7]:
+                        event = Event()
+                        event.add("summary", v)
+                        event.add(
+                            "dtstart",
+                            datetime.datetime.now().date() + datetime.timedelta(i - 1),
+                        )
+                        event.add(
+                            "dtend",
+                            datetime.datetime.now().date() + datetime.timedelta(i - 1),
+                        )
+                        cal.add_component(event)
+        elif type_ == "download":
+            data = [
+                item for item in Download.get_all_downloads() if item["created_time"] and int(item["created_time"]) != 0
+            ]
+            for d in data:
+                todo = Todo()
+                todo.add("summary", f"{d['name']}: {d['episode']}")
+                todo.add("dstart", datetime.datetime.fromtimestamp(int(d["created_time"])))
+                cal.add_component(todo)
+
+        else:
+            data = [bangumi for bangumi in data if bangumi["status"] == 2]
+            for d in data:
+                event = Event()
+                event.add("summary", "Updated: {}".format(d["bangumi_name"]))
+                event.add("dtstart", datetime.datetime.now().date())
+                event.add("dtend", datetime.datetime.now().date())
+                cal.add_component(event)
+
+        cal.add("name", "Bangumi Calendar")
+        cal.add("X-WR-CALNAM", "Bangumi Calendar")
+        cal.add("description", "Followed Bangumi Calendar")
+        cal.add("X-WR-CALDESC", "Followed Bangumi Calendar")
+
+        self.write(cal.to_ical())
+        self.finish()

@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+.bgmi
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+node_modules
+dist

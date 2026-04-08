@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>Trim21/renovate-config",
+    "github>Trim21/renovate-config:python",
+    "github>Trim21/renovate-config:app"
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "labels": [
+    "ci:auto-merge",
+    "dependencies"
+  ],
+  "baseBranches": [
+    "master",
+    "/^v\\d+$/"
+  ],
+  "prConcurrentLimit": 4,
+  "rangeStrategy": "pin",
+  "separateMajorMinor": true,
+  "lockFileMaintenance": {
+    "schedule": [
+      "before 5am on monday"
+    ]
+  },
+  "packageRules": [
+    {
+      "matchDepTypes": [
+        "requires-python"
+      ],
+      "enabled": false
+    },
+    {
+      "matchBaseBranches": [
+        "master"
+      ],
+      "matchPackageNames": [
+        "pydantic"
+      ],
+      "allowedVersions": "<2"
+    },
+    {
+      "matchBaseBranches": [
+        "v5"
+      ],
+      "prPriority": 10
+    },
+    {
+      "groupName": "pre-commit hooks",
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "semanticCommitType": "style",
+      "semanticCommitScope": ""
+    },
+    {
+      "matchPackageNames": [
+        "wcwidth",
+        "anime-episode-parser"
+      ],
+      "rangeStrategy": "bump"
+    }
+  ]
+}
