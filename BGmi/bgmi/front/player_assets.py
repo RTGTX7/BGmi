@@ -4,7 +4,7 @@ import re
 import shutil
 import subprocess
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock, Thread
@@ -571,8 +571,11 @@ def _run_ffmpeg_with_progress(
         raise RuntimeError("ffmpeg progress pipe unavailable")
 
     latest_progress = 0.0
+    output_tail: deque[str] = deque(maxlen=120)
     for raw_line in process.stdout:
         line = raw_line.strip()
+        if line:
+            output_tail.append(line)
         if not line or "=" not in line:
             continue
 
@@ -589,7 +592,11 @@ def _run_ffmpeg_with_progress(
 
     return_code = process.wait()
     if return_code != 0:
-        raise subprocess.CalledProcessError(return_code, progress_command)
+        raise subprocess.CalledProcessError(
+            return_code,
+            progress_command,
+            output="\n".join(output_tail),
+        )
 
 
 def ensure_hls_profile(source_path: Path, profile_name: str, probe: Optional[Dict[str, Any]] = None) -> str:
@@ -650,7 +657,12 @@ def ensure_hls_profile(source_path: Path, profile_name: str, probe: Optional[Dic
 
         try:
             _run(gpu_command)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as exc:
+            print(
+                f"[bgmi] GPU HLS build failed for {source_path.name} [{profile_name}], "
+                f"falling back to CPU.\n{(exc.stderr or exc.stdout or str(exc)).strip()}",
+                flush=True,
+            )
             if tmp_dir.exists():
                 shutil.rmtree(tmp_dir, ignore_errors=True)
                 tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -737,10 +749,16 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
             report(0.0)
             try:
                 _run_ffmpeg_with_progress(gpu_command, duration_seconds=duration_seconds, on_progress=report)
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as exc:
                 if tmp_dir.exists():
                     shutil.rmtree(tmp_dir, ignore_errors=True)
                     tmp_dir.mkdir(parents=True, exist_ok=True)
+                gpu_error = (exc.output or str(exc)).strip()
+                print(
+                    f"[bgmi] GPU HLS job failed for {source_path.name} [{profile_name}], "
+                    f"falling back to CPU.\n{gpu_error}",
+                    flush=True,
+                )
                 _write_hls_job(
                     source_path,
                     profile_name,
@@ -749,7 +767,7 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
                     profile=profile_name,
                     stage="cpu-fallback",
                     url="",
-                    error="",
+                    error=gpu_error,
                 )
                 _run_ffmpeg_with_progress(cpu_command, duration_seconds=duration_seconds, on_progress=report)
 
@@ -842,7 +860,7 @@ def get_hls_profile_status(source_path: Path, profile_name: str) -> dict[str, An
 def build_quality_assets(source_path: Path, bangumi_name: str, episode: str) -> list[Dict[str, str]]:
     qualities = [
         {
-            "name": "直接播放",
+            "name": "Direct Play",
             "url": _relative_url(source_path),
             "type": "auto",
         }
