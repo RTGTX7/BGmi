@@ -1,6 +1,7 @@
 ﻿import { Box, Button, Flex, HStack, Progress, Spinner, Text, useToast } from '@chakra-ui/react';
 import { Select as GlassSelect } from 'chakra-react-select';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import DPlayer from 'dplayer';
 import type { DPlayerOptions } from 'dplayer';
@@ -58,6 +59,95 @@ function formatSubtitleOptionLabel(label: string) {
   if (!label) return '更多语言';
   if (label === '关闭字幕') return '关闭字幕';
   return `${label} · 更多语言`;
+}
+
+function subtitleLangCode(language: string) {
+  const normalized = (language || '').trim().toLowerCase();
+  if (!normalized) return 'und';
+  if (normalized.includes('chinese') || normalized.includes('中文')) return 'zh';
+  if (normalized.includes('english')) return 'en';
+  if (normalized.includes('japanese')) return 'ja';
+  if (normalized.includes('german')) return 'de';
+  if (normalized.includes('french')) return 'fr';
+  if (normalized.includes('italian')) return 'it';
+  if (normalized.includes('russian')) return 'ru';
+  if (normalized.includes('spanish')) return 'es';
+  if (normalized.includes('arabic')) return 'ar';
+  const shortCode = normalized.match(/[a-z]{2,3}/);
+  return shortCode?.[0] ?? 'und';
+}
+
+function normalizeCueText(text: string) {
+  const decodeEntities = (value: string) => {
+    if (typeof document === 'undefined') return value;
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = value;
+    return textarea.value;
+  };
+
+  const stripMarkup = (value: string) =>
+    decodeEntities(value)
+      .replace(/<\/?[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  return text
+    .split(/\r?\n/)
+    .map(stripMarkup)
+    .filter(Boolean);
+}
+
+function applyCustomSubtitleTrack(
+  video: HTMLVideoElement,
+  subtitle: { path: string; label: string; language: string } | undefined,
+  onCueChange: (lines: string[]) => void
+) {
+  Array.from(video.querySelectorAll('track[data-bgmi-subtitle="true"]')).forEach(track => track.remove());
+
+  for (let index = 0; index < video.textTracks.length; index += 1) {
+    video.textTracks[index].mode = 'disabled';
+  }
+
+  onCueChange([]);
+  if (!subtitle) return () => undefined;
+
+  const track = document.createElement('track');
+  track.kind = 'subtitles';
+  track.label = subtitle.label;
+  track.srclang = subtitleLangCode(subtitle.language);
+  track.src = `.${toBangumiAssetPath(subtitle.path)}`;
+  track.default = true;
+  track.dataset.bgmiSubtitle = 'true';
+
+  let activeTrack: TextTrack | null = null;
+  const syncCue = () => {
+    if (!activeTrack?.activeCues?.length) {
+      onCueChange([]);
+      return;
+    }
+
+    const lines = Array.from(activeTrack.activeCues)
+      .flatMap(cue => normalizeCueText((cue as VTTCue).text || ''));
+    onCueChange(lines);
+  };
+
+  track.addEventListener('load', () => {
+    activeTrack = track.track;
+    if (!activeTrack) return;
+    activeTrack.mode = 'hidden';
+    activeTrack.oncuechange = syncCue;
+    syncCue();
+  });
+  video.appendChild(track);
+
+  return () => {
+    if (activeTrack) {
+      activeTrack.oncuechange = null;
+      activeTrack.mode = 'disabled';
+    }
+    track.remove();
+    onCueChange([]);
+  };
 }
 
 function formatHlsStageLabel(stage: string) {
@@ -176,6 +266,7 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
   toastRef.current = toast;
   const pollTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<DPlayer | null>(null);
   const restoredTimeRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
@@ -183,6 +274,9 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number>(0);
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
   const [currentSourceType, setCurrentSourceType] = useState('auto');
+  const [subtitleLines, setSubtitleLines] = useState<string[]>([]);
+  const [subtitleOverlayRoot, setSubtitleOverlayRoot] = useState<HTMLElement | null>(null);
+  const [subtitleScale, setSubtitleScale] = useState({ fontSize: 18, bottomOffset: 72, lineHeight: 1.42 });
   const [hlsProgress, setHlsProgress] = useState<HlsProgressState>({
     active: false,
     profile: '',
@@ -235,13 +329,10 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
   const selectedSubtitleValue = selectedSubtitleIndex >= 0 ? String(selectedSubtitleIndex) : '-1';
   const selectedSubtitleOption =
     subtitleOptions.find(option => option.value === selectedSubtitleValue) ?? subtitleOptions[0];
-  const subtitleDisplayOption = useMemo(
-    () => ({
-      ...selectedSubtitleOption,
-      label: formatSubtitleOptionLabel(selectedSubtitleOption.label),
-    }),
-    [selectedSubtitleOption]
-  );
+  const activeSubtitle =
+    subtitleTracks.length > 0 && selectedSubtitleIndex >= 0
+      ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
+      : undefined;
   const externalUrl = createAbsoluteUrl(currentSourceUrl || `.${toBangumiAssetPath(sourcePath)}`);
   const downloadUrl = sourcePath ? createAbsoluteUrl(`.${toBangumiAssetPath(sourcePath)}`) : '';
 
@@ -438,17 +529,6 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
       autoplay: false,
     };
 
-    if (subtitleTracks.length > 0 && selectedSubtitleIndex >= 0) {
-      const activeSubtitle = subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0];
-      options.subtitle = {
-        url: `.${toBangumiAssetPath(activeSubtitle.path)}`,
-        type: 'webvtt',
-        fontSize: '20px',
-        bottom: '10%',
-        color: '#fff',
-      };
-    }
-
     if (danmakuApi) {
       options.danmaku = {
         id: md5(`${bangumiData.bangumi_name}-${episode}-${selectedProfile}`),
@@ -457,6 +537,9 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
     }
 
     const dp = new DPlayer(options);
+    playerRef.current = dp;
+    setSubtitleOverlayRoot((containerRef.current?.querySelector('.dplayer-video-wrap') as HTMLElement | null) ?? null);
+    const cleanupSubtitle = applyCustomSubtitleTrack(dp.video, activeSubtitle, setSubtitleLines);
 
     const handleCanPlay = () => {
       setLoading(false);
@@ -477,6 +560,9 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
     dp.video.addEventListener('timeupdate', handleTimeUpdate);
 
     return () => {
+      playerRef.current = null;
+      setSubtitleOverlayRoot(null);
+      cleanupSubtitle();
       dp.video.removeEventListener('canplay', handleCanPlay);
       dp.video.removeEventListener('timeupdate', handleTimeUpdate);
       dp.destroy();
@@ -490,10 +576,36 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
     episode,
     getCurrentTime,
     selectedProfile,
-    selectedSubtitleIndex,
-    subtitleTracks,
     updateCurrentTime,
   ]);
+
+  useEffect(() => {
+    const video = playerRef.current?.video;
+    if (!video) return;
+    return applyCustomSubtitleTrack(video, activeSubtitle, setSubtitleLines);
+  }, [activeSubtitle, currentSourceUrl]);
+
+  useEffect(() => {
+    const target = subtitleOverlayRoot;
+    if (!target || typeof ResizeObserver === 'undefined') return;
+
+    const updateScale = () => {
+      const width = target.clientWidth || containerRef.current?.clientWidth || 960;
+      const nextFontSize = Math.max(13, Math.min(28, Math.round(width * 0.021)));
+      const nextBottomOffset = Math.max(58, Math.min(110, Math.round(width * 0.055)));
+      const nextLineHeight = width >= 1400 ? 1.5 : width >= 1000 ? 1.46 : 1.38;
+      setSubtitleScale({
+        fontSize: nextFontSize,
+        bottomOffset: nextBottomOffset,
+        lineHeight: nextLineHeight,
+      });
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(() => updateScale());
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [subtitleOverlayRoot]);
 
   const episodeCardProps = useMemo(
     () => ({
@@ -508,6 +620,7 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
     <>
       <Flex flexDirection="column" flex="1" minW="0">
         <Box
+          className="bgmi-player-shell"
           rounded="2xl"
           bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(226,239,246,0.52)'}
           borderWidth="1px"
@@ -575,6 +688,38 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
             </Flex>
           ) : null}
         </Box>
+        {subtitleOverlayRoot && subtitleLines.length > 0
+          ? createPortal(
+              <Flex
+                className="bgmi-subtitle-overlay"
+                position="absolute"
+                left="0"
+                right="0"
+                bottom={`${subtitleScale.bottomOffset}px`}
+                zIndex={12}
+                px={{ base: '1rem', xl: '1.6rem' }}
+                pointerEvents="none"
+                justify="center"
+              >
+                <Box maxW="82%" textAlign="center">
+                  {subtitleLines.map((line, index) => (
+                    <Text
+                      key={`${index}-${line}`}
+                      color="white"
+                      fontSize={`${subtitleScale.fontSize}px`}
+                      fontWeight="500"
+                      lineHeight={subtitleScale.lineHeight}
+                      textShadow="-1px -1px 0 rgba(0,0,0,0.92), 1px -1px 0 rgba(0,0,0,0.92), -1px 1px 0 rgba(0,0,0,0.92), 1px 1px 0 rgba(0,0,0,0.92), 0 2px 5px rgba(0,0,0,0.45)"
+                      mb="0.22rem"
+                    >
+                      {line}
+                    </Text>
+                  ))}
+                </Box>
+              </Flex>,
+              subtitleOverlayRoot
+            )
+          : null}
 
         {qualityOptions.length > 0 || subtitleTracks.length > 0 ? (
           <Box
@@ -679,10 +824,13 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
                       <GlassSelect<SubtitleOption, false>
                         isSearchable={false}
                         options={subtitleOptions}
-                        value={subtitleDisplayOption}
+                        value={selectedSubtitleOption}
                         onChange={option => setSelectedSubtitleIndex(Number(option?.value ?? -1))}
                         menuPlacement="auto"
                         menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+                        formatOptionLabel={(option, meta) =>
+                          meta.context === 'value' ? formatSubtitleOptionLabel(option.label) : option.label
+                        }
                         styles={{
                           menuPortal: (base: any) => ({
                             ...base,
@@ -724,11 +872,11 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
                             position: 'static',
                             transform: 'none',
                             margin: 0,
-                            maxWidth: '100%',
+                            maxWidth: 'none',
                             lineHeight: '1.25',
                             whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
+                            overflow: 'visible',
+                            textOverflow: 'clip',
                           }),
                           placeholder: provided => ({
                             ...provided,

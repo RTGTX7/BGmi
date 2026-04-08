@@ -99,7 +99,7 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
             />
           ) : null}
           <IconButton
-            aria-label="打开本地播放器弹窗"
+            aria-label="打开本地播放器面板"
             onClick={() => setOpen(true)}
             icon={<BsPlayBtnFill />}
             size="sm"
