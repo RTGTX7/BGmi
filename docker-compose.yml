@@ -1,8 +1,5 @@
 services:
   bgmi:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: rtgtx/bgmi-custom:latest
     container_name: bgmi-custom
     init: true
