@@ -1,4 +1,4 @@
-import { hasCookie } from 'cookies-next';
+import { getCookie, hasCookie } from 'cookies-next';
 
 export const useAuth = () => {
   const tryAuth = async (authToken: string) => {
@@ -20,5 +20,6 @@ export const useAuth = () => {
   return {
     tryAuth,
     hasAuth: hasCookie('authToken'),
+    cookieToken: getCookie('authToken') as string | undefined,
   };
 };

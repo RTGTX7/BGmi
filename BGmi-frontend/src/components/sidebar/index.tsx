@@ -11,11 +11,11 @@ interface Props {
 function Sidebar({ isOpen, onClose }: Props) {
   return (
     <Box>
-      <SidebarContent display={{ base: 'none', md: 'unset' }} />
-      <Box display={{ md: 'none' }}>
+      <SidebarContent display={{ base: 'none', lg: 'unset' }} />
+      <Box display={{ base: 'block', lg: 'none' }}>
         <Drawer autoFocus={false} isOpen={isOpen} onClose={onClose} placement="left">
-          <DrawerOverlay />
-          <DrawerContent bg="chakra-body-bg" maxW="60">
+          <DrawerOverlay backdropFilter="blur(8px)" bg="blackAlpha.300" />
+          <DrawerContent bg="transparent" maxW="60" boxShadow="none">
             <SidebarContent onClose={onClose} w="full" borderRight="none" />
           </DrawerContent>
         </Drawer>

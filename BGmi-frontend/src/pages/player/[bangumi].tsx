@@ -43,21 +43,28 @@ export default function Player() {
         <meta name="referrer" content="no-referrer" />
       </Helmet>
       <Heading
-        ml={{ lg: '10', base: '5' }}
-        mb="6"
-        fontSize="2xl"
-        whiteSpace="nowrap"
-        overflow="hidden"
-        textOverflow="ellipsis"
+        ml={{ base: '0', xl: '10' }}
+        mb={{ base: '4', lg: '6' }}
+        fontSize={{ base: 'lg', sm: 'xl', lg: '2xl' }}
+        whiteSpace={{ base: 'normal', xl: 'nowrap' }}
+        overflow={{ base: 'visible', xl: 'hidden' }}
+        textOverflow={{ xl: 'ellipsis' }}
+        lineHeight="1.25"
       >
         {bangumiData.bangumi_name} {`- 第 ${episode} 集`}
       </Heading>
       {playerAssetLoading ? (
-        <Box ml={{ lg: '10', base: '5' }} mb="4" fontSize="sm" opacity="0.8">
+        <Box ml={{ base: '0', xl: '10' }} mb="4" fontSize="sm" opacity="0.8">
           正在准备字幕和播放资源，首次加载可能需要稍等一下。
         </Box>
       ) : null}
-      <Flex position="relative" mx={{ lg: '30', base: 'unset' }} flexDirection={{ xl: 'row', base: 'column' }}>
+      <Flex
+        position="relative"
+        mx={{ base: '0', xl: '30' }}
+        flexDirection={{ xl: 'row', base: 'column' }}
+        align={{ xl: 'flex-start', base: 'stretch' }}
+        minW="0"
+      >
         <VideoPlayer
           episode={episode}
           bangumiData={bangumiData}

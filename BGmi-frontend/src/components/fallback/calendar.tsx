@@ -17,14 +17,14 @@ export default function FallbackCalendar() {
   }
 
   for (let i = 0; i < 6; ++i) {
-    skeletonTabPanels.push(
-      <TabPanel
-        display="grid"
-        gridTemplateColumns="repeat(auto-fill, minmax(22rem, 1fr))"
-        justifyContent="center"
-        gap={4}
-        key={`tab-panel-${i}`}
-      >
+      skeletonTabPanels.push(
+        <TabPanel
+          display="grid"
+          gridTemplateColumns={{ base: 'repeat(auto-fill, minmax(10rem, 1fr))', sm: 'repeat(auto-fill, minmax(22rem, 1fr))' }}
+          justifyContent="center"
+          gap={{ base: 3, sm: 4 }}
+          key={`tab-panel-${i}`}
+        >
         {...skeletonTabPanelItems}
       </TabPanel>
     );
