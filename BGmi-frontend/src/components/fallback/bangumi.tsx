@@ -1,13 +1,46 @@
 import { Box, Grid } from '@chakra-ui/react';
+
 import Skeleton from './skeleton';
+
 import { useColorMode } from '~/hooks/use-color-mode';
 
 function FallbackCard() {
   const { colorMode } = useColorMode();
+  const isDark = colorMode === 'dark';
+  const posterBg = isDark ? 'gray.900' : 'gray.100';
+  const borderColor = isDark ? 'whiteAlpha.180' : 'blackAlpha.100';
+
   return (
-    <Box roundedTop="md" mx="2" boxShadow="base">
-      <Skeleton h="48" roundedTop="md" />
-      <Box minH="5.5rem" p="4" bg={colorMode === 'light' ? 'blackAlpha.50' : 'whiteAlpha.100'} />
+    <Box
+      mx="auto"
+      maxW="16rem"
+      overflow="hidden"
+      rounded="2xl"
+      borderWidth="1px"
+      borderColor={borderColor}
+      bg={posterBg}
+      boxShadow={isDark ? '0 18px 40px rgba(0,0,0,0.28)' : '0 18px 40px rgba(15,23,42,0.10)'}
+    >
+      <Box aspectRatio={3 / 4} bg={posterBg} position="relative">
+        <Skeleton h="full" w="full" />
+        <Box
+          position="absolute"
+          left="3.5"
+          right="3.5"
+          bottom="3.5"
+          rounded="2xl"
+          px="3.5"
+          py="3"
+          bg={isDark ? 'rgba(30, 34, 46, 0.34)' : 'rgba(255, 255, 255, 0.22)'}
+          borderWidth="1px"
+          borderColor={isDark ? 'whiteAlpha.220' : 'whiteAlpha.800'}
+          backdropFilter="blur(22px) saturate(165%)"
+          boxShadow={isDark ? '0 12px 30px rgba(0,0,0,0.22)' : '0 12px 30px rgba(15,23,42,0.10)'}
+        >
+          <Skeleton h="6" w="78%" rounded="md" />
+          <Skeleton h="4" w="42%" rounded="md" mt="2" />
+        </Box>
+      </Box>
     </Box>
   );
 }
@@ -20,10 +53,15 @@ export default function FallbackBangumi() {
   }
 
   return (
-    <div>
-      <Grid templateColumns="repeat(auto-fill, minmax(20rem, 1fr))" gap={6}>
-        {...renderBox}
-      </Grid>
-    </div>
+    <Grid
+      templateColumns={{
+        base: 'repeat(3, minmax(0, 1fr))',
+        sm: 'repeat(auto-fill, minmax(15rem, 16rem))',
+      }}
+      justifyContent="start"
+      gap={{ base: 2.5, sm: 6 }}
+    >
+      {...renderBox}
+    </Grid>
   );
 }
