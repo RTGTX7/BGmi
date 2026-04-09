@@ -646,7 +646,11 @@ def _build_hls_ffmpeg_command(
 
     use_gpu = prefer_gpu and _pick_video_encoder() == "h264_nvenc"
     needs_scale = bool(target_height and source_height and source_height > target_height)
-    has_scale_cuda = "scale_cuda" in _available_filters()
+
+    # Detect 10-bit (or higher) source — h264_nvenc cannot encode >8-bit.
+    video_stream, _ = _source_streams(probe)
+    pix_fmt = str((video_stream or {}).get("pix_fmt", "")).lower()
+    is_high_bit_depth = "10" in pix_fmt or "12" in pix_fmt or "16" in pix_fmt
 
     # Compute target width preserving aspect ratio (must be even).
     cuvid_resize_w = 0
@@ -660,26 +664,28 @@ def _build_hls_ffmpeg_command(
     if use_gpu:
         decoder = _pick_cuda_decoder(probe)
         if decoder:
-            # cuvid decoders have built-in -resize; always prefer it over
-            # scale_cuda which requires libnvrtc.so (PTX JIT compiler).
-            command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
+            # cuvid decoders have built-in -resize for GPU-side scaling.
+            # For 10-bit sources: omit -hwaccel_output_format cuda so ffmpeg
+            # auto-downloads frames to CPU as 8-bit (nv12/yuv420p) which
+            # h264_nvenc can encode. Decode + resize still happen on GPU.
+            if is_high_bit_depth:
+                command.extend(["-hwaccel", "cuda", "-c:v", decoder])
+            else:
+                command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
             if needs_scale and cuvid_resize_w and cuvid_resize_h:
                 command.extend(["-resize", f"{cuvid_resize_w}x{cuvid_resize_h}"])
         elif "cuda" in _available_hwaccels():
-            if has_scale_cuda or not needs_scale:
-                command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
-            else:
+            if is_high_bit_depth:
                 command.extend(["-hwaccel", "cuda"])
+            else:
+                command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
 
     command.extend(["-i", str(source_path)])
 
     # Apply scaling filter only when cuvid -resize was NOT used above.
     cuvid_resized = use_gpu and needs_scale and _pick_cuda_decoder(probe) is not None and cuvid_resize_w > 0
     if needs_scale and not cuvid_resized:
-        if use_gpu and has_scale_cuda:
-            command.extend(["-vf", f"scale_cuda=-2:{target_height}"])
-        else:
-            command.extend(["-vf", f"scale=-2:{target_height}"])
+        command.extend(["-vf", f"scale=-2:{target_height}"])
 
     video_encoder = "h264_nvenc" if use_gpu else "libx264"
     copy_mode = str(profile.get("mode") or "").lower() == "copy" or profile_name.endswith("_TS")
