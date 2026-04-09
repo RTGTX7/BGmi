@@ -39,11 +39,18 @@ export interface BangumiData {
 
 export interface SubtitleAsset {
   path: string;
+  original_path?: string;
   format: string;
+  source_format?: string;
   language: string;
   label: string;
   default?: boolean;
   source?: string;
+  render_style?: {
+    font_family?: string;
+    font_weight?: number;
+    font_style?: string;
+  };
 }
 
 export interface QualityAsset {

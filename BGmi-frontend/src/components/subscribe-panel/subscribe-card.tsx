@@ -92,7 +92,7 @@ export default function SubscribeCard({ bangumi }: Props) {
             position="absolute"
             inset="0"
             pointerEvents="none"
-            bg="linear-gradient(to bottom, rgba(0,0,0,0.02) 40%, rgba(0,0,0,0.14) 68%, rgba(0,0,0,0.34) 100%)"
+            bg="linear-gradient(to bottom, rgba(0,0,0,0.02) 34%, rgba(0,0,0,0.18) 62%, rgba(0,0,0,0.56) 100%)"
           />
 
           <Box
@@ -114,18 +114,18 @@ export default function SubscribeCard({ bangumi }: Props) {
             zIndex="2"
             rounded="22px"
             borderWidth="1px"
-            borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.32)'}
-            bg="transparent"
-            backdropFilter="blur(4px) saturate(165%)"
+            borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.18)'}
+            bg={isDark ? 'rgba(19,24,36,0.42)' : 'rgba(16,22,34,0.52)'}
+            backdropFilter="blur(2px) saturate(165%)"
             boxShadow={
               isDark
                 ? '0 16px 34px rgba(3,8,20,0.24), inset 0 1px 0 rgba(255,255,255,0.10)'
-                : '0 16px 34px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.22)'
+                : '0 16px 34px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.16)'
             }
-            px={{ base: '3.25', md: '3.5' }}
-            py={{ base: '1.9', md: '2.15' }}
-            minH={{ base: '4.9rem', md: '5rem' }}
-            h={{ base: '4.9rem', md: '5rem' }}
+            px={{ base: '3', md: '3.5' }}
+            py={{ base: '1.75', md: '2.15' }}
+            minH={{ base: '4.6rem', md: '5rem' }}
+            h={{ base: '4.6rem', md: '5rem' }}
             overflow="hidden"
             transition="transform 240ms cubic-bezier(0.22, 1, 0.36, 1), height 240ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms ease, filter 240ms ease"
             _groupHover={{
@@ -145,7 +145,7 @@ export default function SubscribeCard({ bangumi }: Props) {
               border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.12)',
               background: isDark
                 ? 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.028) 30%, rgba(255,255,255,0.008) 62%, rgba(255,255,255,0) 100%)'
-                : 'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.07) 30%, rgba(255,255,255,0.02) 62%, rgba(255,255,255,0) 100%)',
+                : 'linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.02) 62%, rgba(255,255,255,0) 100%)',
             }}
             _after={{
               content: '""',
@@ -159,15 +159,15 @@ export default function SubscribeCard({ bangumi }: Props) {
               opacity: isDark ? 0.4 : 0.56,
             }}
           >
-            <Flex align="center" gap="3.5" position="relative" zIndex="1" h="full">
+            <Flex align="center" gap={{ base: '2.5', md: '3.5' }} position="relative" zIndex="1" h="full">
               <Flex align="center" minW="0" flex="1" h="full">
                 <Text
                   w="full"
-                  color="white"
+                  color="rgba(248,250,252,0.98)"
                   fontSize={{ base: 'md', md: 'lg' }}
                   fontWeight="700"
                   lineHeight="1.16"
-                  textShadow="0 2px 12px rgba(0,0,0,0.40)"
+                  textShadow="0 3px 14px rgba(0,0,0,0.64)"
                   sx={{
                     display: '-webkit-box',
                     WebkitBoxOrient: 'vertical',
@@ -184,17 +184,20 @@ export default function SubscribeCard({ bangumi }: Props) {
                 </Text>
               </Flex>
 
-              <Flex align="center" justify="flex-end" minH="40px" flexShrink={0}>
+              <Flex align="center" justify="flex-end" minH="36px" flexShrink={0}>
                 <Button
                   onClick={() => handleOpen(syncData.status, bangumi.name, bangumi.episode ?? 0)}
-                  h="40px"
-                  minW="98px"
-                  px="5"
-                  rounded="full"
-                  fontSize="sm"
+                  h={{ base: '34px', md: '40px' }}
+                  minW={{ base: '64px', md: '98px' }}
+                  px={{ base: '3.5', md: '5' }}
+                  fontSize={{ base: 'xs', md: 'sm' }}
                   fontWeight="700"
                   color="gray.900"
-                  bg={syncData.status ? 'linear-gradient(135deg, #6ee7b7, #34d399)' : 'linear-gradient(135deg, #7dd3fc, #60a5fa)'}
+                  bg={
+                    syncData.status
+                      ? 'linear-gradient(135deg, #6ee7b7, #34d399)'
+                      : 'linear-gradient(135deg, #7dd3fc, #60a5fa)'
+                  }
                   boxShadow="0 10px 22px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.36)"
                   _hover={{ opacity: 0.96, transform: 'translateY(-1px)' }}
                 >

@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom';
 import VideoPlayer from '~/components/video-player';
 import { useBangumi } from '~/hooks/use-bangumi';
 import { useWatchHistory } from '~/hooks/use-watch-history';
-import { fetcherWithTimeout } from '~/lib/fetcher';
+import { FetchError, fetcherWithTimeout } from '~/lib/fetcher';
 
 import type { PlayerAssetResponse } from '~/types/bangumi';
 
@@ -23,7 +23,11 @@ export default function Player() {
     ? `/api/player?bangumi=${encodeURIComponent(bangumiData.bangumi_name)}&episode=${encodeURIComponent(episode)}`
     : null;
 
-  const { data: playerAsset, isLoading: playerAssetLoading } = useSWR<PlayerAssetResponse>(
+  const {
+    data: playerAsset,
+    error: playerAssetError,
+    isLoading: playerAssetLoading,
+  } = useSWR<PlayerAssetResponse, FetchError>(
     playerAssetKey,
     (key: string) => fetcherWithTimeout<PlayerAssetResponse>([key], {}, 120000),
     {
@@ -37,7 +41,13 @@ export default function Player() {
   if (!bangumiData) return <div>加载播放器出错，数据不存在</div>;
 
   const playerAssetData = playerAsset?.data;
-  const playerAssetMissing = !playerAssetLoading && !playerAssetData?.browser_path && !playerAssetData?.source_path;
+  const playerAssetMissing =
+    !playerAssetLoading &&
+    !playerAssetError &&
+    !playerAssetData?.browser_path &&
+    !playerAssetData?.source_path;
+  const playerAssetErrorMessage = playerAssetError?.message;
+  const playerAssetErrorStatus = playerAssetError?.status;
 
   return (
     <Box>
@@ -48,12 +58,11 @@ export default function Player() {
 
       <Heading
         ml={{ base: '0', xl: '10' }}
-        mb={{ base: '4', lg: '6' }}
-        fontSize={{ base: 'lg', sm: 'xl', lg: '2xl' }}
-        whiteSpace={{ base: 'normal', xl: 'nowrap' }}
-        overflow={{ base: 'visible', xl: 'hidden' }}
-        textOverflow={{ xl: 'ellipsis' }}
-        lineHeight="1.25"
+        mb={{ base: '2.5', lg: '6' }}
+        px={{ base: '0.15rem', xl: '0' }}
+        fontSize={{ base: 'sm', sm: 'lg', lg: '2xl' }}
+        noOfLines={{ base: 2, xl: 1 }}
+        lineHeight={{ base: '1.28', xl: '1.25' }}
       >
         {bangumiData.bangumi_name} {`- 第 ${episode} 集`}
       </Heading>
@@ -61,6 +70,7 @@ export default function Player() {
       <Flex
         position="relative"
         mx={{ base: '0', xl: '30' }}
+        gap={{ base: '2.5', xl: '0' }}
         flexDirection={{ xl: 'row', base: 'column' }}
         align={{ xl: 'flex-start', base: 'stretch' }}
         minW="0"
@@ -71,6 +81,8 @@ export default function Player() {
           danmakuApi={data.danmaku_api}
           playerAsset={playerAssetData}
           playerAssetLoading={playerAssetLoading}
+          playerAssetErrorMessage={playerAssetErrorMessage}
+          playerAssetErrorStatus={playerAssetErrorStatus}
           playerAssetMissing={playerAssetMissing}
         />
       </Flex>

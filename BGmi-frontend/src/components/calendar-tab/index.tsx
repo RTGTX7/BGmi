@@ -19,6 +19,7 @@ interface Props {
 
 function getChipStyles(colorMode: string) {
   return {
+    color: colorMode === 'dark' ? 'whiteAlpha.900' : '#425466',
     bg: colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.28)',
     borderColor: colorMode === 'dark' ? 'whiteAlpha.140' : 'rgba(255,255,255,0.82)',
     boxShadow:
@@ -26,9 +27,9 @@ function getChipStyles(colorMode: string) {
         ? '0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.05)'
         : '0 12px 28px rgba(39,87,116,0.08), inset 0 1px 0 rgba(255,255,255,0.46)',
     selected: {
-      color: colorMode === 'dark' ? 'blue.100' : 'blue.500',
-      bg: colorMode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.38)',
-      borderColor: colorMode === 'dark' ? 'rgba(191,219,254,0.30)' : 'rgba(255,255,255,0.92)',
+      color: colorMode === 'dark' ? 'blue.100' : '#2563eb',
+      bg: colorMode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.44)',
+      borderColor: colorMode === 'dark' ? 'rgba(191,219,254,0.30)' : 'rgba(191,219,254,0.86)',
       boxShadow:
         colorMode === 'dark'
           ? '0 12px 28px rgba(41,121,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)'
@@ -83,7 +84,7 @@ function ActionChip({
       fontWeight="semibold"
       rounded="2xl"
       bg={selected ? chipStyles.selected.bg : chipStyles.bg}
-      color={selected ? chipStyles.selected.color : undefined}
+      color={selected ? chipStyles.selected.color : chipStyles.color}
       borderWidth="1px"
       borderColor={selected ? chipStyles.selected.borderColor : chipStyles.borderColor}
       boxShadow={selected ? chipStyles.selected.boxShadow : chipStyles.boxShadow}
@@ -205,46 +206,47 @@ export default function CalendarTab({
                 fontSize={{ base: 'sm', lg: 'md' }}
                 fontWeight="semibold"
                 rounded="2xl"
+                color={chipStyles.color}
                 bg={chipStyles.bg}
                 borderWidth="1px"
-              borderColor={chipStyles.borderColor}
-              boxShadow={chipStyles.boxShadow}
-              backdropFilter="blur(18px) saturate(168%)"
-              transition="background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease"
-              position="relative"
-              overflow="hidden"
-              _before={{
-                content: '""',
-                position: 'absolute',
-                top: '-30%',
-                left: '-60%',
-                width: '48%',
-                height: '160%',
-                transform: 'rotate(18deg)',
-                background:
-                  colorMode === 'dark'
-                    ? 'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0))'
-                    : 'linear-gradient(180deg, rgba(255,255,255,0.40), rgba(255,255,255,0))',
-                opacity: 0,
-                transition: 'opacity 0.22s ease, left 0.28s ease',
-                pointerEvents: 'none',
-              }}
-              _hover={{
-                bg: chipStyles.hover.bg,
-                borderColor: chipStyles.hover.borderColor,
-                boxShadow: chipStyles.hover.boxShadow,
-                transform: 'translateY(-1px)',
-                _before: {
-                  opacity: 1,
-                  left: '92%',
-                },
-              }}
-              _active={{
-                bg: chipStyles.active.bg,
-                boxShadow: chipStyles.active.boxShadow,
-                transform: 'translateY(1px) scale(0.985)',
-              }}
-              _selected={{
+                borderColor={chipStyles.borderColor}
+                boxShadow={chipStyles.boxShadow}
+                backdropFilter="blur(18px) saturate(168%)"
+                transition="background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease"
+                position="relative"
+                overflow="hidden"
+                _before={{
+                  content: '""',
+                  position: 'absolute',
+                  top: '-30%',
+                  left: '-60%',
+                  width: '48%',
+                  height: '160%',
+                  transform: 'rotate(18deg)',
+                  background:
+                    colorMode === 'dark'
+                      ? 'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0))'
+                      : 'linear-gradient(180deg, rgba(255,255,255,0.40), rgba(255,255,255,0))',
+                  opacity: 0,
+                  transition: 'opacity 0.22s ease, left 0.28s ease',
+                  pointerEvents: 'none',
+                }}
+                _hover={{
+                  bg: chipStyles.hover.bg,
+                  borderColor: chipStyles.hover.borderColor,
+                  boxShadow: chipStyles.hover.boxShadow,
+                  transform: 'translateY(-1px)',
+                  _before: {
+                    opacity: 1,
+                    left: '92%',
+                  },
+                }}
+                _active={{
+                  bg: chipStyles.active.bg,
+                  boxShadow: chipStyles.active.boxShadow,
+                  transform: 'translateY(1px) scale(0.985)',
+                }}
+                _selected={{
                   ...chipStyles.selected,
                   transform: 'translateY(-1px)',
                   _before: {
@@ -260,7 +262,12 @@ export default function CalendarTab({
           </TabList>
 
           {type === 'subscribe' ? (
-            <ActionChip colorMode={colorMode} selected={!!searchOpen} onClick={onSearchToggle} display={{ base: 'inline-flex', lg: 'none' }}>
+            <ActionChip
+              colorMode={colorMode}
+              selected={!!searchOpen}
+              onClick={onSearchToggle}
+              display={{ base: 'inline-flex', lg: 'none' }}
+            >
               搜索
             </ActionChip>
           ) : null}
@@ -278,7 +285,12 @@ export default function CalendarTab({
             flexWrap="wrap"
           >
             {type === 'subscribe' ? (
-              <ActionChip colorMode={colorMode} selected={!!searchOpen} onClick={onSearchToggle} display={{ base: 'none', lg: 'inline-flex' }}>
+              <ActionChip
+                colorMode={colorMode}
+                selected={!!searchOpen}
+                onClick={onSearchToggle}
+                display={{ base: 'none', lg: 'inline-flex' }}
+              >
                 搜索
               </ActionChip>
             ) : null}
@@ -288,13 +300,7 @@ export default function CalendarTab({
       </Flex>
 
       {type === 'subscribe' && searchOpen && searchPanel ? (
-        <Box
-          mt={{ base: '3', lg: '4' }}
-          mb={{ base: '3', lg: '4' }}
-          w="full"
-          display="flex"
-          justifyContent="center"
-        >
+        <Box mt={{ base: '3', lg: '4' }} mb={{ base: '3', lg: '4' }} w="full" display="flex" justifyContent="center">
           <Box w="full" maxW={{ base: 'calc(100% - 0.5rem)', lg: '30rem' }}>
             {searchPanel}
           </Box>

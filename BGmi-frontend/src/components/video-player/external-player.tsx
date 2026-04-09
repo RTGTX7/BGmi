@@ -53,7 +53,7 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
     anchor.href = targetUrl;
     anchor.download = targetUrl.split('/').pop()?.split('?')[0] || 'video';
     anchor.rel = 'noopener';
-    document.body.appendChild(anchor);
+    document.body.append(anchor);
     anchor.click();
     anchor.remove();
   };
@@ -81,9 +81,9 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
               icon={<BsDownload />}
               onClick={() => triggerBrowserDownload(downloadUrl)}
               size="sm"
-              minW={{ base: '1.9rem', sm: '2.55rem' }}
-              h={{ base: '1.9rem', sm: '2.55rem' }}
-              fontSize={{ base: '0.8rem', sm: '1rem' }}
+              minW={{ base: '1.82rem', sm: '2.55rem' }}
+              h={{ base: '1.82rem', sm: '2.55rem' }}
+              fontSize={{ base: '0.76rem', sm: '1rem' }}
               rounded="full"
               variant="outline"
               bg={toolButtonBg}
@@ -103,9 +103,9 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
             onClick={() => setOpen(true)}
             icon={<BsPlayBtnFill />}
             size="sm"
-            minW={{ base: '1.9rem', sm: '2.55rem' }}
-            h={{ base: '1.9rem', sm: '2.55rem' }}
-            fontSize={{ base: '0.8rem', sm: '1rem' }}
+            minW={{ base: '1.82rem', sm: '2.55rem' }}
+            h={{ base: '1.82rem', sm: '2.55rem' }}
+            fontSize={{ base: '0.76rem', sm: '1rem' }}
             rounded="full"
             variant="outline"
             bg={toolButtonBg}
@@ -141,10 +141,16 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
           backdropFilter="blur(28px) saturate(180%)"
           overflow="hidden"
         >
-          <ModalHeader pb="2">本地播放器</ModalHeader>
+          <ModalHeader pb="2" fontSize="lg" fontWeight="700">
+            本地播放器
+          </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb="5">
-            <Text fontSize="sm" opacity="0.76" mb="4">
+            <Text
+              fontSize="sm"
+              color={colorMode === 'dark' ? 'whiteAlpha.800' : 'gray.600'}
+              mb="4"
+            >
               复制链接、拖拽链接，或者直接调用本地播放器。
             </Text>
 
@@ -153,9 +159,11 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
                 onClick={() => window.open(downloadUrl || url, '_blank', 'noopener,noreferrer')}
                 size="sm"
                 rounded="full"
-                bg={colorMode === 'light' ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.10)'}
+                bg={colorMode === 'light' ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.12)'}
                 borderWidth="1px"
-                borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.82)' : 'whiteAlpha.180'}
+                borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.82)' : 'whiteAlpha.300'}
+                color={colorMode === 'dark' ? 'whiteAlpha.900' : 'gray.700'}
+                fontWeight="600"
               >
                 打开直链
               </Button>
@@ -163,9 +171,11 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
                 onClick={() => navigator.clipboard.writeText(url)}
                 size="sm"
                 rounded="full"
-                bg={colorMode === 'light' ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.10)'}
+                bg={colorMode === 'light' ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.12)'}
                 borderWidth="1px"
-                borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.82)' : 'whiteAlpha.180'}
+                borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.82)' : 'whiteAlpha.300'}
+                color={colorMode === 'dark' ? 'whiteAlpha.900' : 'gray.700'}
+                fontWeight="600"
               >
                 复制播放器链接
               </Button>
@@ -181,9 +191,11 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
                   size="sm"
                   fontSize="sm"
                   rounded="full"
-                  bg={colorMode === 'light' ? 'rgba(255,255,255,0.58)' : 'rgba(255,255,255,0.08)'}
+                  bg={colorMode === 'light' ? 'rgba(255,255,255,0.58)' : 'rgba(255,255,255,0.10)'}
                   borderWidth="1px"
-                  borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.78)' : 'whiteAlpha.160'}
+                  borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.78)' : 'whiteAlpha.240'}
+                  color={colorMode === 'dark' ? 'whiteAlpha.880' : 'gray.700'}
+                  fontWeight="600"
                   boxShadow={
                     colorMode === 'light'
                       ? '0 8px 18px rgba(39,87,116,0.06), inset 0 1px 0 rgba(255,255,255,0.42)'
@@ -208,10 +220,22 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
               onDragStart={handleDragStart}
               userSelect="none"
             >
-              <Text fontSize="sm" fontWeight="bold" mb="2">
+              <Text
+                fontSize="sm"
+                fontWeight="700"
+                mb="2"
+                color={colorMode === 'dark' ? 'whiteAlpha.900' : 'gray.700'}
+              >
                 拖动此链接到播放器
               </Text>
-              <Link href={url} isExternal wordBreak="break-all" fontSize="sm">
+              <Link
+                href={url}
+                isExternal
+                wordBreak="break-all"
+                fontSize="xs"
+                color={colorMode === 'dark' ? 'blue.200' : 'blue.600'}
+                lineHeight="1.6"
+              >
                 {url}
               </Link>
             </Flex>

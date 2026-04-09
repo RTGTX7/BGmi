@@ -24,9 +24,9 @@ function Layout({ children }: { children: React.ReactNode }) {
       <MobileBottomNav sidebarToggle={handleToggle} />
       <Box
         as="main"
-        p={{ base: '3', sm: '4', md: '5', lg: '6' }}
-        pt={{ base: '3', lg: '6' }}
-        pb={{ base: '10rem', lg: '6' }}
+        p={{ base: '2.5', sm: '4', md: '5', lg: '6' }}
+        pt={{ base: '2.5', lg: '6' }}
+        pb={{ base: '7.4rem', lg: '6' }}
         minW="0"
         position="relative"
         zIndex="1"

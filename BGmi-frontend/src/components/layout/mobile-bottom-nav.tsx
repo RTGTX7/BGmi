@@ -1,17 +1,7 @@
-import { Box, Flex, Icon, IconButton, Text } from '@chakra-ui/react';
-import {
-  BsCalendar2CheckFill,
-  BsChevronLeft,
-  BsFillCollectionPlayFill,
-  BsFolderFill,
-  BsInfoSquareFill,
-  BsMoonFill,
-  BsPlayBtnFill,
-  BsSunFill,
-} from 'react-icons/bs';
+import { Box, Flex, Icon, IconButton } from '@chakra-ui/react';
+import { BsCalendar2CheckFill, BsFillCollectionPlayFill, BsMoonFill, BsPlayBtnFill, BsSunFill } from 'react-icons/bs';
 import type { IconType } from 'react-icons';
-import { FiChevronLeft, FiChevronRight, FiMenu } from 'react-icons/fi';
-import { useState } from 'react';
+import { FiMenu } from 'react-icons/fi';
 import { useLocation } from 'react-router-dom';
 
 import Link from '../router-link';
@@ -29,153 +19,120 @@ const navItems: NavItem[] = [
   { label: 'Bangumi', href: '/', icon: BsPlayBtnFill },
   { label: 'Calendar', href: '/calendar', icon: BsCalendar2CheckFill },
   { label: 'Subscribe', href: '/subscribe', icon: BsFillCollectionPlayFill },
-  { label: 'Files', href: '/bangumi', icon: BsFolderFill, external: true },
-  { label: 'About', href: '/about', icon: BsInfoSquareFill },
 ];
 
 export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () => void }) {
   const { pathname } = useLocation();
   const { colorMode, toggleColorMode } = useColorMode();
-  const [expanded, setExpanded] = useState(false);
+  const isPlayerPage = pathname.startsWith('/player/');
 
-  const panelBg = colorMode === 'dark' ? 'rgba(18, 22, 38, 0.76)' : 'rgba(240, 248, 251, 0.68)';
-  const panelBorder = colorMode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.70)';
+  const navBottom = 'calc(env(safe-area-inset-bottom, 0px) + 0.85rem)';
+  const navInset = isPlayerPage ? '2.55' : '3';
+  const navGap = isPlayerPage ? '0.75rem' : '0.9rem';
+  const navItemMinH = isPlayerPage ? '3.7rem' : '4rem';
+  const navIconSize = isPlayerPage ? '22px' : '24px';
+  const toggleButtonSize = isPlayerPage ? '3.7rem' : '4rem';
 
   return (
     <Box display={{ base: 'block', lg: 'none' }}>
       <Flex
         position="fixed"
-        right="0"
-        bottom="6.75rem"
-        zIndex="211"
-        align="center"
-        transform={expanded ? 'translateX(0)' : 'translateX(5.4rem)'}
-        transition="transform 240ms cubic-bezier(0.22, 1, 0.36, 1)"
-      >
-        <IconButton
-          aria-label={expanded ? 'Hide quick tools' : 'Show quick tools'}
-          onClick={() => setExpanded(v => !v)}
-          icon={expanded ? <FiChevronRight /> : <FiChevronLeft />}
-          size="sm"
-          w="1.65rem"
-          minW="1.65rem"
-          h="2.95rem"
-          roundedLeft="full"
-          roundedRight="none"
-          borderWidth="1px"
-          borderRightWidth="0"
-          borderColor={panelBorder}
-          bg={panelBg}
-          boxShadow={
-            colorMode === 'dark'
-              ? '0 14px 30px rgba(0,0,0,0.24)'
-              : '0 14px 30px rgba(36,78,88,0.12)'
-          }
-          backdropFilter="blur(16px) saturate(170%)"
-        />
-
-        <Flex
-          align="center"
-          gap="1.5"
-          px="2"
-          py="1.5"
-          roundedRight="full"
-          borderWidth="1px"
-          borderColor={panelBorder}
-          bg={panelBg}
-          boxShadow={
-            colorMode === 'dark'
-              ? '0 14px 30px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.08)'
-              : '0 14px 30px rgba(36,78,88,0.12), inset 0 1px 0 rgba(255,255,255,0.46)'
-          }
-          backdropFilter="blur(16px) saturate(170%)"
-        >
-          <IconButton
-            aria-label="Theme Toggle"
-            onClick={toggleColorMode}
-            icon={colorMode === 'dark' ? <BsSunFill /> : <BsMoonFill />}
-            size="sm"
-            rounded="full"
-            borderWidth="1px"
-            borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.50)'}
-            bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.42)'}
-          />
-          <IconButton
-            aria-label="Menu"
-            onClick={sidebarToggle}
-            icon={<FiMenu />}
-            size="sm"
-            rounded="full"
-            borderWidth="1px"
-            borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.50)'}
-            bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.42)'}
-          />
-        </Flex>
-      </Flex>
-
-      <Box
-        position="fixed"
-        left="3"
-        right="3"
-        bottom="3"
+        left={navInset}
+        right={navInset}
+        bottom={navBottom}
         zIndex="210"
-        rounded="2xl"
-        borderWidth="1px"
-        borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.84)'}
-        bg={colorMode === 'dark' ? 'rgba(18, 22, 38, 0.68)' : 'rgba(240, 248, 251, 0.58)'}
-        boxShadow={
-          colorMode === 'dark'
-            ? '0 20px 44px rgba(0,0,0,0.34), 0 6px 18px rgba(96,126,255,0.10), inset 0 1px 0 rgba(255,255,255,0.12)'
-            : '0 20px 44px rgba(36,78,88,0.16), 0 6px 18px rgba(94,188,214,0.10), inset 0 1px 0 rgba(255,255,255,0.62)'
-        }
-        backdropFilter="blur(18px) saturate(240%)"
-        overflow="hidden"
+        align="center"
+        gap={navGap}
       >
-        <Flex align="stretch" justify="space-between">
-          {navItems.map(item => {
-            const active = !item.external && pathname === item.href;
-            const content = (
+        <Box
+          flex="1"
+          rounded="1.6rem"
+          borderWidth="1px"
+          borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.84)'}
+          bg={colorMode === 'dark' ? 'rgba(18, 22, 38, 0.68)' : 'rgba(240, 248, 251, 0.58)'}
+          boxShadow={
+            colorMode === 'dark'
+              ? '0 20px 44px rgba(0,0,0,0.34), 0 6px 18px rgba(96,126,255,0.10), inset 0 1px 0 rgba(255,255,255,0.12)'
+              : '0 20px 44px rgba(36,78,88,0.16), 0 6px 18px rgba(94,188,214,0.10), inset 0 1px 0 rgba(255,255,255,0.62)'
+          }
+          backdropFilter="blur(1px) saturate(240%)"
+          overflow="hidden"
+        >
+          <Flex align="stretch" justify="space-between">
+            {navItems.map(item => {
+              const active = pathname === item.href;
+              const content = (
+                <Flex
+                  align="center"
+                  justify="center"
+                  minH={navItemMinH}
+                  flex="1"
+                  color={
+                    active
+                      ? colorMode === 'dark' ? 'blue.100' : 'blue.600'
+                      : colorMode === 'dark' ? 'whiteAlpha.600' : 'gray.500'
+                  }
+                  bg={
+                    active
+                      ? colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.52)'
+                      : 'transparent'
+                  }
+                  transition="color 0.18s ease, background 0.18s ease"
+                >
+                  <Icon as={item.icon} boxSize={navIconSize} />
+                </Flex>
+              );
+
+              return (
+                <Link key={item.label} href={item.href} flex="1">
+                  {content}
+                </Link>
+              );
+            })}
+
+            <Box as="button" type="button" onClick={sidebarToggle} flex="1">
               <Flex
-                direction="column"
                 align="center"
                 justify="center"
-                gap="1"
-                minH="4.1rem"
+                minH={navItemMinH}
                 flex="1"
-                color={
-                  active
-                    ? colorMode === 'dark'
-                      ? 'blue.100'
-                      : 'blue.600'
-                    : colorMode === 'dark'
-                      ? 'whiteAlpha.700'
-                      : 'gray.600'
-                }
-                bg={active ? (colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.52)') : 'transparent'}
+                color={colorMode === 'dark' ? 'whiteAlpha.600' : 'gray.500'}
+                transition="color 0.18s ease"
+                _hover={{ color: colorMode === 'dark' ? 'whiteAlpha.900' : 'gray.700' }}
               >
-                <Icon as={item.icon} boxSize="4.5" />
-                <Text fontSize="xs" fontWeight={active ? '700' : '600'}>
-                  {item.label}
-                </Text>
+                <Icon as={FiMenu} boxSize={navIconSize} />
               </Flex>
-            );
+            </Box>
+          </Flex>
+        </Box>
 
-            if (item.external) {
-              return (
-                <Box key={item.label} as="a" href={item.href} target="_blank" rel="noreferrer" flex="1">
-                  {content}
-                </Box>
-              );
-            }
-
-            return (
-              <Link key={item.label} href={item.href} flex="1">
-                {content}
-              </Link>
-            );
-          })}
-        </Flex>
-      </Box>
+        <IconButton
+          aria-label="Toggle day and night mode"
+          onClick={toggleColorMode}
+          icon={<Icon as={colorMode === 'dark' ? BsSunFill : BsMoonFill} boxSize={navIconSize} />}
+          w={toggleButtonSize}
+          minW={toggleButtonSize}
+          h={toggleButtonSize}
+          rounded="full"
+          borderWidth="1px"
+          borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.84)'}
+          color={colorMode === 'dark' ? 'blue.100' : 'blue.600'}
+          bg={colorMode === 'dark' ? 'rgba(18, 22, 38, 0.82)' : 'rgba(240, 248, 251, 0.74)'}
+          boxShadow={
+            colorMode === 'dark'
+              ? '0 20px 44px rgba(0,0,0,0.34), 0 6px 18px rgba(96,126,255,0.12), inset 0 1px 0 rgba(255,255,255,0.12)'
+              : '0 20px 44px rgba(36,78,88,0.16), 0 6px 18px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.62)'
+          }
+          backdropFilter="blur(1px) saturate(240%)"
+          _hover={{
+            transform: 'translateY(-1px)',
+            bg: colorMode === 'dark' ? 'rgba(18, 22, 38, 0.9)' : 'rgba(240, 248, 251, 0.88)',
+          }}
+          _active={{
+            transform: 'scale(0.98)',
+          }}
+        />
+      </Flex>
     </Box>
   );
 }

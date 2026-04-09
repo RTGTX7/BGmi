@@ -14,6 +14,7 @@ from bgmi.config import cfg
 
 PLAYER_CACHE_DIR = ".bgmi-player-cache"
 HLS_CACHE_DIR = ".bgmi-hls"
+HLS_METADATA_FILE = ".bgmi-hls-meta.json"
 SUBTITLE_FILE_PREFIX = "bgmi-subtitle"
 SUBTITLE_CODEC_EXTENSIONS = {
     "ass": "vtt",
@@ -25,6 +26,20 @@ SUBTITLE_CODEC_EXTENSIONS = {
 SIDECAR_SUBTITLE_EXTENSIONS = [".vtt", ".srt", ".ass", ".ssa"]
 REMUX_AUDIO_CODECS = {"aac", "mp3", "ac3", "eac3"}
 REMUX_VIDEO_CODECS = {"h264", "av1", "vp9", "hev1", "h265", "hevc"}
+HLS_COPY_AUDIO_CODECS = {"aac", "ac3", "eac3", "mp3"}
+
+SUBTITLE_TEXT_ENCODINGS = (
+    "utf-8-sig",
+    "utf-16",
+    "utf-16-le",
+    "utf-16-be",
+    "utf-32",
+    "gb18030",
+    "cp936",
+    "cp950",
+    "shift_jis",
+    "cp932",
+)
 
 _asset_locks: defaultdict[str, Lock] = defaultdict(Lock)
 _hls_jobs_lock = Lock()
@@ -257,22 +272,56 @@ def _is_mp4_ready(probe: Dict[str, Any]) -> bool:
 
 
 def _find_sidecar_subtitles(source_path: Path) -> list[Path]:
+    search_root = _episode_root_dir(source_path)
     candidates = [
         item
-        for item in source_path.parent.iterdir()
-        if item.is_file() and item != source_path and item.suffix.lower() in SIDECAR_SUBTITLE_EXTENSIONS
+        for item in search_root.rglob("*")
+        if item.is_file()
+        and item != source_path
+        and item.suffix.lower() in SIDECAR_SUBTITLE_EXTENSIONS
+        and PLAYER_CACHE_DIR not in item.parts
+        and HLS_CACHE_DIR not in item.parts
         and not item.name.startswith(f"{SUBTITLE_FILE_PREFIX}-")
     ]
 
-    def sorter(item: Path) -> tuple[int, int, str]:
+    source_stem = source_path.stem.lower()
+
+    def sidecar_stem(item: Path) -> str:
+        item_name = item.name
+        lower_name = item_name.lower()
+        for extension in SIDECAR_SUBTITLE_EXTENSIONS:
+            if lower_name.endswith(extension):
+                return item_name[: -len(extension)]
+        return item.stem
+
+    def stem_match_rank(item: Path) -> int:
+        item_stem = sidecar_stem(item).lower()
+        if item_stem == source_stem:
+            return 0
+        if any(item_stem.startswith(f"{source_stem}{sep}") for sep in (".", "_", "-", " ")):
+            return 1
+        if source_stem in item_stem:
+            return 2
+        return 3
+
+    def sorter(item: Path) -> tuple[int, int, int, int, str]:
         return (
-            0 if item.stem == source_path.stem else 1,
+            stem_match_rank(item),
+            0 if item.parent == source_path.parent else 1,
+            len(item.relative_to(search_root).parts),
             SIDECAR_SUBTITLE_EXTENSIONS.index(item.suffix.lower()),
             item.name.lower(),
         )
 
     candidates.sort(key=sorter)
     return candidates
+
+
+def _episode_root_dir(source_path: Path) -> Path:
+    for parent in source_path.parents:
+        if parent.name.isdigit():
+            return parent
+    return source_path.parent
 
 
 def _subtitle_target_path(source_path: Path, identifier: str) -> Path:
@@ -293,6 +342,82 @@ def _subtitle_label(title: str, language: str, fallback: str) -> str:
     if language:
         return language
     return fallback
+
+
+def _read_subtitle_text(path: Path) -> Optional[str]:
+    raw = path.read_bytes()
+
+    for encoding in SUBTITLE_TEXT_ENCODINGS:
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return raw.decode("utf-8", errors="ignore")
+
+
+def _parse_ass_default_style(path: Path) -> dict[str, Any]:
+    if path.suffix.lower() not in {".ass", ".ssa"}:
+        return {}
+
+    try:
+        content = _read_subtitle_text(path)
+    except OSError:
+        return {}
+
+    if not content:
+        return {}
+
+    format_fields: list[str] = []
+    style_lines: list[list[str]] = []
+    in_styles = False
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(";"):
+            continue
+
+        lower_line = line.lower()
+        if lower_line.startswith("[v4+ styles]") or lower_line.startswith("[v4 styles]"):
+            in_styles = True
+            format_fields = []
+            style_lines = []
+            continue
+        if lower_line.startswith("[") and lower_line.endswith("]") and not lower_line.startswith("[v4"):
+            in_styles = False
+            continue
+        if not in_styles:
+            continue
+        if lower_line.startswith("format:"):
+            format_fields = [field.strip().lower() for field in line.split(":", 1)[1].split(",")]
+            continue
+        if lower_line.startswith("style:"):
+            style_lines.append([value.strip() for value in line.split(":", 1)[1].split(",")])
+
+    if not format_fields or not style_lines:
+        return {}
+
+    def line_to_style(values: list[str]) -> dict[str, str]:
+        padded = values + [""] * max(0, len(format_fields) - len(values))
+        return {field: padded[index] for index, field in enumerate(format_fields)}
+
+    styles = [line_to_style(values) for values in style_lines]
+    default_style = next((style for style in styles if style.get("name", "").lower() == "default"), styles[0])
+
+    font_family = default_style.get("fontname", "").strip()
+    if not font_family:
+        return {}
+
+    style: dict[str, Any] = {"font_family": font_family}
+    bold_value = default_style.get("bold", "").strip()
+    italic_value = default_style.get("italic", "").strip()
+
+    if bold_value in {"-1", "1"}:
+        style["font_weight"] = 700
+    if italic_value in {"-1", "1"}:
+        style["font_style"] = "italic"
+
+    return style
 
 
 def _convert_to_vtt(input_path: Path, target_path: Path, source_path: Path) -> None:
@@ -409,8 +534,51 @@ def _profile_buffer_size(video_bitrate: str) -> str:
     return video_bitrate
 
 
+def _audio_codec_name(probe: Dict[str, Any]) -> str:
+    _, audio = _source_streams(probe)
+    return str((audio or {}).get("codec_name", "")).lower()
+
+
 def _profile_target_dir(source_path: Path, profile_name: str) -> Path:
     return _hls_dir(source_path).joinpath(profile_name)
+
+
+def _profile_metadata_path(source_path: Path, profile_name: str) -> Path:
+    return _profile_target_dir(source_path, profile_name).joinpath(HLS_METADATA_FILE)
+
+
+def _build_hls_signature(profile_name: str, profile: Dict[str, Any], probe: Dict[str, Any]) -> dict[str, Any]:
+    copy_mode = str(profile.get("mode") or "").lower() == "copy" or profile_name.endswith("_TS")
+    return {
+        "version": 2,
+        "profile": profile_name,
+        "copy_mode": copy_mode,
+        "audio_codec": _audio_codec_name(probe),
+        "audio_copy_mode": copy_mode and _audio_codec_name(probe) in HLS_COPY_AUDIO_CODECS,
+        "target_height": _profile_target_height(profile_name),
+        "video_bitrate": str(profile.get("video_bitrate") or "3M"),
+    }
+
+
+def _write_hls_signature(target_dir: Path, signature: dict[str, Any]) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_dir.joinpath(HLS_METADATA_FILE).write_text(
+        json.dumps(signature, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def _is_hls_signature_match(source_path: Path, profile_name: str, signature: dict[str, Any]) -> bool:
+    metadata_path = _profile_metadata_path(source_path, profile_name)
+    if not metadata_path.exists():
+        return False
+
+    try:
+        cached_signature = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    return cached_signature == signature
 
 
 def _manifest_is_ready(source_path: Path, profile_name: str) -> bool:
@@ -475,6 +643,7 @@ def _build_hls_ffmpeg_command(
 
     video_encoder = "h264_nvenc" if use_gpu else "libx264"
     copy_mode = str(profile.get("mode") or "").lower() == "copy" or profile_name.endswith("_TS")
+    audio_copy_mode = copy_mode and _audio_codec_name(probe) in HLS_COPY_AUDIO_CODECS
 
     command.extend(
         [
@@ -485,7 +654,7 @@ def _build_hls_ffmpeg_command(
             "-c:v",
             "copy" if copy_mode else video_encoder,
             "-c:a",
-            "copy" if copy_mode else "aac",
+            "copy" if audio_copy_mode else "aac",
             "-sn",
             "-dn",
         ]
@@ -495,6 +664,18 @@ def _build_hls_ffmpeg_command(
         video, _ = _source_streams(probe)
         if str((video or {}).get("codec_name", "")).lower() == "h264":
             command.extend(["-bsf:v", "h264_mp4toannexb"])
+    if not audio_copy_mode:
+        command.extend(
+            [
+                "-b:a",
+                _profile_audio_bitrate(profile_name),
+                "-ac",
+                "2",
+            ]
+        )
+
+    if copy_mode:
+        pass
     elif use_gpu:
         command.extend(
             [
@@ -508,10 +689,6 @@ def _build_hls_ffmpeg_command(
                 "p4",
                 "-rc",
                 "vbr",
-                "-b:a",
-                _profile_audio_bitrate(profile_name),
-                "-ac",
-                "2",
             ]
         )
     else:
@@ -527,10 +704,6 @@ def _build_hls_ffmpeg_command(
                 bufsize,
                 "-pix_fmt",
                 "yuv420p",
-                "-b:a",
-                _profile_audio_bitrate(profile_name),
-                "-ac",
-                "2",
             ]
         )
 
@@ -605,13 +778,15 @@ def ensure_hls_profile(source_path: Path, profile_name: str, probe: Optional[Dic
         raise ValueError(f"unknown hls profile: {profile_name}")
 
     cleanup_hls_cache(source_path)
+    probe = probe or _probe(source_path)
+    signature = _build_hls_signature(profile_name, profile, probe)
 
     target_dir = _profile_target_dir(source_path, profile_name)
     target_manifest = target_dir.joinpath("index.m3u8")
     lock = _asset_locks[str(target_manifest)]
 
     with lock:
-        if target_manifest.exists() and target_manifest.stat().st_mtime >= source_path.stat().st_mtime:
+        if target_manifest.exists() and target_manifest.stat().st_mtime >= source_path.stat().st_mtime and _is_hls_signature_match(source_path, profile_name, signature):
             now = time.time()
             try:
                 target_dir.utime((now, now))  # type: ignore[attr-defined]
@@ -621,7 +796,6 @@ def ensure_hls_profile(source_path: Path, profile_name: str, probe: Optional[Dic
             return _relative_url(target_manifest)
 
         safe_source = _safe_ffmpeg_input(source_path)
-        probe = probe or _probe(source_path)
         _, source_height = _video_dimensions(probe)
         target_height = _profile_target_height(profile_name)
         video_bitrate = str(profile.get("video_bitrate") or "3M")
@@ -670,6 +844,7 @@ def ensure_hls_profile(source_path: Path, profile_name: str, probe: Optional[Dic
 
         if target_dir.exists():
             shutil.rmtree(target_dir, ignore_errors=True)
+        _write_hls_signature(tmp_dir, signature)
         target_dir.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(tmp_dir), str(target_dir))
 
@@ -685,6 +860,7 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
 
         cleanup_hls_cache(source_path)
         probe = _probe(source_path)
+        signature = _build_hls_signature(profile_name, profile, probe)
         duration_seconds = float(probe.get("format", {}).get("duration") or 0.0)
 
         target_dir = _profile_target_dir(source_path, profile_name)
@@ -692,7 +868,7 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
         lock = _asset_locks[str(target_manifest)]
 
         with lock:
-            if _manifest_is_ready(source_path, profile_name):
+            if _manifest_is_ready(source_path, profile_name) and _is_hls_signature_match(source_path, profile_name, signature):
                 manifest_url = _relative_url(target_manifest)
                 _write_hls_job(
                     source_path,
@@ -773,6 +949,7 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
 
             if target_dir.exists():
                 shutil.rmtree(target_dir, ignore_errors=True)
+            _write_hls_signature(tmp_dir, signature)
             target_dir.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(tmp_dir), str(target_dir))
 
@@ -800,7 +977,11 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
 
 
 def start_hls_profile_generation(source_path: Path, profile_name: str) -> dict[str, Any]:
-    if _manifest_is_ready(source_path, profile_name):
+    profile = dict(_hls_config().get(profile_name, {}))
+    probe = _probe(source_path)
+    signature = _build_hls_signature(profile_name, profile, probe)
+
+    if _manifest_is_ready(source_path, profile_name) and _is_hls_signature_match(source_path, profile_name, signature):
         manifest_url = _relative_url(_profile_target_dir(source_path, profile_name).joinpath("index.m3u8"))
         return _write_hls_job(
             source_path,
@@ -978,24 +1159,38 @@ def ensure_browser_video(source_path: Path, probe: Dict[str, Any]) -> str:
 def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dict[str, Any]]:
     subtitles: list[Dict[str, Any]] = []
     seen_paths: set[str] = set()
+    subtitle_order = 0
 
     for sidecar in _find_sidecar_subtitles(source_path):
         target_path = sidecar if sidecar.suffix.lower() == ".vtt" else _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}")
-        _convert_to_vtt(sidecar, target_path, source_path)
-        relative_path = _relative_url(target_path)
+        try:
+            _convert_to_vtt(sidecar, target_path, source_path)
+            relative_path = _relative_url(target_path)
+        except Exception as exc:
+            print(
+                f"[bgmi] Skip invalid sidecar subtitle for {source_path.name}: {sidecar.name} ({exc})",
+                flush=True,
+            )
+            continue
+
         if relative_path in seen_paths:
             continue
         seen_paths.add(relative_path)
         subtitles.append(
             {
                 "path": relative_path,
+                "original_path": _relative_url(sidecar),
                 "format": "vtt",
+                "source_format": sidecar.suffix.lower().lstrip("."),
                 "language": "",
                 "label": sidecar.stem,
                 "default": sidecar.stem == source_path.stem,
                 "source": "sidecar",
+                "render_style": _parse_ass_default_style(sidecar),
+                "_order": subtitle_order,
             }
         )
+        subtitle_order += 1
 
     subtitle_streams = [
         item
@@ -1013,29 +1208,36 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
         target_path = _subtitle_target_path(source_path, f"embedded-{stream['index']}")
         lock = _asset_locks[str(target_path)]
 
-        with lock:
-            if not (target_path.exists() and target_path.stat().st_mtime >= source_path.stat().st_mtime):
-                safe_source = _safe_ffmpeg_input(source_path)
-                workspace = _workspace_dir(source_path)
-                tmp_path = workspace.joinpath(f"subtitle-{stream['index']}.tmp.vtt")
-                if tmp_path.exists():
-                    tmp_path.unlink()
+        try:
+            with lock:
+                if not (target_path.exists() and target_path.stat().st_mtime >= source_path.stat().st_mtime):
+                    safe_source = _safe_ffmpeg_input(source_path)
+                    workspace = _workspace_dir(source_path)
+                    tmp_path = workspace.joinpath(f"subtitle-{stream['index']}.tmp.vtt")
+                    if tmp_path.exists():
+                        tmp_path.unlink()
 
-                _run(
-                    [
-                        "ffmpeg",
-                        "-nostdin",
-                        "-y",
-                        "-i",
-                        str(safe_source),
-                        "-map",
-                        f"0:{stream['index']}",
-                        "-f",
-                        "webvtt",
-                        str(tmp_path),
-                    ]
-                )
-                _replace_atomic(tmp_path, target_path)
+                    _run(
+                        [
+                            "ffmpeg",
+                            "-nostdin",
+                            "-y",
+                            "-i",
+                            str(safe_source),
+                            "-map",
+                            f"0:{stream['index']}",
+                            "-f",
+                            "webvtt",
+                            str(tmp_path),
+                        ]
+                    )
+                    _replace_atomic(tmp_path, target_path)
+        except Exception as exc:
+            print(
+                f"[bgmi] Skip invalid embedded subtitle for {source_path.name} stream {stream['index']}: {exc}",
+                flush=True,
+            )
+            continue
 
         language = str(stream.get("tags", {}).get("language", "")).strip()
         title = str(stream.get("tags", {}).get("title", "")).strip()
@@ -1048,23 +1250,28 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
             {
                 "path": relative_path,
                 "format": "vtt",
+                "source_format": str(stream.get("codec_name", "")).lower() or "vtt",
                 "language": language,
                 "label": label,
                 "default": bool(stream.get("disposition", {}).get("default", 0)),
                 "source": "embedded",
+                "render_style": {},
+                "_order": subtitle_order,
             }
         )
+        subtitle_order += 1
 
     subtitles.sort(
         key=lambda item: (
             0 if item["default"] else 1,
             0 if item["source"] == "sidecar" else 1,
-            item["label"].lower(),
+            item.get("_order", 0),
         )
     )
 
     for index, subtitle in enumerate(subtitles):
         subtitle["default"] = index == 0
+        subtitle.pop("_order", None)
 
     return subtitles
 

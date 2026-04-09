@@ -22,6 +22,7 @@ from bgmi.front.index import (
     PlayerHlsStatusHandler,
 )
 from bgmi.front.resources import BangumiHandler, CalendarHandler, RssHandler
+from bgmi.setup import create_dir, init_db
 
 define("port", default=8888, help="listen on the port", type=int)
 define("address", default="0.0.0.0", help="binding at given address", type=str)
@@ -36,6 +37,9 @@ class SpaIndexHandler(tornado.web.RequestHandler):
 
 
 def make_app() -> tornado.web.Application:
+    create_dir()
+    init_db()
+
     settings = {
         "autoreload": True,
         "gzip": True,

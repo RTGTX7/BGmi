@@ -340,9 +340,12 @@ def convert_cover_url_to_path(cover_url: str) -> Tuple[str, str]:
 
 
 def web_cover_url(cover_url: str) -> str:
+    normalized_cover_url = normalize_path(cover_url)
     dir_path, file_path = convert_cover_url_to_path(cover_url)
     if os.path.exists(file_path):
-        return f"/bangumi/cover/{normalize_path(cover_url)}"
+        return f"/bangumi/cover/{normalized_cover_url}"
+    if cover_url and not cover_url.startswith(("http://", "https://", "/bangumi/cover/", "/")):
+        return f"/bangumi/cover/{normalized_cover_url}"
     return cover_url
 
 

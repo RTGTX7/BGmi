@@ -21,7 +21,7 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
   const drawerContentRef = useRef<HTMLDivElement | null>(null);
   const isDark = colorMode === 'dark';
   const posterBg = isDark ? 'gray.900' : 'rgba(255,255,255,0.72)';
-  const borderColor = isDark ? 'whiteAlpha.180' : 'rgba(148,163,184,0.20)';
+  const borderColor = isDark ? 'whiteAlpha.180' : 'rgba(162,186,198,0.24)';
 
   const { bangumi_name: title, cover: coverUrl, episode, status } = bangumiData;
   const statusText = episode > 0 ? `最新：第 ${episode} 集` : '暂无更新';
@@ -63,10 +63,8 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
         inset: '1px',
         pointerEvents: 'none',
         borderRadius: 'inherit',
-        border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.42)',
-        boxShadow: isDark
-          ? 'inset 0 0 0 1px rgba(255,255,255,0.02)'
-          : 'inset 0 0 0 1px rgba(255,255,255,0.12)',
+        border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.08)',
+        boxShadow: isDark ? 'inset 0 0 0 1px rgba(255,255,255,0.02)' : 'none',
         zIndex: 3,
       }}
     >
@@ -88,6 +86,17 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                 objectFit="cover"
                 objectPosition="center center"
                 onLoad={() => setImageLoaded(true)}
+              />
+
+              <Box
+                position="absolute"
+                inset="0"
+                pointerEvents="none"
+                bg={
+                  isDark
+                    ? 'linear-gradient(180deg, rgba(5,10,18,0.02) 24%, rgba(5,10,18,0.12) 48%, rgba(5,10,18,0.76) 100%)'
+                    : 'linear-gradient(180deg, rgba(5,10,18,0) 28%, rgba(5,10,18,0.06) 54%, rgba(5,10,18,0.48) 100%)'
+                }
               />
 
               <Box
@@ -117,21 +126,21 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                 px={{ base: '3', md: '3.5' }}
                 py={{ base: '2.5', md: '3' }}
                 borderWidth="1px"
-                borderColor={isDark ? 'whiteAlpha.220' : 'rgba(255,255,255,0.78)'}
-                backdropFilter="blur(2px) saturate(165%)"
+                borderColor={isDark ? 'whiteAlpha.220' : 'rgba(255,255,255,0.14)'}
+                backdropFilter="blur(2px) saturate(155%)"
                 boxShadow={
                   isDark
                     ? '0 14px 32px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10)'
-                    : '0 14px 32px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.52)'
+                    : '0 12px 28px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.08)'
                 }
                 bg={
                   drawerExpanded
                     ? isDark
-                      ? 'rgba(30, 34, 46, 0.32)'
-                      : 'rgba(246, 253, 255, 0.28)'
+                      ? 'rgba(19, 24, 36, 0.58)'
+                      : 'rgba(24, 30, 42, 0.42)'
                     : isDark
-                      ? 'rgba(30, 34, 46, 0.24)'
-                      : 'rgba(246, 253, 255, 0.20)'
+                    ? 'rgba(19, 24, 36, 0.48)'
+                    : 'rgba(24, 30, 42, 0.34)'
                 }
                 maxH={drawerMaxHeight}
                 overflow="hidden"
@@ -152,7 +161,7 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                   borderRadius: 'inherit',
                   background: isDark
                     ? 'linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 34%, rgba(255,255,255,0.02) 100%)'
-                    : `linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.18) 34%, rgba(255,255,255,0.06) 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23000' fill-opacity='.03'%3E%3Ccircle cx='12' cy='18' r='1'/%3E%3Ccircle cx='34' cy='26' r='1'/%3E%3Ccircle cx='76' cy='12' r='1'/%3E%3Ccircle cx='94' cy='44' r='1'/%3E%3Ccircle cx='20' cy='82' r='1'/%3E%3Ccircle cx='72' cy='96' r='1'/%3E%3C/g%3E%3C/svg%3E")`,
+                    : `linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04) 34%, rgba(255,255,255,0.01) 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23fff' fill-opacity='.03'%3E%3Ccircle cx='12' cy='18' r='1'/%3E%3Ccircle cx='34' cy='26' r='1'/%3E%3Ccircle cx='76' cy='12' r='1'/%3E%3Ccircle cx='94' cy='44' r='1'/%3E%3Ccircle cx='20' cy='82' r='1'/%3E%3Ccircle cx='72' cy='96' r='1'/%3E%3C/g%3E%3C/svg%3E")`,
                   pointerEvents: 'none',
                 }}
                 _after={{
@@ -166,7 +175,7 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                   transform: 'rotate(-20deg)',
                   background: isDark
                     ? 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0))'
-                    : 'linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0))',
+                    : 'linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0))',
                   pointerEvents: 'none',
                   filter: 'blur(2px)',
                 }}
@@ -184,8 +193,8 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                     fontSize={{ base: 'md', md: 'lg' }}
                     lineHeight="1.22"
                     fontWeight="semibold"
-                    color="white"
-                    textShadow="0 2px 6px rgba(0, 0, 0, 0.85)"
+                    color="rgba(248,250,252,0.98)"
+                    textShadow="0 3px 14px rgba(0, 0, 0, 0.72)"
                     transition="all 0.32s cubic-bezier(0.22, 1, 0.36, 1)"
                     sx={{
                       display: '-webkit-box',
@@ -202,8 +211,8 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                     mt="1.5"
                     fontSize={{ base: '10px', md: 'xs' }}
                     letterSpacing="0.02em"
-                    color={isDark ? 'whiteAlpha.860' : 'rgba(255,255,255,0.92)'}
-                    textShadow="0 1px 8px rgba(0,0,0,0.28)"
+                    color="rgba(241,245,249,0.92)"
+                    textShadow="0 1px 10px rgba(0,0,0,0.36)"
                   >
                     {statusText}
                   </Text>

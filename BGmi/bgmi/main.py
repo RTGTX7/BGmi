@@ -60,6 +60,10 @@ def main_for_test(args: Optional[List[str]] = None) -> None:
 @click.version_option(__version__, package_name="bgmi", prog_name="bgmi", message=print_version())
 @click.pass_context
 def cli(ctx: click.Context) -> None:
+    if ctx.invoked_subcommand != "completion":
+        create_dir()
+        init_db()
+
     if ctx.invoked_subcommand not in ["install", "upgrade", "completion"]:
         check_update()
 

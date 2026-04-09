@@ -13,6 +13,25 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
+  const titleColor = isDark ? 'whiteAlpha.940' : '#203447';
+  const linkTagBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.86)';
+  const linkTagBorder = isDark ? 'whiteAlpha.140' : 'rgba(252,165,165,0.52)';
+  const linkColor = isDark ? 'pink.200' : 'pink.500';
+  const statusColor = bangumi.status ? (isDark ? 'green.200' : 'green.700') : isDark ? 'whiteAlpha.860' : '#4b5d71';
+  const statusBg = bangumi.status
+    ? isDark
+      ? 'rgba(34,197,94,0.16)'
+      : 'rgba(220,252,231,0.96)'
+    : isDark
+    ? 'rgba(255,255,255,0.08)'
+    : 'rgba(241,245,249,0.96)';
+  const statusBorder = bangumi.status
+    ? isDark
+      ? 'rgba(74,222,128,0.24)'
+      : 'rgba(134,239,172,0.92)'
+    : isDark
+    ? 'whiteAlpha.120'
+    : 'rgba(203,213,225,0.96)';
 
   return (
     <Card
@@ -49,14 +68,22 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
         background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.94)',
       }}
     >
-      <CardBody display="flex" flexDirection={{ base: 'column', md: 'row' }} gap={{ base: '3', md: '0' }} position="relative" zIndex="1">
+      <CardBody
+        display="flex"
+        flexDirection="row"
+        alignItems="stretch"
+        gap={{ base: '3.5', md: '4' }}
+        p={{ base: '3.5', md: '5' }}
+        position="relative"
+        zIndex="1"
+      >
         <Box
           position="relative"
-          w={{ base: 'full', md: '180px' }}
-          minW="0"
-          maxW={{ base: 'full', md: '180px' }}
-          minH={{ base: '11.5rem', md: '250px' }}
-          maxH={{ base: '11.5rem', md: '250px' }}
+          w={{ base: '5.6rem', md: '180px' }}
+          minW={{ base: '5.6rem', md: '180px' }}
+          maxW={{ base: '5.6rem', md: '180px' }}
+          minH={{ base: '7.5rem', md: '250px' }}
+          maxH={{ base: '7.5rem', md: '250px' }}
           bg={isDark ? 'gray.900' : 'gray.100'}
           rounded="xl"
           overflow="hidden"
@@ -77,9 +104,7 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
             pointerEvents: 'none',
             borderRadius: 'inherit',
             border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.46)',
-            boxShadow: isDark
-              ? 'inset 0 0 0 1px rgba(255,255,255,0.02)'
-              : 'inset 0 0 0 1px rgba(255,255,255,0.20)',
+            boxShadow: isDark ? 'inset 0 0 0 1px rgba(255,255,255,0.02)' : 'inset 0 0 0 1px rgba(255,255,255,0.20)',
           }}
         >
           <Fade in={isLoaded}>
@@ -95,17 +120,28 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
           </Fade>
         </Box>
 
-        <Flex ml={{ base: '0', md: '4' }} mt={{ base: '1', md: '0' }} direction="column" justify="space-between" minW="0" flex="1">
-          <Text mr="-2" fontWeight="medium" fontSize={{ base: 'sm', md: 'md' }} lineHeight="1.45" wordBreak="break-word">
+        <Flex direction="column" justify="space-between" minW="0" flex="1" py={{ base: '0.1rem', md: '0.35rem' }}>
+          <Text
+            mr="-2"
+            fontWeight="700"
+            fontSize={{ base: 'sm', md: 'md' }}
+            lineHeight="1.4"
+            color={titleColor}
+            noOfLines={{ base: 2, md: 3 }}
+            wordBreak="break-word"
+          >
             {bangumi.name}
           </Text>
 
-          <HStack mt="2" spacing="2" flexWrap="wrap">
+          <HStack mt={{ base: '2.5', md: '3' }} spacing={{ base: '1.5', md: '2' }} flexWrap="wrap" align="center">
             <Tag
               w="fit-content"
-              bg={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.62)'}
+              px={{ base: '0.62rem', md: '0.75rem' }}
+              py={{ base: '0.1rem', md: '0.15rem' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
+              bg={linkTagBg}
               borderWidth="1px"
-              borderColor={isDark ? 'whiteAlpha.140' : 'whiteAlpha.800'}
+              borderColor={linkTagBorder}
               boxShadow={
                 isDark
                   ? '0 8px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.05)'
@@ -113,16 +149,24 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
               }
               backdropFilter="blur(14px) saturate(160%)"
             >
-              <Link color="pink.300" href={`https://bgm.tv/subject_search/${bangumi.name}`} target="_blank">
+              <Link
+                color={linkColor}
+                fontWeight="700"
+                href={`https://bgm.tv/subject_search/${bangumi.name}`}
+                target="_blank"
+              >
                 番组计划
               </Link>
             </Tag>
             <Tag
               w="fit-content"
-              color={bangumi.status ? (isDark ? 'green.200' : 'green.700') : isDark ? 'whiteAlpha.860' : 'gray.600'}
-              bg={bangumi.status ? (isDark ? 'rgba(34,197,94,0.16)' : 'rgba(220,252,231,0.92)') : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.62)'}
+              px={{ base: '0.62rem', md: '0.75rem' }}
+              py={{ base: '0.1rem', md: '0.15rem' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
+              color={statusColor}
+              bg={statusBg}
               borderWidth="1px"
-              borderColor={bangumi.status ? (isDark ? 'rgba(74,222,128,0.24)' : 'rgba(134,239,172,0.92)') : isDark ? 'whiteAlpha.120' : 'whiteAlpha.700'}
+              borderColor={statusBorder}
               boxShadow={
                 isDark
                   ? '0 8px 20px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.04)'
@@ -153,11 +197,12 @@ export default function Calendar() {
         <TabPanel
           display="grid"
           gridTemplateColumns={{
-            base: 'repeat(auto-fill, minmax(10rem, 1fr))',
+            base: '1fr',
             md: 'repeat(auto-fill, minmax(20rem, 1fr))',
             lg: 'repeat(auto-fill, minmax(22rem, 1fr))',
           }}
           justifyContent="center"
+          px={{ base: 0, md: 0 }}
           gap={{ base: 3, md: 4, lg: 5 }}
           key={week}
         >
