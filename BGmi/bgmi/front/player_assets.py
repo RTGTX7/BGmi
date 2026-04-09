@@ -175,7 +175,8 @@ def _available_filters() -> set[str]:
     filters: set[str] = set()
     for line in result.stdout.splitlines():
         parts = line.split()
-        if len(parts) >= 4 and parts[0] in {"T.", ".S", ".."}:
+        # ffmpeg -filters output: 3-char flags (e.g. "T..", "...", "TSC") then name then type
+        if len(parts) >= 3 and len(parts[0]) == 3 and all(c in "TSC." for c in parts[0]):
             filters.add(parts[1])
     return filters
 
@@ -194,8 +195,26 @@ def _available_decoders() -> set[str]:
     }
 
 
+@lru_cache(maxsize=1)
+def _nvenc_runtime_ok() -> bool:
+    """Return True only if h264_nvenc can actually encode a frame (GPU accessible)."""
+    try:
+        _run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "testsrc=size=640x480:rate=1",
+                "-frames:v", "1", "-c:v", "h264_nvenc", "-f", "null", "-",
+            ]
+        )
+        return True
+    except Exception:
+        return False
+
+
 def _pick_video_encoder() -> str:
-    return "h264_nvenc" if "h264_nvenc" in _available_encoders() else "libx264"
+    if "h264_nvenc" in _available_encoders() and _nvenc_runtime_ok():
+        return "h264_nvenc"
+    return "libx264"
 
 
 def _pick_cuda_decoder(probe: Dict[str, Any]) -> Optional[str]:
@@ -613,7 +632,7 @@ def _build_hls_ffmpeg_command(
     *,
     prefer_gpu: bool,
 ) -> list[str]:
-    _, source_height = _video_dimensions(probe)
+    source_width, source_height = _video_dimensions(probe)
     target_height = _profile_target_height(profile_name)
     video_bitrate = str(profile.get("video_bitrate") or "3M")
     maxrate = str(profile.get("maxrate") or video_bitrate)
@@ -626,17 +645,38 @@ def _build_hls_ffmpeg_command(
     ]
 
     use_gpu = prefer_gpu and _pick_video_encoder() == "h264_nvenc"
+    needs_scale = bool(target_height and source_height and source_height > target_height)
+    has_scale_cuda = "scale_cuda" in _available_filters()
+
+    # Compute target width preserving aspect ratio (must be even).
+    cuvid_resize_w = 0
+    cuvid_resize_h = 0
+    if needs_scale and target_height and source_height and source_width:
+        cuvid_resize_h = target_height
+        cuvid_resize_w = int(round(source_width * target_height / source_height))
+        if cuvid_resize_w % 2:
+            cuvid_resize_w += 1
+
     if use_gpu:
         decoder = _pick_cuda_decoder(probe)
         if decoder:
+            # cuvid decoders support -resize WxH for GPU-side scaling,
+            # avoiding CPU involvement entirely.
             command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
+            if needs_scale and not has_scale_cuda and cuvid_resize_w and cuvid_resize_h:
+                command.extend(["-resize", f"{cuvid_resize_w}x{cuvid_resize_h}"])
         elif "cuda" in _available_hwaccels():
-            command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
+            if has_scale_cuda or not needs_scale:
+                command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
+            else:
+                command.extend(["-hwaccel", "cuda"])
 
     command.extend(["-i", str(source_path)])
 
-    if target_height and source_height and source_height > target_height:
-        if use_gpu and "scale_cuda" in _available_filters():
+    # Apply scaling filter only when cuvid -resize was NOT used above.
+    cuvid_resized = use_gpu and needs_scale and not has_scale_cuda and _pick_cuda_decoder(probe) is not None and cuvid_resize_w > 0
+    if needs_scale and not cuvid_resized:
+        if use_gpu and has_scale_cuda:
             command.extend(["-vf", f"scale_cuda=-2:{target_height}"])
         else:
             command.extend(["-vf", f"scale=-2:{target_height}"])

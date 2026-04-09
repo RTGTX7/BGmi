@@ -15,10 +15,12 @@ else
     echo "[bgmi] ffmpeg NVENC encoder is not available."
 fi
 
-if ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=128x72:rate=1 -frames:v 1 -c:v h264_nvenc -f null - >/dev/null 2>&1; then
+NVENC_ERR=$(ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=640x480:rate=1 -frames:v 1 -c:v h264_nvenc -f null - 2>&1) || true
+if [ -z "$NVENC_ERR" ]; then
     echo "[bgmi] ffmpeg NVENC runtime test passed."
 else
     echo "[bgmi] ffmpeg NVENC runtime test failed; GPU may still be unavailable to the container."
+    echo "[bgmi] NVENC error: $NVENC_ERR"
 fi
 
 if [ ! -f "${BGMI_PATH}/config.toml" ]; then
