@@ -87,26 +87,60 @@ type WebkitVideoElement = HTMLVideoElement & {
   webkitPresentationMode?: 'fullscreen' | 'inline' | 'picture-in-picture';
 };
 
+interface ParsedCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+function parseSubtitleTimestamp(ts: string): number {
+  const trimmed = ts.trim();
+  const longMatch = trimmed.match(/^(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})$/);
+  if (longMatch) {
+    const [, h, m, s, ms] = longMatch;
+    return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms.padEnd(3, '0')) / 1000;
+  }
+  const shortMatch = trimmed.match(/^(\d{1,2}):(\d{2})[.,](\d{1,3})$/);
+  if (shortMatch) {
+    const [, m, s, ms] = shortMatch;
+    return Number(m) * 60 + Number(s) + Number(ms.padEnd(3, '0')) / 1000;
+  }
+  return 0;
+}
+
+function parseSubtitleText(content: string): ParsedCue[] {
+  const cues: ParsedCue[] = [];
+  const stripped = content
+    .replace(/^\uFEFF/, '')
+    .replace(/^WEBVTT[^\n]*\n/, '')
+    .replace(/^NOTE[\s\S]*?(?=\n\n)/gm, '');
+  const blocks = stripped.trim().replace(/\r\n/g, '\n').split(/\n\n+/);
+
+  for (const block of blocks) {
+    const lines = block.split('\n');
+    const tsIndex = lines.findIndex(line => line.includes(' --> '));
+    if (tsIndex < 0) continue;
+    const tsParts = lines[tsIndex].split(' --> ');
+    const start = parseSubtitleTimestamp(tsParts[0]);
+    const end = parseSubtitleTimestamp((tsParts[1] || '').split(/\s/)[0]);
+    const text = lines
+      .slice(tsIndex + 1)
+      .join('\n')
+      .trim();
+    if (text && end > start) cues.push({ start, end, text });
+  }
+  return cues;
+}
+
+function findActiveCueLines(cues: ParsedCue[], time: number): string[] {
+  const active = cues.filter(cue => time >= cue.start && time < cue.end);
+  return active.flatMap(cue => normalizeCueText(cue.text));
+}
+
 function formatSubtitleOptionLabel(label: string) {
   if (!label) return '更多语言';
   if (label === '关闭字幕') return '关闭字幕';
   return `${label} · 更多语言`;
-}
-
-function subtitleLangCode(language: string) {
-  const normalized = (language || '').trim().toLowerCase();
-  if (!normalized) return 'und';
-  if (normalized.includes('chinese') || normalized.includes('中文')) return 'zh';
-  if (normalized.includes('english')) return 'en';
-  if (normalized.includes('japanese')) return 'ja';
-  if (normalized.includes('german')) return 'de';
-  if (normalized.includes('french')) return 'fr';
-  if (normalized.includes('italian')) return 'it';
-  if (normalized.includes('russian')) return 'ru';
-  if (normalized.includes('spanish')) return 'es';
-  if (normalized.includes('arabic')) return 'ar';
-  const shortCode = normalized.match(/[a-z]{2,3}/);
-  return shortCode?.[0] ?? 'und';
 }
 
 function normalizeCueText(text: string) {
@@ -155,84 +189,7 @@ function buildSubtitleLineModels(lines: string[]): StyledSubtitleLine[] {
   });
 }
 
-function applyCustomSubtitleTrack(
-  video: HTMLVideoElement,
-  subtitle: { path: string; label: string; language: string } | undefined,
-  onCueChange: (lines: string[]) => void
-) {
-  clearCustomSubtitleTracks(video);
-
-  onCueChange([]);
-  if (!subtitle) return () => undefined;
-
-  const track = document.createElement('track');
-  track.kind = 'subtitles';
-  track.label = subtitle.label;
-  track.srclang = subtitleLangCode(subtitle.language);
-  track.src = `.${toEncodedBangumiAssetPath(subtitle.path)}`;
-  track.default = true;
-  track.dataset.bgmiSubtitle = 'true';
-
-  let activeTrack: TextTrack | null = null;
-  let cueChangeTrack: TextTrack | null = null;
-  const syncTrackMode = () => {
-    if (!activeTrack) return;
-    activeTrack.mode = isNativeVideoFullscreen(video) ? 'showing' : 'hidden';
-  };
-  const syncCue = () => {
-    const activeCues = activeTrack?.activeCues;
-    if (!activeCues || activeCues.length === 0) {
-      onCueChange([]);
-      return;
-    }
-
-    const lines = Array.from(activeCues).flatMap(cue => normalizeCueText((cue as VTTCue).text || ''));
-    onCueChange(lines);
-  };
-  const handleCueChange = () => {
-    syncCue();
-  };
-  const handleTrackLoad = () => {
-    activeTrack = track.track;
-    if (!activeTrack) return;
-
-    syncTrackMode();
-    activeTrack.addEventListener('cuechange', handleCueChange);
-    cueChangeTrack = activeTrack;
-    syncCue();
-  };
-  const handleFullscreenStateChange = () => {
-    syncTrackMode();
-    syncCue();
-  };
-
-  track.addEventListener('load', handleTrackLoad);
-  document.addEventListener('fullscreenchange', handleFullscreenStateChange);
-  document.addEventListener('webkitfullscreenchange', handleFullscreenStateChange as EventListener);
-  video.addEventListener('webkitbeginfullscreen', handleFullscreenStateChange as EventListener);
-  video.addEventListener('webkitendfullscreen', handleFullscreenStateChange as EventListener);
-  video.append(track);
-
-  return () => {
-    track.removeEventListener('load', handleTrackLoad);
-    document.removeEventListener('fullscreenchange', handleFullscreenStateChange);
-    document.removeEventListener('webkitfullscreenchange', handleFullscreenStateChange as EventListener);
-    video.removeEventListener('webkitbeginfullscreen', handleFullscreenStateChange as EventListener);
-    video.removeEventListener('webkitendfullscreen', handleFullscreenStateChange as EventListener);
-    if (cueChangeTrack) {
-      cueChangeTrack.removeEventListener('cuechange', handleCueChange);
-    }
-    if (activeTrack) {
-      activeTrack.mode = 'disabled';
-    }
-    track.remove();
-    onCueChange([]);
-  };
-}
-
-function clearCustomSubtitleTracks(video: HTMLVideoElement) {
-  Array.from(video.querySelectorAll('track[data-bgmi-subtitle="true"]')).forEach(track => track.remove());
-
+function disableNativeTracks(video: HTMLVideoElement) {
   for (let index = 0; index < video.textTracks.length; index += 1) {
     video.textTracks[index].mode = 'disabled';
   }
@@ -478,7 +435,6 @@ export default function VideoPlayer({
   const [subtitleOverlayRoot, setSubtitleOverlayRoot] = useState<HTMLElement | null>(null);
   const [subtitleScale, setSubtitleScale] = useState<SubtitleScaleState>(defaultSubtitleScale);
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
-  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [hlsProgress, setHlsProgress] = useState<HlsProgressState>({
     active: false,
     profile: '',
@@ -792,12 +748,54 @@ export default function VideoPlayer({
   useEffect(() => {
     const video = playerRef.current?.video;
     if (!video) return;
-    if (isAssSubtitle) {
-      clearCustomSubtitleTracks(video);
+    if (isAssSubtitle || !activeSubtitle) {
+      disableNativeTracks(video);
       setSubtitleLines([]);
-      return () => undefined;
+      return;
     }
-    return applyCustomSubtitleTrack(video, activeSubtitle, setSubtitleLines);
+
+    disableNativeTracks(video);
+    setSubtitleLines([]);
+
+    const subUrl = activeSubtitle.original_path
+      ? createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`)
+      : createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
+
+    const abortController = new AbortController();
+    let cues: ParsedCue[] = [];
+    let ready = false;
+
+    fetch(subUrl, { signal: abortController.signal })
+      .then(res => res.text())
+      .then(content => {
+        if (abortController.signal.aborted) return;
+        cues = parseSubtitleText(content);
+        ready = true;
+        const lines = findActiveCueLines(cues, video.currentTime);
+        setSubtitleLines(lines);
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') console.error('Failed to load subtitle:', err);
+      });
+
+    let prevLineKey = '';
+    const handleTimeUpdate = () => {
+      if (!ready) return;
+      const lines = findActiveCueLines(cues, video.currentTime);
+      const lineKey = lines.join('\n');
+      if (lineKey !== prevLineKey) {
+        prevLineKey = lineKey;
+        setSubtitleLines(lines);
+      }
+    };
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      abortController.abort();
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      setSubtitleLines([]);
+    };
   }, [activeSubtitle, currentSourceUrl, isAssSubtitle]);
 
   useEffect(() => {
@@ -807,7 +805,7 @@ export default function VideoPlayer({
     assRendererRef.current = null;
     if (!isAssSubtitle || !activeSubtitle?.original_path || !video) return;
 
-    clearCustomSubtitleTracks(video);
+    disableNativeTracks(video);
     setSubtitleLines([]);
 
     const container = video.parentElement;
@@ -842,9 +840,9 @@ export default function VideoPlayer({
     if (!playerRoot && !video) return;
 
     const syncFullscreenState = () => {
-      const nextNativeFullscreen = isNativeVideoFullscreen(video);
-      setIsNativeFullscreen(nextNativeFullscreen);
-      setIsPlayerFullscreen(nextNativeFullscreen || isPlayerInDocumentFullscreen(playerRoot));
+      setIsPlayerFullscreen(
+        isNativeVideoFullscreen(video) || isPlayerInDocumentFullscreen(playerRoot)
+      );
     };
 
     syncFullscreenState();
@@ -1077,7 +1075,7 @@ export default function VideoPlayer({
             </Flex>
           ) : null}
         </Box>
-        {subtitleOverlayRoot && subtitleLineModels.length > 0 && !isNativeFullscreen && !isAssSubtitle
+        {subtitleOverlayRoot && subtitleLineModels.length > 0 && !isAssSubtitle
           ? createPortal(
               <Flex
                 className="bgmi-subtitle-overlay"

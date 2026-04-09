@@ -61,8 +61,27 @@ cp -R /opt/bgmi-frontend-dist/. "${BGMI_PATH}/front_static/"
 cp /opt/bgmi-frontend-package.json "${BGMI_PATH}/front_static/package.json"
 cp /opt/bgmi-frontend-package.json "${BGMI_PATH}/front_static/package/package.json"
 
+BGMI_UPDATE_INTERVAL="${BGMI_UPDATE_INTERVAL:-1800}"
+BGMI_CAL_INTERVAL="${BGMI_CAL_INTERVAL:-14400}"
+
 if [ "${1:-}" = "bgmi_http" ]; then
     shift
+    # Update subscribed bangumi every BGMI_UPDATE_INTERVAL (default 30 min)
+    (
+        while true; do
+            sleep "${BGMI_UPDATE_INTERVAL}"
+            echo "[bgmi] Running scheduled update --download ..."
+            bgmi update --download 2>&1 || echo "[bgmi] Update failed, will retry next cycle."
+        done
+    ) &
+    # Refresh calendar & download covers every BGMI_CAL_INTERVAL (default 4 hours)
+    (
+        while true; do
+            sleep "${BGMI_CAL_INTERVAL}"
+            echo "[bgmi] Running scheduled cal --force-update --download-cover ..."
+            bgmi cal --force-update --download-cover 2>&1 || echo "[bgmi] Cal failed, will retry next cycle."
+        done
+    ) &
     exec bgmi_http --port="${BGMI_HTTP_PORT}" --address="${BGMI_HTTP_ADDRESS}" "$@"
 fi
 
