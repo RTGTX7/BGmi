@@ -1145,6 +1145,7 @@ export default function VideoPlayer({
                         mb={index === subtitleLineModels.length - 1 ? '0' : isSecondary ? '0.08rem' : '0.18rem'}
                         sx={{
                           WebkitTextStroke: `${strokeWidth} rgba(0,0,0,0.72)`,
+                          paintOrder: 'stroke fill',
                         }}
                       >
                         {line.text}
