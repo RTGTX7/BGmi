@@ -66,7 +66,7 @@ def make_app() -> tornado.web.Application:
                 (r"/bangumi/(.*)", tornado.web.StaticFileHandler, {"path": cfg.save_path}),
                 (r"^/assets/(.*)$", tornado.web.StaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("assets")}),
                 (r"^/package/(.*)$", tornado.web.StaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("package")}),
-                (r"^/(logo\.jpg)$", tornado.web.StaticFileHandler, {"path": cfg.front_static_path}),
+                (r"^/(logo2?\.(?:png|jpg))$", tornado.web.StaticFileHandler, {"path": cfg.front_static_path}),
                 (
                     r"^/(.*)$",
                     SpaIndexHandler,
