@@ -1,6 +1,6 @@
 services:
   bgmi:
-    image: rtgtx/bgmi-custom:latest
+    image: rtgtx7/bgmi-custom:latest
     container_name: bgmi-custom
     init: true
     ports:
@@ -23,4 +23,10 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [compute, utility, video]

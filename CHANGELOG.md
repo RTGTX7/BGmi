@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-04-09
+
+### Subtitle Rendering
+
+- Replaced JASSUB (libass WASM) with **ass.js** for ASS subtitle rendering — uses DOM-based rendering so CJK font fallback is handled natively by the browser, eliminating tofu boxes.
+- Replaced native `<track>` WebVTT rendering with a **client-side SRT/VTT parser** + DOM overlay — fixes font size/position inconsistencies across screen sizes and fullscreen modes.
+- Added support for both `HH:MM:SS.mmm` and short `MM:SS.mmm` timestamp formats (ffmpeg-extracted VTT files often omit hours).
+- Added `paint-order: stroke fill` to subtitle text stroke to prevent glyph intersection artifacts on characters like "t".
+- Removed ~64MB bundled CJK font files that were previously needed for JASSUB.
+
+### Subtitle Selector
+
+- Replaced `chakra-react-select` dropdown with Chakra UI native `<Select>` for the subtitle track picker — fixes "Maximum update depth exceeded" infinite re-render loop caused by `@floating-ui` `autoUpdate`.
+
+### Docker
+
+- Fixed `docker-entrypoint.sh` CRLF line endings that caused `exec: no such file or directory` on Linux containers.
+- Added scheduled `bgmi update --download` every 30 minutes (configurable via `BGMI_UPDATE_INTERVAL`).
+- Added scheduled `bgmi cal --force-update --download-cover` every 4 hours (configurable via `BGMI_CAL_INTERVAL`).
+- Published Docker image to `rtgtx7/bgmi-custom:latest` on Docker Hub with full README overview.
+
+### Mobile UI
+
+- Polished episode card button sizing, gaps, padding, and rounded corners for mobile viewports.
+
 ## 2026-04-08
 
 ### Player

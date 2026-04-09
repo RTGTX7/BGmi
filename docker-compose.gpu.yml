@@ -1,11 +1,14 @@
+# GPU override — use with: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Selects a specific GPU instead of all GPUs. Change device_ids to match your setup.
 services:
   bgmi:
     environment:
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,video,utility}
-      NVIDIA_DISABLE_REQUIRE: "true"
-    devices:
-      - /dev/nvidia0:/dev/nvidia0
-      - /dev/nvidiactl:/dev/nvidiactl
-      - /dev/nvidia-uvm:/dev/nvidia-uvm
-      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${NVIDIA_GPU_ID:-0}"]
+              capabilities: [compute, utility, video]
