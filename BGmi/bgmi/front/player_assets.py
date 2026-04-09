@@ -660,10 +660,10 @@ def _build_hls_ffmpeg_command(
     if use_gpu:
         decoder = _pick_cuda_decoder(probe)
         if decoder:
-            # cuvid decoders support -resize WxH for GPU-side scaling,
-            # avoiding CPU involvement entirely.
+            # cuvid decoders have built-in -resize; always prefer it over
+            # scale_cuda which requires libnvrtc.so (PTX JIT compiler).
             command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
-            if needs_scale and not has_scale_cuda and cuvid_resize_w and cuvid_resize_h:
+            if needs_scale and cuvid_resize_w and cuvid_resize_h:
                 command.extend(["-resize", f"{cuvid_resize_w}x{cuvid_resize_h}"])
         elif "cuda" in _available_hwaccels():
             if has_scale_cuda or not needs_scale:
@@ -674,7 +674,7 @@ def _build_hls_ffmpeg_command(
     command.extend(["-i", str(source_path)])
 
     # Apply scaling filter only when cuvid -resize was NOT used above.
-    cuvid_resized = use_gpu and needs_scale and not has_scale_cuda and _pick_cuda_decoder(probe) is not None and cuvid_resize_w > 0
+    cuvid_resized = use_gpu and needs_scale and _pick_cuda_decoder(probe) is not None and cuvid_resize_w > 0
     if needs_scale and not cuvid_resized:
         if use_gpu and has_scale_cuda:
             command.extend(["-vf", f"scale_cuda=-2:{target_height}"])
