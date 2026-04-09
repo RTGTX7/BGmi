@@ -696,8 +696,11 @@ def _build_hls_ffmpeg_command(
             command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
             if needs_scale and cuvid_resize_w and cuvid_resize_h:
                 command.extend(["-resize", f"{cuvid_resize_w}x{cuvid_resize_h}"])
-        elif "cuda" in _available_hwaccels():
+        elif "cuda" in _available_hwaccels() and "422" not in pix_fmt:
+            # Generic CUDA hwaccel (NVDEC via ffmpeg API).
+            # Skip for 4:2:2 — NVDEC doesn't support it; CPU decode + nvenc encode instead.
             command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
+        # else: 4:2:2 or unsupported → CPU decode, still GPU encode via nvenc.
 
     command.extend(["-i", str(source_path)])
 
