@@ -18,7 +18,7 @@ import Link from '../router-link';
 import SidebarNavItem from './sidebar-nav-item';
 
 import { useColorMode } from '~/hooks/use-color-mode';
-import LOGO from '../../assets/logo.jpg';
+const LOGO = '/logo.png';
 
 export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () => void }) => {
   const { colorMode, toggleColorMode } = useColorMode();
@@ -71,17 +71,18 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
       <Flex px={{ base: '5', lg: '6' }} py={{ base: '5', lg: '6' }} alignItems="center">
         <Image
           src={LOGO}
-          width={{ base: '40px', lg: '46px' }}
-          height={{ base: '40px', lg: '46px' }}
+          width={{ base: '44px', lg: '52px' }}
+          height={{ base: '44px', lg: '52px' }}
           borderRadius="50%"
           alt="logo"
+          flexShrink={0}
           placeholder="empty"
           boxShadow={colorMode === 'dark' ? '0 6px 18px rgba(0,0,0,0.16)' : '0 8px 18px rgba(31,84,110,0.10)'}
           borderWidth="1px"
           borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(123,152,168,0.22)'}
         />
         <Text
-          ml="3.5"
+          ml="4"
           fontSize={{ base: '2xl', lg: '3xl' }}
           lineHeight="1"
           fontWeight="bold"

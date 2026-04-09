@@ -5,7 +5,7 @@ import { BsMoonFill, BsSunFill } from 'react-icons/bs';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { handleSecondaryTitle } from '~/lib/utils';
-import LOGO from '../../assets/logo.jpg';
+const LOGO = '/logo.png';
 
 export default function Header({ sidebarToggle }: { sidebarToggle: () => void }) {
   const { pathname } = useLocation();
@@ -32,15 +32,16 @@ export default function Header({ sidebarToggle }: { sidebarToggle: () => void })
       >
         <Image
           src={LOGO}
-          width="34px"
-          height="34px"
+          width="40px"
+          height="40px"
           borderRadius="full"
           alt="logo"
+          flexShrink={0}
           boxShadow={colorMode === 'dark' ? '0 6px 18px rgba(0,0,0,0.16)' : '0 8px 18px rgba(31,84,110,0.10)'}
         />
 
-        <Box minW="0" flex="1">
-          <Text fontSize="lg" fontWeight="bold" lineHeight="1.1" noOfLines={1}>
+        <Box minW="0" flex="1" ml="1">
+          <Text fontSize="xl" fontWeight="bold" lineHeight="1.1" noOfLines={1}>
             BGmi
           </Text>
           <Text fontSize="xs" opacity="0.72" noOfLines={1}>
