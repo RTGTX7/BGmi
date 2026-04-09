@@ -116,7 +116,7 @@ export default function SubscribeCard({ bangumi }: Props) {
             borderWidth="1px"
             borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.32)'}
             bg="transparent"
-            backdropFilter="blur(18px) saturate(165%)"
+            backdropFilter="blur(4px) saturate(165%)"
             boxShadow={
               isDark
                 ? '0 16px 34px rgba(3,8,20,0.24), inset 0 1px 0 rgba(255,255,255,0.10)'

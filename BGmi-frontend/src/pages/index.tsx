@@ -185,7 +185,7 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                     lineHeight="1.22"
                     fontWeight="semibold"
                     color="white"
-                    textShadow="0 2px 14px rgba(0,0,0,0.34)"
+                    textShadow="0 2px 6px rgba(0, 0, 0, 0.85)"
                     transition="all 0.32s cubic-bezier(0.22, 1, 0.36, 1)"
                     sx={{
                       display: '-webkit-box',
