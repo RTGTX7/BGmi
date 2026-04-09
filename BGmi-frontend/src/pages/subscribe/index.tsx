@@ -1,5 +1,5 @@
 import { useMemo, useReducer, useState } from 'react';
-import { CiFilter } from 'react-icons/ci';
+import { CiFilter, CiSearch } from 'react-icons/ci';
 import {
   Box,
   Button,
@@ -68,32 +68,47 @@ interface FilterOptionsMenuProps {
 function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) {
   const { colorMode } = useColorMode();
   const [bangumiShow, setBangumiShow] = useAtom(bangumiFilterAtom);
+  const isDark = colorMode === 'dark';
 
-  const selectedBg = colorMode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(234,248,255,0.72)';
+  const selectedBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(234,248,255,0.72)';
 
   const handleShow = (type: DataKind) => {
     setBangumiShow(current => (current === type ? 'both' : type));
   };
 
   return (
-    <Box display="flex" alignItems="center" justifyContent="flex-start" h="full" w={{ base: 'full', lg: 'auto' }} pl={{ base: 0, lg: 1 }}>
+    <Box display="flex" alignItems="center" justifyContent="flex-start" h="full" w="auto" pl={{ base: 0, lg: 1 }}>
       <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end">
         <MenuButton
           as={Button}
-          leftIcon={<CiFilter size="15" />}
+          leftIcon={<CiFilter size="17" />}
           size="sm"
           h="10"
-          w={{ base: 'full', lg: 'auto' }}
+          w="auto"
           minW="unset"
-          px="4"
+          px="3.5"
           lineHeight="1"
-          bg={colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(234,248,255,0.64)'}
-          borderColor={colorMode === 'dark' ? 'whiteAlpha.140' : 'rgba(255,255,255,0.78)'}
+          display="inline-flex"
+          alignItems="center"
+          justifyContent="center"
+          gap="1.5"
+          rounded="2xl"
+          color={isDark ? 'whiteAlpha.920' : '#516274'}
+          bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.32)'}
+          borderWidth="1px"
+          borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.82)'}
           boxShadow={
-            colorMode === 'dark'
-              ? '0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
-              : '0 14px 30px rgba(39,87,116,0.10), 0 4px 14px rgba(94,188,214,0.10), inset 0 1px 0 rgba(255,255,255,0.52)'
+            isDark
+              ? '0 14px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
+              : '0 14px 30px rgba(39,87,116,0.10), inset 0 1px 0 rgba(255,255,255,0.52)'
           }
+          backdropFilter="blur(22px) saturate(170%)"
+          fontSize="sm"
+          fontWeight="semibold"
+          _hover={{
+            bg: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.42)',
+            borderColor: isDark ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.92)',
+          }}
         >
           筛选
         </MenuButton>
@@ -101,10 +116,10 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           <MenuList
             minW="36"
             zIndex={1600}
-            bg={colorMode === 'dark' ? 'rgba(25,30,42,0.88)' : 'rgba(244,252,255,0.88)'}
-            borderColor={colorMode === 'dark' ? 'whiteAlpha.160' : 'rgba(255,255,255,0.80)'}
+            bg={isDark ? 'rgba(25,30,42,0.88)' : 'rgba(244,252,255,0.88)'}
+            borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.80)'}
             boxShadow={
-              colorMode === 'dark'
+              isDark
                 ? '0 18px 44px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)'
                 : '0 18px 44px rgba(39,87,116,0.12), 0 6px 18px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.56)'
             }
@@ -144,29 +159,29 @@ function SearchPanel({
     <Box
       px="2"
       py="2"
-      rounded="2xl"
+      rounded="20px"
       borderWidth="1px"
-      borderColor={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.62)'}
-      bg={isDark ? 'rgba(18,24,36,0.62)' : 'rgba(228,244,246,0.58)'}
+      borderColor={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.72)'}
+      bg={isDark ? 'rgba(18,24,36,0.58)' : 'rgba(236,248,252,0.54)'}
       boxShadow={
         isDark
           ? '0 18px 36px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05)'
-          : '0 14px 28px rgba(39,87,116,0.10), 0 4px 10px rgba(94,188,214,0.08), inset 0 1px 0 rgba(255,255,255,0.42)'
+          : '0 16px 32px rgba(39,87,116,0.10), inset 0 1px 0 rgba(255,255,255,0.46)'
       }
-      backdropFilter="blur(22px) saturate(170%)"
+      backdropFilter="blur(24px) saturate(180%)"
     >
       <Box
         w="full"
-        rounded="full"
+        rounded="16px"
         borderWidth="1px"
-        borderColor={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.58)'}
-        bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.20)'}
+        borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.78)'}
+        bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.34)'}
         boxShadow={
           isDark
-            ? '0 10px 22px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)'
-            : '0 10px 22px rgba(39,87,116,0.08), 0 3px 10px rgba(94,188,214,0.06), inset 0 1px 0 rgba(255,255,255,0.46)'
+            ? '0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)'
+            : '0 10px 24px rgba(39,87,116,0.08), inset 0 1px 0 rgba(255,255,255,0.48)'
         }
-        backdropFilter="blur(18px) saturate(170%)"
+        backdropFilter="blur(20px) saturate(175%)"
         _before={{
           content: '""',
           position: 'absolute',
@@ -179,23 +194,38 @@ function SearchPanel({
         }}
         position="relative"
       >
+        <Box
+          position="absolute"
+          left="1rem"
+          top="50%"
+          transform="translateY(-50%)"
+          zIndex="2"
+          color={isDark ? 'whiteAlpha.700' : 'rgba(79,95,110,0.62)'}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
+          <CiSearch size="20" />
+        </Box>
         <Input
           placeholder="搜索动画片"
           value={keyword}
           onChange={event => onKeywordChange(event.target.value)}
-          h="2.9rem"
-          px="4.5"
-          rounded="full"
+          h={{ base: '3rem', md: '3.1rem' }}
+          pl="2.85rem"
+          pr="1rem"
+          rounded="16px"
           border="none"
           bg="transparent"
           color={isDark ? 'whiteAlpha.920' : '#516274'}
           fontSize={{ base: 'sm', md: 'md' }}
+          fontWeight="500"
           lineHeight="1"
           _placeholder={{ color: isDark ? 'whiteAlpha.500' : 'rgba(79,95,110,0.52)' }}
           _focusVisible={{
             boxShadow: isDark
-              ? '0 0 0 1px rgba(191,219,254,0.34), 0 10px 24px rgba(59,130,246,0.16)'
-              : '0 0 0 1px rgba(148,211,255,0.62), 0 12px 28px rgba(94,188,214,0.16)',
+              ? '0 0 0 1px rgba(191,219,254,0.42), 0 0 0 4px rgba(59,130,246,0.14), 0 14px 30px rgba(59,130,246,0.18)'
+              : '0 0 0 1px rgba(148,211,255,0.72), 0 0 0 4px rgba(94,188,214,0.14), 0 14px 30px rgba(94,188,214,0.18)',
           }}
         />
       </Box>

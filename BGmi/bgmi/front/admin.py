@@ -110,6 +110,11 @@ class UpdateHandler(BaseHandler):
         name = data.get("name", "")
         download = data.get("download", [])
 
+        if isinstance(name, str):
+            name = [name] if name else []
+        elif not isinstance(name, list):
+            name = []
+
         if not download:
             download = None
         update(name, download)

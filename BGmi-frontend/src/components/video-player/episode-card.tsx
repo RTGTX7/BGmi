@@ -11,9 +11,10 @@ interface Props {
     bangumiName: string;
     currentEpisode: string;
   };
+  embedded?: boolean;
 }
 
-export default function EpisodeCard({ setPlayState, bangumiData, ...props }: Props & BoxProps) {
+export default function EpisodeCard({ setPlayState, bangumiData, embedded = false, ...props }: Props & BoxProps) {
   const { colorMode } = useColorMode();
   const [watchHistory, setWatchHistory] = useWatchHistory();
 
@@ -41,21 +42,29 @@ export default function EpisodeCard({ setPlayState, bangumiData, ...props }: Pro
 
   return (
     <Box
-      bg={colorMode === 'light' ? 'rgba(255,255,255,0.58)' : 'rgba(255,255,255,0.05)'}
-      p="4"
-      ml={{ base: 'unset', xl: '4' }}
-      mt={{ base: '4', xl: 'unset' }}
+      bg={
+        embedded
+          ? 'transparent'
+          : colorMode === 'light'
+            ? 'rgba(255,255,255,0.58)'
+            : 'rgba(255,255,255,0.05)'
+      }
+      p={embedded ? '0' : '4'}
+      ml={embedded ? '0' : { base: 'unset', xl: '4' }}
+      mt={embedded ? '0' : { base: '4', xl: 'unset' }}
       w={{ base: 'full', xl: '18rem' }}
       minW={{ base: '0', xl: '18rem' }}
       alignSelf={{ base: 'stretch', xl: 'flex-start' }}
       rounded="2xl"
-      borderWidth="1px"
-      borderColor={colorMode === 'light' ? 'rgba(255,255,255,0.78)' : 'whiteAlpha.140'}
-      backdropFilter="blur(20px) saturate(170%)"
+      borderWidth={embedded ? '0' : '1px'}
+      borderColor={embedded ? 'transparent' : colorMode === 'light' ? 'rgba(255,255,255,0.78)' : 'whiteAlpha.140'}
+      backdropFilter={embedded ? 'none' : 'blur(20px) saturate(170%)'}
       boxShadow={
-        colorMode === 'light'
-          ? '0 18px 38px rgba(39,87,116,0.10), 0 6px 16px rgba(94,188,214,0.10), inset 0 1px 0 rgba(255,255,255,0.56)'
-          : '0 18px 38px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)'
+        embedded
+          ? 'none'
+          : colorMode === 'light'
+            ? '0 18px 38px rgba(39,87,116,0.10), 0 6px 16px rgba(94,188,214,0.10), inset 0 1px 0 rgba(255,255,255,0.56)'
+            : '0 18px 38px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)'
       }
       position="relative"
       overflow="hidden"
@@ -66,7 +75,9 @@ export default function EpisodeCard({ setPlayState, bangumiData, ...props }: Pro
         borderRadius: 'inherit',
         pointerEvents: 'none',
         background:
-          colorMode === 'light'
+          embedded
+            ? 'transparent'
+            : colorMode === 'light'
             ? 'linear-gradient(180deg, rgba(255,255,255,0.62), rgba(214,255,249,0.12) 22%, rgba(255,255,255,0.04) 48%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.01) 22%)',
       }}

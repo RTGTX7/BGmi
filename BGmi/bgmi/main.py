@@ -15,7 +15,7 @@ from pycomplete import Completer
 from tornado import template
 
 from bgmi import __version__
-from bgmi.config import BGMI_PATH, CONFIG_FILE_PATH, Config, cfg, write_default_config
+from bgmi.config import BGMI_PATH, CONFIG_FILE_PATH, Config, cfg, normalize_config_path_value, write_default_config
 from bgmi.lib import controllers as ctl
 from bgmi.lib.constants import BANGUMI_UPDATE_TIME, SPACIAL_APPEND_CHARS, SPACIAL_REMOVE_CHARS, SUPPORT_WEBSITE
 from bgmi.lib.download import download_prepare
@@ -121,6 +121,9 @@ def config_set(keys: List[str], value: str) -> None:
 
     if keys[0] == "source":
         print_error("you can't change source with this command, use `bgmi source ...`", stop=True)
+
+    if keys and keys[0] == "save_path_map":
+        value = normalize_config_path_value(value)
 
     res = doc
     for key in keys[:-1]:

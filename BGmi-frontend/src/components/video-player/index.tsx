@@ -21,6 +21,8 @@ interface Props {
   danmakuApi: string;
   episode: string;
   playerAsset?: PlayerAsset;
+  playerAssetLoading?: boolean;
+  playerAssetMissing?: boolean;
 }
 
 interface HlsProgressState {
@@ -259,7 +261,14 @@ function createCustomHlsFactory(
   };
 }
 
-export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAsset }: Props) {
+export default function VideoPlayer({
+  bangumiData,
+  danmakuApi,
+  episode,
+  playerAsset,
+  playerAssetLoading = false,
+  playerAssetMissing = false,
+}: Props) {
   const { colorMode } = useColorMode();
   const toast = useToast();
   const toastRef = useRef(toast);
@@ -348,18 +357,6 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
   };
 
   useEffect(() => stopPolling, []);
-
-  useEffect(() => {
-    if (rawPath || toastRef.current.isActive(episode)) return;
-
-    toastRef.current({
-      title: '视频文件不存在',
-      status: 'error',
-      duration: 3000,
-      position: 'top-right',
-      id: episode,
-    });
-  }, [episode, rawPath]);
 
   useEffect(() => {
     const directOption = qualityOptions.find(item => item.profile === 'source');
@@ -615,6 +612,9 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
     }),
     [bangumiData.bangumi_name, bangumiData.player, episode]
   );
+  const showAssetLoading = !currentSourceUrl && playerAssetLoading;
+  const showMissingState = !currentSourceUrl && !playerAssetLoading && playerAssetMissing;
+  const showPendingState = !currentSourceUrl && !playerAssetLoading && !playerAssetMissing;
 
   return (
     <>
@@ -631,10 +631,9 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
               : '0 18px 40px rgba(31,84,110,0.10), 0 6px 16px rgba(94,188,214,0.08), inset 0 1px 0 rgba(255,255,255,0.52)'
           }
           backdropFilter="blur(22px) saturate(170%)"
-          transition=".5s width"
           w="full"
           position="relative"
-          overflow="visible"
+          overflow="hidden"
           minH={{ base: '16rem', xl: '26rem' }}
           _before={{
             content: '""',
@@ -650,7 +649,6 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
           sx={{
             '& .dplayer': {
               width: '100%',
-              borderRadius: 'inherit',
               overflow: 'hidden',
             },
             '& .dplayer-video-wrap': {
@@ -679,11 +677,28 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
             m="auto"
             color={colorMode === 'dark' ? 'white' : 'blue.500'}
           />
-          <Box id="DPlayer" ref={containerRef} display={currentSourceUrl ? 'block' : 'none'} rounded="inherit" overflow="hidden" />
-          {!currentSourceUrl ? (
+          <Box id="DPlayer" ref={containerRef} display={currentSourceUrl ? 'block' : 'none'} overflow="hidden" />
+          {showAssetLoading ? (
             <Flex minH={{ base: '16rem', xl: '26rem' }} align="center" justify="center" direction="column" gap="3" px="6" textAlign="center">
               <Text fontSize="sm" opacity="0.82">
                 正在加载播放路径和字幕信息，请稍候...
+              </Text>
+            </Flex>
+          ) : null}
+          {showMissingState ? (
+            <Flex minH={{ base: '16rem', xl: '26rem' }} align="center" justify="center" direction="column" gap="3" px="6" textAlign="center">
+              <Text fontSize="sm" fontWeight="600" opacity="0.9">
+                当前剧集还没有可播放的视频文件
+              </Text>
+              <Text fontSize="sm" opacity="0.74">
+                请先提交下载，或等待下载器完成后再播放。
+              </Text>
+            </Flex>
+          ) : null}
+          {showPendingState ? (
+            <Flex minH={{ base: '16rem', xl: '26rem' }} align="center" justify="center" direction="column" gap="3" px="6" textAlign="center">
+              <Text fontSize="sm" opacity="0.82">
+                正在准备播放资源，请稍候...
               </Text>
             </Flex>
           ) : null}
@@ -723,20 +738,15 @@ export default function VideoPlayer({ bangumiData, danmakuApi, episode, playerAs
 
         {qualityOptions.length > 0 || subtitleTracks.length > 0 ? (
           <Box
-            mt="3"
+            mt="0"
             p="4"
             w="full"
             alignSelf="stretch"
-            rounded="2xl"
+            roundedBottom="2xl"
             bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(226,239,246,0.44)'}
-            borderWidth="1px"
-            borderColor={colorMode === 'dark' ? 'whiteAlpha.140' : 'rgba(255,255,255,0.64)'}
+            borderTopWidth="1px"
+            borderTopColor={colorMode === 'dark' ? 'whiteAlpha.140' : 'rgba(255,255,255,0.64)'}
             backdropFilter="blur(18px) saturate(165%)"
-            boxShadow={
-              colorMode === 'dark'
-                ? '0 14px 30px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.06)'
-                : '0 16px 32px rgba(39,87,116,0.10), 0 4px 12px rgba(94,188,214,0.08), inset 0 1px 0 rgba(255,255,255,0.44)'
-            }
             position="relative"
             overflow="visible"
             _before={{

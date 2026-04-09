@@ -8,6 +8,7 @@ import VideoPlayer from '~/components/video-player';
 import { useBangumi } from '~/hooks/use-bangumi';
 import { useWatchHistory } from '~/hooks/use-watch-history';
 import { fetcherWithTimeout } from '~/lib/fetcher';
+
 import type { PlayerAssetResponse } from '~/types/bangumi';
 
 export default function Player() {
@@ -33,8 +34,10 @@ export default function Player() {
   );
 
   if (!data) return null;
-
   if (!bangumiData) return <div>加载播放器出错，数据不存在</div>;
+
+  const playerAssetData = playerAsset?.data;
+  const playerAssetMissing = !playerAssetLoading && !playerAssetData?.browser_path && !playerAssetData?.source_path;
 
   return (
     <Box>
@@ -42,6 +45,7 @@ export default function Player() {
         <title>{`BGmi - ${bangumiData.bangumi_name}`}</title>
         <meta name="referrer" content="no-referrer" />
       </Helmet>
+
       <Heading
         ml={{ base: '0', xl: '10' }}
         mb={{ base: '4', lg: '6' }}
@@ -53,11 +57,7 @@ export default function Player() {
       >
         {bangumiData.bangumi_name} {`- 第 ${episode} 集`}
       </Heading>
-      {playerAssetLoading ? (
-        <Box ml={{ base: '0', xl: '10' }} mb="4" fontSize="sm" opacity="0.8">
-          正在准备字幕和播放资源，首次加载可能需要稍等一下。
-        </Box>
-      ) : null}
+
       <Flex
         position="relative"
         mx={{ base: '0', xl: '30' }}
@@ -69,7 +69,9 @@ export default function Player() {
           episode={episode}
           bangumiData={bangumiData}
           danmakuApi={data.danmaku_api}
-          playerAsset={playerAsset?.data}
+          playerAsset={playerAssetData}
+          playerAssetLoading={playerAssetLoading}
+          playerAssetMissing={playerAssetMissing}
         />
       </Flex>
     </Box>

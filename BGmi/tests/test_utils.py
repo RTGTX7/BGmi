@@ -1,12 +1,13 @@
 import shutil
 from pathlib import Path
 from typing import List, Tuple
+from unittest import mock
 
 import pytest
 
 from bgmi.config import cfg
 from bgmi.front.index import get_player
-from bgmi.utils import episode_filter_regex, parse_episode
+from bgmi.utils import bangumi_save_path, episode_filter_regex, parse_episode
 from bgmi.website.model import Episode
 
 _episode_cases: List[Tuple[str, int]] = [
@@ -99,3 +100,16 @@ def test_get_player():
         1: {"path": "/test-save-path/ss/1/q/bigger.mkv"},
         2: {"path": "/test-save-path/ss/2/2.mp4"},
     }
+
+
+def test_bangumi_save_path_normalizes_windows_relative_path():
+    cfg.save_path_map["test-path-normalize"] = r".\test-path-normalize\Season 1"
+
+    assert bangumi_save_path("test-path-normalize") == cfg.save_path.joinpath("test-path-normalize/Season 1")
+
+
+def test_bangumi_save_path_rejects_windows_absolute_path_on_non_windows():
+    cfg.save_path_map["test-windows-absolute"] = r"C:\Anime\test-windows-absolute"
+
+    with mock.patch("bgmi.utils.IS_WINDOWS", False):
+        assert bangumi_save_path("test-windows-absolute") == cfg.save_path.joinpath("test-windows-absolute")

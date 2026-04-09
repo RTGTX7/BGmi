@@ -23,7 +23,7 @@ from loguru import logger
 from requests import Response
 
 from bgmi import __admin_version__, __version__
-from bgmi.config import BGMI_PATH, IS_WINDOWS, cfg
+from bgmi.config import BGMI_PATH, IS_WINDOWS, cfg, is_windows_absolute_path, normalize_config_path_value
 from bgmi.lib.constants import SUPPORT_WEBSITE
 from bgmi.session import session
 from bgmi.website.model import Episode
@@ -266,10 +266,21 @@ def bangumi_save_path(bangumi_name: str) -> Path:
     if r is None:
         return cfg.save_path.joinpath(name)
 
-    if r.is_absolute():
-        return r
+    normalized = normalize_config_path_value(r)
 
-    return cfg.save_path.joinpath(r)
+    if not IS_WINDOWS and is_windows_absolute_path(normalized):
+        print_warning(
+            f"save_path_map for {bangumi_name} uses a Windows absolute path on a non-Windows system; "
+            "falling back to the default save_path"
+        )
+        return cfg.save_path.joinpath(name)
+
+    resolved = Path(normalized)
+
+    if resolved.is_absolute():
+        return resolved
+
+    return cfg.save_path.joinpath(resolved)
 
 
 def get_web_admin(method: str) -> None:

@@ -118,7 +118,7 @@ function PlayerCard({ bangumiData }: PlayerCardProps) {
                 py={{ base: '2.5', md: '3' }}
                 borderWidth="1px"
                 borderColor={isDark ? 'whiteAlpha.220' : 'rgba(255,255,255,0.78)'}
-                backdropFilter="blur(22px) saturate(165%)"
+                backdropFilter="blur(2px) saturate(165%)"
                 boxShadow={
                   isDark
                     ? '0 14px 32px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10)'

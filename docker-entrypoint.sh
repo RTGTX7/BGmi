@@ -3,16 +3,22 @@ set -eu
 
 mkdir -p "${BGMI_PATH}" "${BGMI_SAVE_PATH}" "${BGMI_TMP_PATH}"
 
-if ls /dev/nvidia* >/dev/null 2>&1; then
-    echo "[bgmi] NVIDIA device nodes detected in container."
+if ls /dev/nvidia* >/dev/null 2>&1 || [ -e /dev/dxg ]; then
+    echo "[bgmi] GPU device nodes detected in container."
 else
-    echo "[bgmi] NVIDIA device nodes not found; ffmpeg will fall back to CPU if GPU runtime is unavailable."
+    echo "[bgmi] GPU device nodes not found; ffmpeg will fall back to CPU if GPU runtime is unavailable."
 fi
 
 if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q 'h264_nvenc'; then
     echo "[bgmi] ffmpeg NVENC encoder is available."
 else
     echo "[bgmi] ffmpeg NVENC encoder is not available."
+fi
+
+if ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=128x72:rate=1 -frames:v 1 -c:v h264_nvenc -f null - >/dev/null 2>&1; then
+    echo "[bgmi] ffmpeg NVENC runtime test passed."
+else
+    echo "[bgmi] ffmpeg NVENC runtime test failed; GPU may still be unavailable to the container."
 fi
 
 if [ ! -f "${BGMI_PATH}/config.toml" ]; then

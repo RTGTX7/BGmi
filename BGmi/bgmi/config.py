@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import secrets
 import tempfile
 from pathlib import Path
@@ -39,6 +40,15 @@ def get_bgmi_home() -> Path:
 BGMI_PATH = get_bgmi_home().absolute()
 
 CONFIG_FILE_PATH = BGMI_PATH / "config.toml"
+WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def normalize_config_path_value(value: os.PathLike[str] | str) -> str:
+    return os.fspath(value).strip().replace("\\", "/")
+
+
+def is_windows_absolute_path(value: str) -> bool:
+    return bool(WINDOWS_ABS_PATH_RE.match(value))
 
 
 class BaseSetting(BaseModel):
@@ -148,11 +158,32 @@ class Config(BaseSetting):
         ["Leopard-Raws", "hevc", "x265", "c-a Raws", "U3-Web"], description="Global exclude keywords"
     )
 
-    save_path_map: dict[str, Path] = Field(default_factory=dict, description="per-bangumi save path")
+    save_path_map: dict[str, str] = Field(default_factory=dict, description="per-bangumi save path")
     player: dict[str, typing.Any] = Field(default_factory=dict, description="player related settings")
 
+    @pydantic.field_validator("save_path_map", mode="before")
+    @classmethod
+    def _normalize_save_path_map(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+
+        return {
+            str(key): normalize_config_path_value(path_value)
+            for key, path_value in value.items()
+            if path_value is not None and os.fspath(path_value).strip()
+        }
+
+    def _config_dump(self) -> dict[str, typing.Any]:
+        data = json.loads(self.model_dump_json())
+        data["save_path_map"] = {
+            key: normalize_config_path_value(value)
+            for key, value in data.get("save_path_map", {}).items()
+            if value
+        }
+        return data
+
     def save(self) -> None:
-        s = tomlkit.dumps(json.loads(self.model_dump_json()))
+        s = tomlkit.dumps(self._config_dump())
 
         CONFIG_FILE_PATH.write_text(s, encoding="utf8")
 
@@ -198,7 +229,7 @@ else:
 
 
 def print_config() -> str:
-    return tomlkit.dumps(json.loads(cfg.model_dump_json()))
+    return tomlkit.dumps(cfg._config_dump())
 
 
 def write_default_config() -> None:

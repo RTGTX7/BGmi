@@ -1,8 +1,8 @@
-import { Box, Button, Fade, Flex, Image, Text, useDisclosure } from '@chakra-ui/react';
-
+import { Box, Button, Flex, Image, Text, useDisclosure } from '@chakra-ui/react';
 import { useState } from 'react';
-import { useSubscribeAction } from '~/hooks/use-subscribe-action';
+
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useSubscribeAction } from '~/hooks/use-subscribe-action';
 import { resolveCoverSrc } from '~/lib/utils';
 
 import SubscribeForm from './subscribe-form';
@@ -21,16 +21,12 @@ export interface SyncData {
 
 export default function SubscribeCard({ bangumi }: Props) {
   const { colorMode } = useColorMode();
-  const buttonSubscribeBg = colorMode === 'dark' ? 'green.400' : 'rgba(104, 219, 149, 0.72)';
-  const buttonUnSubscribeBg = colorMode === 'dark' ? 'blue.400' : 'rgba(105, 191, 255, 0.70)';
-
+  const isDark = colorMode === 'dark';
   const [imageLoaded, setImageLoaded] = useState(false);
-
   const { isOpen, onClose, onOpen } = useDisclosure();
   const [initialData, setInitialData] = useState<InitialData>();
 
   const { handleFetchFilter, handleSubscribe } = useSubscribeAction();
-
   const [syncData, setSyncData] = useState<SyncData>({
     status: !!bangumi.status,
     episode: bangumi.episode,
@@ -39,15 +35,12 @@ export default function SubscribeCard({ bangumi }: Props) {
   const handleOpen = async (status: boolean, name: string, ep: number) => {
     onOpen();
 
-    /**
-     * 先进行订阅操作才能请求 `filter` 获取字幕组数据, 已订阅不操作
-     * */
     if (!status) {
       await handleSubscribe(name, 0);
-      setSyncData({
-        ...syncData,
+      setSyncData(current => ({
+        ...current,
         status: true,
-      });
+      }));
     }
 
     const data = await handleFetchFilter(name);
@@ -68,126 +61,151 @@ export default function SubscribeCard({ bangumi }: Props) {
   return (
     <>
       <Box
-        rounded="2xl"
+        role="group"
+        position="relative"
+        rounded="24px"
         overflow="hidden"
         borderWidth="1px"
-        borderColor={colorMode === 'dark' ? 'whiteAlpha.120' : 'rgba(255,255,255,0.76)'}
-        bg={colorMode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(236,248,255,0.62)'}
-        backdropFilter="blur(18px) saturate(165%)"
-        boxShadow={
-          colorMode === 'dark'
-            ? '0 16px 36px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05)'
-            : '0 20px 42px rgba(39,87,116,0.10), 0 6px 18px rgba(94,188,214,0.10), inset 0 1px 0 rgba(255,255,255,0.52)'
-        }
-        position="relative"
-        _before={{
-          content: '""',
-          position: 'absolute',
-          inset: '1px',
-          borderRadius: 'inherit',
-          pointerEvents: 'none',
-          background:
-            colorMode === 'dark'
-              ? 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 22%)'
-              : 'linear-gradient(180deg, rgba(255,255,255,0.66), rgba(214,255,249,0.16) 22%, rgba(188,233,255,0.08) 48%, rgba(255,255,255,0.04) 70%)',
-        }}
-        _after={{
-          content: '""',
-          position: 'absolute',
-          top: '0',
-          left: '0',
-          right: '0',
-          height: '1px',
-          pointerEvents: 'none',
-          background: colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.82)',
+        borderColor={isDark ? 'whiteAlpha.120' : 'rgba(255,255,255,0.54)'}
+        bg={isDark ? 'rgba(14,20,38,0.22)' : 'rgba(255,255,255,0.22)'}
+        boxShadow={isDark ? '0 18px 42px rgba(0,0,0,0.24)' : '0 18px 42px rgba(15,23,42,0.12)'}
+        transition="transform 240ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms ease"
+        _hover={{
+          transform: 'translateY(-3px) scale(1.008)',
+          boxShadow: isDark ? '0 24px 54px rgba(0,0,0,0.30)' : '0 24px 54px rgba(15,23,42,0.16)',
         }}
       >
-        <Flex
-          align={{ base: 'stretch', sm: 'center' }}
-          direction={{ base: 'column', sm: 'row' }}
-          gap={{ base: '3', sm: '2' }}
-          minH="12"
-          bg="transparent"
-          p={{ base: '3.5', sm: '4' }}
-          px={{ base: '3', sm: '2.5' }}
-        >
-          <Text
-            minW="0"
-            flex="1"
-            maxH={{ base: '10', sm: '6' }}
-            overflow="hidden"
-            transition="max-height 0.3s ease"
-            fontWeight="medium"
-            fontSize={{ base: 'sm', sm: 'md' }}
-            color={colorMode === 'dark' ? 'whiteAlpha.920' : 'gray.700'}
-            _hover={{
-              maxH: '28',
-            }}
-          >
-            {bangumi.name}
-          </Text>
-          <Button
-            onClick={() => handleOpen(syncData.status, bangumi.name, bangumi.episode ?? 0)}
-            ml={{ base: '0', sm: '2' }}
-            w={{ base: 'full', sm: 'auto' }}
-            minW={{ sm: '6.5rem' }}
-            bg={syncData.status ? buttonSubscribeBg : buttonUnSubscribeBg}
-            borderColor={colorMode === 'dark' ? undefined : 'rgba(255,255,255,0.58)'}
-            boxShadow={
-              colorMode === 'dark'
-                ? undefined
-                : '0 10px 22px rgba(83, 162, 214, 0.14), inset 0 1px 0 rgba(255,255,255,0.36)'
+        <Box position="relative" aspectRatio={3 / 4} w="full" overflow="hidden" bg={isDark ? 'gray.900' : 'gray.100'}>
+          <Image
+            h="full"
+            w="full"
+            src={resolveCoverSrc(bangumi.cover)}
+            alt={bangumi.name}
+            objectFit="cover"
+            opacity={imageLoaded ? 1 : 0}
+            onLoad={() => setImageLoaded(true)}
+            transition="opacity 180ms ease, transform 260ms ease"
+            _groupHover={{ transform: 'scale(1.025)' }}
+          />
+
+          <Box
+            position="absolute"
+            inset="0"
+            pointerEvents="none"
+            bg="linear-gradient(to bottom, rgba(0,0,0,0.02) 40%, rgba(0,0,0,0.14) 68%, rgba(0,0,0,0.34) 100%)"
+          />
+
+          <Box
+            position="absolute"
+            inset="0"
+            pointerEvents="none"
+            bg={
+              isDark
+                ? 'radial-gradient(circle at 22% 86%, rgba(83,240,193,0.12), transparent 26%), radial-gradient(circle at 78% 20%, rgba(123,181,255,0.12), transparent 26%)'
+                : 'radial-gradient(circle at 20% 84%, rgba(83,240,193,0.16), transparent 28%), radial-gradient(circle at 82% 20%, rgba(123,181,255,0.16), transparent 28%)'
             }
-            color={colorMode === 'dark' ? undefined : 'gray.800'}
-            _hover={{
-              opacity: 0.92,
+          />
+
+          <Box
+            position="absolute"
+            left={{ base: '3', md: '3.5' }}
+            right={{ base: '3', md: '3.5' }}
+            bottom={{ base: '3', md: '3.5' }}
+            zIndex="2"
+            rounded="22px"
+            borderWidth="1px"
+            borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.32)'}
+            bg="transparent"
+            backdropFilter="blur(18px) saturate(165%)"
+            boxShadow={
+              isDark
+                ? '0 16px 34px rgba(3,8,20,0.24), inset 0 1px 0 rgba(255,255,255,0.10)'
+                : '0 16px 34px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.22)'
+            }
+            px={{ base: '3.25', md: '3.5' }}
+            py={{ base: '1.9', md: '2.15' }}
+            minH={{ base: '4.9rem', md: '5rem' }}
+            h={{ base: '4.9rem', md: '5rem' }}
+            overflow="hidden"
+            transition="transform 240ms cubic-bezier(0.22, 1, 0.36, 1), height 240ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms ease, filter 240ms ease"
+            _groupHover={{
+              transform: 'translateY(-2px)',
+              h: { base: '5.6rem', md: '6.3rem' },
+              filter: 'saturate(1.03)',
+              boxShadow: isDark
+                ? '0 20px 38px rgba(3,8,20,0.28), inset 0 1px 0 rgba(255,255,255,0.12)'
+                : '0 20px 38px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.24)',
+            }}
+            _before={{
+              content: '""',
+              position: 'absolute',
+              inset: '1px',
+              borderRadius: 'inherit',
+              pointerEvents: 'none',
+              border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.12)',
+              background: isDark
+                ? 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.028) 30%, rgba(255,255,255,0.008) 62%, rgba(255,255,255,0) 100%)'
+                : 'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.07) 30%, rgba(255,255,255,0.02) 62%, rgba(255,255,255,0) 100%)',
+            }}
+            _after={{
+              content: '""',
+              position: 'absolute',
+              inset: '0',
+              borderRadius: 'inherit',
+              pointerEvents: 'none',
+              background: isDark
+                ? 'radial-gradient(circle at 18% -8%, rgba(255,255,255,0.14), transparent 28%), radial-gradient(circle at 84% 18%, rgba(120,194,255,0.06), transparent 28%)'
+                : 'radial-gradient(circle at 18% -8%, rgba(255,255,255,0.28), transparent 28%), radial-gradient(circle at 84% 18%, rgba(120,194,255,0.06), transparent 28%)',
+              opacity: isDark ? 0.4 : 0.56,
             }}
           >
-            {syncData.status ? '查看' : '订阅'}
-          </Button>
-        </Flex>
-        <Box
-          bg={colorMode === 'dark' ? 'gray.900' : 'gray.100'}
-          minW="0"
-          w="full"
-          minH={{ base: '11.5rem', sm: 'sm' }}
-          position="relative"
-          overflow="hidden"
-          _before={{
-            content: '""',
-            position: 'absolute',
-            inset: '0',
-            pointerEvents: 'none',
-            border: colorMode === 'dark' ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.42)',
-            boxShadow:
-              colorMode === 'dark'
-                ? 'inset 0 0 0 1px rgba(255,255,255,0.02)'
-                : 'inset 0 0 0 1px rgba(255,255,255,0.18)',
-          }}
-          _after={{
-            content: '""',
-            position: 'absolute',
-            inset: '0',
-            pointerEvents: 'none',
-            background:
-              colorMode === 'dark'
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 34%)'
-                : 'linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 34%)',
-          }}
-        >
-          <Fade in={imageLoaded}>
-            <Image
-              h="full"
-              w="full"
-              src={resolveCoverSrc(bangumi.cover)}
-              alt="anime cover"
-              objectFit="cover"
-              backgroundPosition="50% 50%"
-              onLoad={() => setImageLoaded(true)}
-            />
-          </Fade>
+            <Flex align="center" gap="3.5" position="relative" zIndex="1" h="full">
+              <Flex align="center" minW="0" flex="1" h="full">
+                <Text
+                  w="full"
+                  color="white"
+                  fontSize={{ base: 'md', md: 'lg' }}
+                  fontWeight="700"
+                  lineHeight="1.16"
+                  textShadow="0 2px 12px rgba(0,0,0,0.40)"
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: '2',
+                    overflow: 'hidden',
+                    '@media (min-width: 48em)': {
+                      '[role="group"]:hover &': {
+                        WebkitLineClamp: 'unset',
+                      },
+                    },
+                  }}
+                >
+                  {bangumi.name}
+                </Text>
+              </Flex>
+
+              <Flex align="center" justify="flex-end" minH="40px" flexShrink={0}>
+                <Button
+                  onClick={() => handleOpen(syncData.status, bangumi.name, bangumi.episode ?? 0)}
+                  h="40px"
+                  minW="98px"
+                  px="5"
+                  rounded="full"
+                  fontSize="sm"
+                  fontWeight="700"
+                  color="gray.900"
+                  bg={syncData.status ? 'linear-gradient(135deg, #6ee7b7, #34d399)' : 'linear-gradient(135deg, #7dd3fc, #60a5fa)'}
+                  boxShadow="0 10px 22px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.36)"
+                  _hover={{ opacity: 0.96, transform: 'translateY(-1px)' }}
+                >
+                  {syncData.status ? '查看' : '订阅'}
+                </Button>
+              </Flex>
+            </Flex>
+          </Box>
         </Box>
       </Box>
+
       <SubscribeForm
         initialData={initialData}
         isOpen={isOpen}

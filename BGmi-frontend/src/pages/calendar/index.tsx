@@ -1,4 +1,4 @@
-import { Box, Card, CardBody, Fade, Flex, Image, Link, TabPanel, Tag, Text } from '@chakra-ui/react';
+import { Box, Card, CardBody, Fade, Flex, HStack, Image, Link, TabPanel, Tag, Text } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
 
 import CalendarTab from '~/components/calendar-tab';
@@ -99,23 +99,40 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
           <Text mr="-2" fontWeight="medium" fontSize={{ base: 'sm', md: 'md' }} lineHeight="1.45" wordBreak="break-word">
             {bangumi.name}
           </Text>
-          <Tag
-            mt="2"
-            w="fit-content"
-            bg={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.62)'}
-            borderWidth="1px"
-            borderColor={isDark ? 'whiteAlpha.140' : 'whiteAlpha.800'}
-            boxShadow={
-              isDark
-                ? '0 8px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.05)'
-                : '0 8px 20px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.48)'
-            }
-            backdropFilter="blur(14px) saturate(160%)"
-          >
-            <Link color="pink.300" href={`https://bgm.tv/subject_search/${bangumi.name}`} target="_blank">
-              番组计划
-            </Link>
-          </Tag>
+
+          <HStack mt="2" spacing="2" flexWrap="wrap">
+            <Tag
+              w="fit-content"
+              bg={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.62)'}
+              borderWidth="1px"
+              borderColor={isDark ? 'whiteAlpha.140' : 'whiteAlpha.800'}
+              boxShadow={
+                isDark
+                  ? '0 8px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.05)'
+                  : '0 8px 20px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.48)'
+              }
+              backdropFilter="blur(14px) saturate(160%)"
+            >
+              <Link color="pink.300" href={`https://bgm.tv/subject_search/${bangumi.name}`} target="_blank">
+                番组计划
+              </Link>
+            </Tag>
+            <Tag
+              w="fit-content"
+              color={bangumi.status ? (isDark ? 'green.200' : 'green.700') : isDark ? 'whiteAlpha.860' : 'gray.600'}
+              bg={bangumi.status ? (isDark ? 'rgba(34,197,94,0.16)' : 'rgba(220,252,231,0.92)') : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.62)'}
+              borderWidth="1px"
+              borderColor={bangumi.status ? (isDark ? 'rgba(74,222,128,0.24)' : 'rgba(134,239,172,0.92)') : isDark ? 'whiteAlpha.120' : 'whiteAlpha.700'}
+              boxShadow={
+                isDark
+                  ? '0 8px 20px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.04)'
+                  : '0 8px 20px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.46)'
+              }
+              backdropFilter="blur(14px) saturate(160%)"
+            >
+              {bangumi.status ? '已订阅' : '未订阅'}
+            </Tag>
+          </HStack>
         </Flex>
       </CardBody>
     </Card>
@@ -133,17 +150,17 @@ export default function Calendar() {
   return (
     <CalendarTab tabListItems={tabListItems}>
       {tabPanelsItems.map(([week, bangumis]) => (
-      <TabPanel
-        display="grid"
-        gridTemplateColumns={{
-          base: 'repeat(auto-fill, minmax(10rem, 1fr))',
-          md: 'repeat(auto-fill, minmax(20rem, 1fr))',
-          lg: 'repeat(auto-fill, minmax(22rem, 1fr))',
-        }}
-        justifyContent="center"
-        gap={{ base: 3, md: 4, lg: 5 }}
-        key={week}
-      >
+        <TabPanel
+          display="grid"
+          gridTemplateColumns={{
+            base: 'repeat(auto-fill, minmax(10rem, 1fr))',
+            md: 'repeat(auto-fill, minmax(20rem, 1fr))',
+            lg: 'repeat(auto-fill, minmax(22rem, 1fr))',
+          }}
+          justifyContent="center"
+          gap={{ base: 3, md: 4, lg: 5 }}
+          key={week}
+        >
           {bangumis?.map(bangumi => <CalendarPanel key={bangumi.id} bangumi={bangumi} />)}
         </TabPanel>
       ))}

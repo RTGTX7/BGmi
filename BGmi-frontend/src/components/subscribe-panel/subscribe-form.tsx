@@ -18,10 +18,11 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { Select } from 'chakra-react-select';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useSubscribeAction } from '~/hooks/use-subscribe-action';
+
 import type { SyncData } from './subscribe-card';
 
 export interface InitialData {
@@ -52,9 +53,11 @@ interface SelectOption {
 export default function SubscribeForm({ isOpen, onClose, initialData, setSyncData, syncData }: Props) {
   const { colorMode } = useColorMode();
   const [formData, setFormData] = useState<InitialData>();
-  const { handleSaveFilter, handleSaveMark, handleUnSubscribe } = useSubscribeAction();
+  const { handleSaveFilter, handleSaveMark, handleUnSubscribe, handleTriggerDownload } = useSubscribeAction();
 
-  if (initialData && !formData) setFormData(initialData);
+  useEffect(() => {
+    setFormData(initialData);
+  }, [initialData]);
 
   const selectOptions = useMemo<SelectOption[]>(
     () =>
@@ -65,7 +68,7 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
     [formData]
   );
 
-  const selectDefaultValue = useMemo<SelectOption[]>(
+  const selectValue = useMemo<SelectOption[]>(
     () =>
       formData?.follwedSubtitleGroups.map(followedSubtitleGroup => ({
         label: followedSubtitleGroup,
@@ -76,10 +79,6 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
 
   const glassFieldBg = colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(234,248,255,0.42)';
   const glassFieldBorder = colorMode === 'dark' ? 'whiteAlpha.180' : 'rgba(255,255,255,0.76)';
-
-  const handleClose = () => {
-    onClose();
-  };
 
   const handleSave = async () => {
     if (!formData) return;
@@ -101,6 +100,29 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
     onClose();
   };
 
+  const handleResetCompleted = async () => {
+    if (!formData) return;
+
+    await handleSaveMark.trigger({
+      name: formData.bangumiName,
+      episode: 0,
+    });
+
+    setFormData({
+      ...formData,
+      completedEpisodes: 0,
+    });
+    setSyncData({ ...syncData, episode: 0 });
+  };
+
+  const handleSubmitDownload = async () => {
+    if (!formData) return;
+    await handleTriggerDownload.trigger({
+      name: formData.bangumiName,
+      download: true,
+    });
+  };
+
   const handleUnSub = async () => {
     if (!formData) return;
 
@@ -110,7 +132,7 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
   };
 
   return (
-    <Modal onClose={handleClose} isOpen={isOpen} closeOnOverlayClick={false}>
+    <Modal onClose={onClose} isOpen={isOpen} closeOnOverlayClick={false}>
       <ModalOverlay />
       <ModalContent
         maxW={{ base: 'calc(100vw - 1rem)', sm: 'sm', md: 'xl' }}
@@ -135,8 +157,17 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
           ) : (
             <Stack spacing="5">
               <Text fontSize="sm" opacity="0.78">
-                为当前番剧调整过滤规则、已完成剧集和字幕组偏好。
+                调整过滤规则、已完成剧集和字幕组偏好。手动下载可立刻触发一次抓取。
               </Text>
+
+              <Flex gap="3" flexWrap="wrap">
+                <Button variant="outline" onClick={() => void handleResetCompleted()} isLoading={handleSaveMark.isMutating}>
+                  完成剧集清零
+                </Button>
+                <Button onClick={() => void handleSubmitDownload()} isLoading={handleTriggerDownload.isMutating}>
+                  提交下载
+                </Button>
+              </Flex>
 
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing="4">
                 <FormControl id="include">
@@ -204,7 +235,7 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
                   isMulti
                   placeholder="选择要跟随的字幕组"
                   options={selectOptions}
-                  value={selectDefaultValue}
+                  value={selectValue}
                   onChange={items =>
                     setFormData({
                       ...formData,
@@ -284,12 +315,12 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
               返回
             </Button>
             <Flex gap="3" ml={{ md: 'auto', base: 0 }}>
-              <Button colorScheme="red" variant="solid" onClick={handleUnSub}>
+              <Button colorScheme="red" variant="solid" onClick={() => void handleUnSub()}>
                 取消订阅
               </Button>
               <Button
                 colorScheme="blue"
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 isLoading={handleSaveFilter.isMutating || handleSaveMark.isMutating}
               >
                 保存

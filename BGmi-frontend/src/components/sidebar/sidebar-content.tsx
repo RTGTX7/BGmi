@@ -29,7 +29,7 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
   return (
     <Box
       as="nav"
-      pos="fixed"
+      pos={{ base: 'relative', lg: 'fixed' }}
       top="0"
       left="0"
       h="full"
@@ -37,7 +37,7 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
       overscrollBehavior="contain"
       borderRightWidth="1px"
       borderRightColor={colorMode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(122, 167, 176, 0.30)'}
-      w="60"
+      w={{ base: 'full', lg: '60' }}
       bg={colorMode === 'dark' ? 'rgba(13, 16, 28, 0.78)' : 'rgba(204, 225, 229, 0.62)'}
       backdropFilter="blur(24px) saturate(170%)"
       boxShadow={colorMode === 'dark' ? '0 20px 50px rgba(4,6,18,0.28)' : '0 18px 40px rgba(36,78,88,0.10)'}

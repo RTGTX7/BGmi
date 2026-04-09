@@ -1,7 +1,7 @@
 import { Box } from '@chakra-ui/react';
 import { memo, useState } from 'react';
 import { useColorMode } from '~/hooks/use-color-mode';
-import Header from '../header';
+import MobileBottomNav from './mobile-bottom-nav';
 import Sidebar from '../sidebar';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -20,11 +20,13 @@ function Layout({ children }: { children: React.ReactNode }) {
           : 'radial-gradient(circle at 14% 16%, rgba(122,203,214,0.22), transparent 24%), radial-gradient(circle at 84% 14%, rgba(170,221,226,0.18), transparent 26%), linear-gradient(180deg, #d9e9eb 0%, #d2e4e7 42%, #ccdde1 100%)'
       }
     >
-      <Header sidebarToggle={handleToggle} />
       <Sidebar isOpen={open} onClose={handleToggle} />
+      <MobileBottomNav sidebarToggle={handleToggle} />
       <Box
         as="main"
         p={{ base: '3', sm: '4', md: '5', lg: '6' }}
+        pt={{ base: '3', lg: '6' }}
+        pb={{ base: '10rem', lg: '6' }}
         minW="0"
         position="relative"
         zIndex="1"

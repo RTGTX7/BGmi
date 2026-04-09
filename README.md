@@ -23,22 +23,52 @@
 
 ## 本地开发
 
-### 1. 启动后端服务
+现在仓库已经补了一套可热更新的开发环境，前后端可以分开跑，也可以一键拉起。
+
+### 1. 初始化依赖
 
 ```powershell
-cd C:\Users\rtgtx\Desktop\bgmi\BGmi
-.\run-local.ps1 http --port=8899 --address=127.0.0.1
+cd C:\Users\rtgtx\Desktop\bgmi
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-setup.ps1
 ```
 
-### 2. 前端开发与构建
+这一步会完成这些事情：
+
+- 在 `BGmi/.venv` 创建 Python 虚拟环境
+- 以可编辑模式安装后端 `BGmi`
+- 通过 `corepack` 安装前端 `pnpm` 依赖
+
+### 2. 启动开发环境
+
+分别启动前后端：
 
 ```powershell
-cd C:\Users\rtgtx\Desktop\bgmi\BGmi-frontend
-corepack pnpm install
-corepack pnpm build
+cd C:\Users\rtgtx\Desktop\bgmi
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-backend.ps1
 ```
 
-前端构建完成后，需要把 `dist` 覆盖到 `BGmi/.bgmi/front_static`。
+```powershell
+cd C:\Users\rtgtx\Desktop\bgmi
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-frontend.ps1
+```
+
+或者直接一键拉起两个窗口：
+
+```powershell
+cd C:\Users\rtgtx\Desktop\bgmi
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+```
+
+### 3. 访问地址
+
+- 前端开发页：`http://127.0.0.1:5173`
+- 后端接口：`http://127.0.0.1:8888`
+
+### 4. 热更新说明
+
+- 前端修改后会通过 Vite HMR 立即生效
+- 后端 Python 代码修改后会由 Tornado 调试模式自动重载
+- 本地开发时前端会把 `/api`、`/bangumi`、`/resource` 代理到后端，不需要再手动复制 `dist` 到 `front_static`
 
 ## 常用播放说明
 

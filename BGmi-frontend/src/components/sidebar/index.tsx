@@ -14,8 +14,8 @@ function Sidebar({ isOpen, onClose }: Props) {
       <SidebarContent display={{ base: 'none', lg: 'unset' }} />
       <Box display={{ base: 'block', lg: 'none' }}>
         <Drawer autoFocus={false} isOpen={isOpen} onClose={onClose} placement="left">
-          <DrawerOverlay backdropFilter="blur(8px)" bg="blackAlpha.300" />
-          <DrawerContent bg="transparent" maxW="60" boxShadow="none">
+          <DrawerOverlay backdropFilter="blur(10px)" bg="blackAlpha.360" />
+          <DrawerContent bg="transparent" maxW="18rem" boxShadow="none">
             <SidebarContent onClose={onClose} w="full" borderRight="none" />
           </DrawerContent>
         </Drawer>

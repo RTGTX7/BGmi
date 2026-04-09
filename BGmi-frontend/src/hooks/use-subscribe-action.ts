@@ -76,6 +76,19 @@ export function useSubscribeAction() {
     }
   );
 
+  const { trigger: triggerDownload, isMutating: triggerDownloadMutating } = useSWRMutation(
+    ['/api/update', authToken],
+    fetcherWithMutation,
+    {
+      onError(err) {
+        handleError(err, '提交下载失败');
+      },
+      onSuccess() {
+        handleSuccess('已提交下载任务');
+      },
+    }
+  );
+
   return {
     handleSubscribe: (name: string, episode: number) => subscribe({ name, episode }),
     handleUnSubscribe: (name: string) => unSubscribe({ name }),
@@ -85,6 +98,10 @@ export function useSubscribeAction() {
     handleSaveMark: {
       isMutating: saveMarkMutating,
       trigger: (body: { name: string; episode: number }) => saveMarkEpisode(body),
+    },
+    handleTriggerDownload: {
+      isMutating: triggerDownloadMutating,
+      trigger: (body: { name: string; download: boolean }) => triggerDownload(body),
     },
   };
 }
