@@ -211,10 +211,21 @@ def _nvenc_runtime_ok() -> bool:
         return False
 
 
-def _pick_video_encoder() -> str:
-    if "h264_nvenc" in _available_encoders() and _nvenc_runtime_ok():
-        return "h264_nvenc"
-    return "libx264"
+def _gpu_available() -> bool:
+    """Return True if NVENC GPU encoding is available at runtime."""
+    return "h264_nvenc" in _available_encoders() and _nvenc_runtime_ok()
+
+
+def _pick_nvenc_encoder(*, is_high_bit_depth: bool = False) -> str:
+    """Choose the best NVENC encoder.
+
+    - 10-bit+ sources -> hevc_nvenc (HEVC NVENC supports 10-bit on Ampere+)
+    - 8-bit sources   -> h264_nvenc (best browser compatibility)
+    """
+    encoders = _available_encoders()
+    if is_high_bit_depth and "hevc_nvenc" in encoders:
+        return "hevc_nvenc"
+    return "h264_nvenc"
 
 
 def _pick_cuda_decoder(probe: Dict[str, Any]) -> Optional[str]:
@@ -225,6 +236,17 @@ def _pick_cuda_decoder(probe: Dict[str, Any]) -> Optional[str]:
     if video is None:
         return None
 
+    pix_fmt = str(video.get("pix_fmt", "")).lower()
+    codec_name = str(video.get("codec_name", "")).lower()
+
+    # NVDEC chroma subsampling limits (Ampere RTX A2000):
+    # 4:2:2 not supported for any codec
+    if "422" in pix_fmt:
+        return None
+    # 4:4:4 supported for HEVC only, not H.264/VP9/AV1
+    if "444" in pix_fmt and codec_name not in ("hevc", "h265"):
+        return None
+
     decoder_map = {
         "h264": "h264_cuvid",
         "hevc": "hevc_cuvid",
@@ -233,7 +255,6 @@ def _pick_cuda_decoder(probe: Dict[str, Any]) -> Optional[str]:
         "vp9": "vp9_cuvid",
     }
 
-    codec_name = str(video.get("codec_name", "")).lower()
     decoder = decoder_map.get(codec_name)
     if decoder and decoder in _available_decoders():
         return decoder
@@ -644,13 +665,19 @@ def _build_hls_ffmpeg_command(
         "-y",
     ]
 
-    use_gpu = prefer_gpu and _pick_video_encoder() == "h264_nvenc"
-    needs_scale = bool(target_height and source_height and source_height > target_height)
-
-    # Detect 10-bit (or higher) source — h264_nvenc cannot encode >8-bit.
+    # Detect source properties for GPU capability matching.
     video_stream, _ = _source_streams(probe)
     pix_fmt = str((video_stream or {}).get("pix_fmt", "")).lower()
     is_high_bit_depth = "10" in pix_fmt or "12" in pix_fmt or "16" in pix_fmt
+
+    use_gpu = prefer_gpu and _gpu_available()
+    needs_scale = bool(target_height and source_height and source_height > target_height)
+
+    # Choose encoder: 10-bit → hevc_nvenc (full GPU), 8-bit → h264_nvenc
+    if use_gpu:
+        video_encoder = _pick_nvenc_encoder(is_high_bit_depth=is_high_bit_depth)
+    else:
+        video_encoder = "libx264"
 
     # Compute target width preserving aspect ratio (must be even).
     cuvid_resize_w = 0
@@ -664,21 +691,13 @@ def _build_hls_ffmpeg_command(
     if use_gpu:
         decoder = _pick_cuda_decoder(probe)
         if decoder:
-            # cuvid decoders have built-in -resize for GPU-side scaling.
-            # For 10-bit sources: omit -hwaccel_output_format cuda so ffmpeg
-            # auto-downloads frames to CPU as 8-bit (nv12/yuv420p) which
-            # h264_nvenc can encode. Decode + resize still happen on GPU.
-            if is_high_bit_depth:
-                command.extend(["-hwaccel", "cuda", "-c:v", decoder])
-            else:
-                command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
+            # Full GPU pipeline: cuvid decode (+resize) → CUDA frames → nvenc encode.
+            # hevc_nvenc handles 10-bit natively, no CPU conversion needed.
+            command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-c:v", decoder])
             if needs_scale and cuvid_resize_w and cuvid_resize_h:
                 command.extend(["-resize", f"{cuvid_resize_w}x{cuvid_resize_h}"])
         elif "cuda" in _available_hwaccels():
-            if is_high_bit_depth:
-                command.extend(["-hwaccel", "cuda"])
-            else:
-                command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
+            command.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"])
 
     command.extend(["-i", str(source_path)])
 
@@ -686,8 +705,6 @@ def _build_hls_ffmpeg_command(
     cuvid_resized = use_gpu and needs_scale and _pick_cuda_decoder(probe) is not None and cuvid_resize_w > 0
     if needs_scale and not cuvid_resized:
         command.extend(["-vf", f"scale=-2:{target_height}"])
-
-    video_encoder = "h264_nvenc" if use_gpu else "libx264"
     copy_mode = str(profile.get("mode") or "").lower() == "copy" or profile_name.endswith("_TS")
     audio_copy_mode = copy_mode and _audio_codec_name(probe) in HLS_COPY_AUDIO_CODECS
 
@@ -737,6 +754,9 @@ def _build_hls_ffmpeg_command(
                 "vbr",
             ]
         )
+        # HEVC in HLS needs hvc1 tag for Apple/browser compatibility.
+        if video_encoder == "hevc_nvenc":
+            command.extend(["-tag:v", "hvc1"])
     else:
         command.extend(
             [
