@@ -1,5 +1,4 @@
-﻿import { Box, Button, Flex, HStack, Progress, Spinner, Text, useToast } from '@chakra-ui/react';
-import { Select as GlassSelect } from 'chakra-react-select';
+﻿import { Box, Button, Flex, HStack, Progress, Select, Spinner, Text, useToast } from '@chakra-ui/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -501,8 +500,6 @@ export default function VideoPlayer({
     return index >= 0 ? index : 0;
   }, [subtitleTracks]);
   const selectedSubtitleValue = selectedSubtitleIndex >= 0 ? String(selectedSubtitleIndex) : '-1';
-  const selectedSubtitleOption =
-    subtitleOptions.find(option => option.value === selectedSubtitleValue) ?? subtitleOptions[0];
   const activeSubtitle =
     subtitleTracks.length > 0 && selectedSubtitleIndex >= 0
       ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
@@ -1259,151 +1256,34 @@ export default function VideoPlayer({
               {/* Row 2: subtitle selector full width */}
               {subtitleTracks.length > 0 ? (
                 <Box w="full" maxW={subtitleRailWidth}>
-                  <GlassSelect<SubtitleOption, false>
-                    isSearchable={false}
-                    options={subtitleOptions}
-                    value={selectedSubtitleOption}
-                    onChange={option => setSelectedSubtitleIndex(Number(option?.value ?? -1))}
-                    menuPlacement="auto"
-                    menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
-                    formatOptionLabel={(option, meta) =>
-                      meta.context === 'value' ? formatSubtitleOptionLabel(option.label) : option.label
-                    }
-                    styles={{
-                      menuPortal: (base: any) => ({
-                        ...base,
-                        zIndex: 1700,
-                      }),
+                  <Select
+                    value={selectedSubtitleValue}
+                    onChange={e => setSelectedSubtitleIndex(Number(e.target.value))}
+                    size="sm"
+                    borderRadius="999px"
+                    bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.72)'}
+                    borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(174,200,210,0.92)'}
+                    color={colorMode === 'dark' ? 'rgba(255,255,255,0.94)' : '#243042'}
+                    fontWeight={600}
+                    fontSize="0.86rem"
+                    h="2.55rem"
+                    cursor="pointer"
+                    sx={{
+                      backdropFilter: 'blur(8px) saturate(145%)',
+                      boxShadow:
+                        colorMode === 'dark'
+                          ? '0 6px 14px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.05)'
+                          : '0 6px 14px rgba(39,87,116,0.05), inset 0 1px 0 rgba(255,255,255,0.40)',
                     }}
-                    chakraStyles={{
-                      container: provided => ({
-                        ...provided,
-                        w: '100%',
-                      }),
-                      control: provided => ({
-                        ...provided,
-                        minH: '2.55rem',
-                        bg: colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.72)',
-                        borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(174,200,210,0.92)',
-                        borderRadius: '999px',
-                        boxShadow:
-                          colorMode === 'dark'
-                            ? '0 6px 14px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.05)'
-                            : '0 6px 14px rgba(39,87,116,0.05), inset 0 1px 0 rgba(255,255,255,0.40)',
-                        backdropFilter: 'blur(8px) saturate(145%)',
-                        overflow: 'hidden',
-                        cursor: 'pointer',
-                      }),
-                      valueContainer: provided => ({
-                        ...provided,
-                        py: '0.2rem',
-                        px: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                      }),
-                      singleValue: provided => ({
-                        ...provided,
-                        color: colorMode === 'dark' ? 'rgba(255,255,255,0.94)' : '#243042',
-                        fontWeight: 600,
-                        fontSize: '0.86rem',
-                        position: 'static',
-                        transform: 'none',
-                        margin: 0,
-                        maxWidth: 'none',
-                        lineHeight: '1.25',
-                        whiteSpace: 'nowrap',
-                        overflow: 'visible',
-                        textOverflow: 'clip',
-                      }),
-                      placeholder: provided => ({
-                        ...provided,
-                        color: colorMode === 'dark' ? 'rgba(255,255,255,0.54)' : 'rgba(36,48,66,0.54)',
-                        position: 'static',
-                        transform: 'none',
-                        margin: 0,
-                      }),
-                      inputContainer: provided => ({
-                        ...provided,
-                        p: 0,
-                        m: 0,
-                      }),
-                      indicatorsContainer: provided => ({
-                        ...provided,
-                        pr: '0.2rem',
-                        bg: 'transparent',
-                      }),
-                      dropdownIndicator: provided => ({
-                        ...provided,
-                        px: '0.7rem',
-                        bg: 'transparent',
-                        color: colorMode === 'dark' ? 'rgba(255,255,255,0.82)' : 'rgba(36,48,66,0.76)',
-                      }),
-                      indicatorSeparator: provided => ({
-                        ...provided,
-                        display: 'none',
-                      }),
-                      menu: provided => ({
-                        ...provided,
-                        bg: colorMode === 'dark' ? 'rgba(21,27,39,0.86)' : 'rgba(244,252,255,0.84)',
-                        border: '1px solid',
-                        borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.68)',
-                        borderRadius: '1.1rem',
-                        overflow: 'hidden',
-                        boxShadow:
-                          colorMode === 'dark'
-                            ? '0 16px 34px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.03)'
-                            : '0 14px 30px rgba(39,87,116,0.08), 0 4px 12px rgba(94,188,214,0.06), inset 0 1px 0 rgba(255,255,255,0.44)',
-                        backdropFilter: 'blur(18px) saturate(160%)',
-                      }),
-                      menuList: provided => ({
-                        ...provided,
-                        py: '0.4rem',
-                        px: '0.2rem',
-                        maxH: '14rem',
-                        scrollbarWidth: 'thin',
-                        scrollbarColor:
-                          colorMode === 'dark'
-                            ? 'rgba(255,255,255,0.22) transparent'
-                            : 'rgba(113,133,164,0.34) transparent',
-                        '&::-webkit-scrollbar': {
-                          width: '8px',
-                        },
-                        '&::-webkit-scrollbar-track': {
-                          background: 'transparent',
-                        },
-                        '&::-webkit-scrollbar-thumb': {
-                          background: colorMode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(113,133,164,0.30)',
-                          borderRadius: '999px',
-                        },
-                      }),
-                      option: (provided, state) => ({
-                        ...provided,
-                        mx: '0.25rem',
-                        my: '0.12rem',
-                        px: '0.85rem',
-                        py: '0.72rem',
-                        borderRadius: '0.9rem',
-                        color: colorMode === 'dark' ? 'rgba(255,255,255,0.90)' : '#243042',
-                        fontSize: '0.98rem',
-                        fontWeight: state.isSelected ? 600 : 500,
-                        whiteSpace: 'normal',
-                        boxShadow: state.isFocused
-                          ? colorMode === 'dark'
-                            ? 'inset 0 1px 0 rgba(255,255,255,0.04)'
-                            : 'inset 0 1px 0 rgba(255,255,255,0.36)'
-                          : 'none',
-                        bg: state.isFocused
-                          ? colorMode === 'dark'
-                            ? 'rgba(255,255,255,0.08)'
-                            : 'rgba(234,248,255,0.58)'
-                          : state.isSelected
-                          ? colorMode === 'dark'
-                            ? 'rgba(255,255,255,0.05)'
-                            : 'rgba(228,244,255,0.46)'
-                          : 'transparent',
-                      }),
-                    }}
-                  />
+                  >
+                    {subtitleOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.value === selectedSubtitleValue
+                          ? formatSubtitleOptionLabel(opt.label)
+                          : opt.label}
+                      </option>
+                    ))}
+                  </Select>
                 </Box>
               ) : null}
             </Flex>
