@@ -500,13 +500,20 @@ export default function VideoPlayer({
     art.video.addEventListener('canplay', handleCanPlay);
     art.video.addEventListener('timeupdate', handleTimeUpdate);
 
-    // Long-press 2x speed
+
+    // Only enable long-press 2x on desktop
+    const isMobile = /mobile|android|iphone|ipad|ipod|phone|touch/i.test(navigator.userAgent);
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
     let longPressActive = false;
     const LONG_PRESS_MS = 500;
     const LONG_PRESS_RATE = 2;
 
-    const onPressStart = () => {
+    const onPressStart = (e: PointerEvent) => {
+      if (isMobile) {
+        // Prevent long-press menu on mobile
+        e.preventDefault();
+        return;
+      }
       longPressTimer = setTimeout(() => {
         longPressActive = true;
         art.playbackRate = LONG_PRESS_RATE;
@@ -514,7 +521,11 @@ export default function VideoPlayer({
       }, LONG_PRESS_MS);
     };
 
-    const onPressEnd = () => {
+    const onPressEnd = (e: PointerEvent) => {
+      if (isMobile) {
+        e.preventDefault();
+        return;
+      }
       if (longPressTimer !== null) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
@@ -527,6 +538,10 @@ export default function VideoPlayer({
     };
 
     const onContextMenu = (e: Event) => {
+      if (isMobile) {
+        e.preventDefault();
+        return;
+      }
       if (longPressActive) e.preventDefault();
     };
 
@@ -535,6 +550,9 @@ export default function VideoPlayer({
     art.video.addEventListener('pointerleave', onPressEnd);
     art.video.addEventListener('pointercancel', onPressEnd);
     art.video.addEventListener('contextmenu', onContextMenu);
+    // Prevent long-press menu on mobile
+    art.video.addEventListener('touchstart', e => isMobile && e.preventDefault(), { passive: false });
+    art.video.addEventListener('touchend', e => isMobile && e.preventDefault(), { passive: false });
 
     return () => {
       if (longPressTimer !== null) clearTimeout(longPressTimer);
@@ -549,6 +567,8 @@ export default function VideoPlayer({
       art.video.removeEventListener('pointerleave', onPressEnd);
       art.video.removeEventListener('pointercancel', onPressEnd);
       art.video.removeEventListener('contextmenu', onContextMenu);
+      art.video.removeEventListener('touchstart', e => isMobile && e.preventDefault());
+      art.video.removeEventListener('touchend', e => isMobile && e.preventDefault());
       art.destroy();
       hls.destroy();
     };
