@@ -500,13 +500,55 @@ export default function VideoPlayer({
     art.video.addEventListener('canplay', handleCanPlay);
     art.video.addEventListener('timeupdate', handleTimeUpdate);
 
+    // Long-press 2x speed
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let longPressActive = false;
+    const LONG_PRESS_MS = 500;
+    const LONG_PRESS_RATE = 2;
+
+    const onPressStart = () => {
+      longPressTimer = setTimeout(() => {
+        longPressActive = true;
+        art.playbackRate = LONG_PRESS_RATE;
+        art.notice.show = '2x 倍速';
+      }, LONG_PRESS_MS);
+    };
+
+    const onPressEnd = () => {
+      if (longPressTimer !== null) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (longPressActive) {
+        longPressActive = false;
+        art.playbackRate = 1;
+        art.notice.show = '正常速度';
+      }
+    };
+
+    const onContextMenu = (e: Event) => {
+      if (longPressActive) e.preventDefault();
+    };
+
+    art.video.addEventListener('pointerdown', onPressStart);
+    art.video.addEventListener('pointerup', onPressEnd);
+    art.video.addEventListener('pointerleave', onPressEnd);
+    art.video.addEventListener('pointercancel', onPressEnd);
+    art.video.addEventListener('contextmenu', onContextMenu);
+
     return () => {
+      if (longPressTimer !== null) clearTimeout(longPressTimer);
       assRendererRef.current?.destroy();
       assRendererRef.current = null;
       playerRef.current = null;
       setArtMountSeq(n => n + 1);
       art.video.removeEventListener('canplay', handleCanPlay);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
+      art.video.removeEventListener('pointerdown', onPressStart);
+      art.video.removeEventListener('pointerup', onPressEnd);
+      art.video.removeEventListener('pointerleave', onPressEnd);
+      art.video.removeEventListener('pointercancel', onPressEnd);
+      art.video.removeEventListener('contextmenu', onContextMenu);
       art.destroy();
       hls.destroy();
     };
