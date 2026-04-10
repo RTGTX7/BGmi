@@ -17,8 +17,8 @@ HLS_CACHE_DIR = ".bgmi-hls"
 HLS_METADATA_FILE = ".bgmi-hls-meta.json"
 SUBTITLE_FILE_PREFIX = "bgmi-subtitle"
 SUBTITLE_CODEC_EXTENSIONS = {
-    "ass": "vtt",
-    "ssa": "vtt",
+    "ass": "ass",
+    "ssa": "ssa",
     "subrip": "vtt",
     "srt": "vtt",
     "webvtt": "vtt",
@@ -364,10 +364,11 @@ def _episode_root_dir(source_path: Path) -> Path:
     return source_path.parent
 
 
-def _subtitle_target_path(source_path: Path, identifier: str) -> Path:
+def _subtitle_target_path(source_path: Path, identifier: str, extension: str = "vtt") -> Path:
     cache_key = _cache_key(source_path)
     safe_identifier = "".join(ch if ch.isalnum() or ch in ("-", "_") else "-" for ch in identifier).strip("-") or "subtitle"
-    return source_path.parent.joinpath(f"{SUBTITLE_FILE_PREFIX}-{safe_identifier}-{cache_key}.vtt")
+    safe_extension = "".join(ch for ch in extension.lower().strip(".") if ch.isalnum()) or "vtt"
+    return source_path.parent.joinpath(f"{SUBTITLE_FILE_PREFIX}-{safe_identifier}-{cache_key}.{safe_extension}")
 
 
 def _subtitle_label(title: str, language: str, fallback: str) -> str:
@@ -1231,9 +1232,26 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
     subtitle_order = 0
 
     for sidecar in _find_sidecar_subtitles(source_path):
-        target_path = sidecar if sidecar.suffix.lower() == ".vtt" else _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}")
+        source_extension = sidecar.suffix.lower().lstrip(".")
+        if source_extension in {"ass", "ssa"}:
+            target_path = sidecar
+            should_convert_to_vtt = False
+            subtitle_format = source_extension
+            original_path = _relative_url(sidecar)
+        elif source_extension in {"vtt"}:
+            target_path = sidecar
+            should_convert_to_vtt = False
+            subtitle_format = "vtt"
+            original_path = None
+        else:
+            target_path = _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}", "vtt")
+            should_convert_to_vtt = True
+            subtitle_format = "vtt"
+            original_path = None
+
         try:
-            _convert_to_vtt(sidecar, target_path, source_path)
+            if should_convert_to_vtt:
+                _convert_to_vtt(sidecar, target_path, source_path)
             relative_path = _relative_url(target_path)
         except Exception as exc:
             print(
@@ -1248,9 +1266,9 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
         subtitles.append(
             {
                 "path": relative_path,
-                "original_path": _relative_url(sidecar),
-                "format": "vtt",
-                "source_format": sidecar.suffix.lower().lstrip("."),
+                "original_path": original_path,
+                "format": subtitle_format,
+                "source_format": source_extension,
                 "language": "",
                 "label": sidecar.stem,
                 "default": sidecar.stem == source_path.stem,
@@ -1274,7 +1292,9 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
     )
 
     for stream in subtitle_streams:
-        target_path = _subtitle_target_path(source_path, f"embedded-{stream['index']}")
+        stream_codec = str(stream.get("codec_name", "")).lower() or "vtt"
+        target_extension = SUBTITLE_CODEC_EXTENSIONS.get(stream_codec, "vtt")
+        target_path = _subtitle_target_path(source_path, f"embedded-{stream['index']}", target_extension)
         lock = _asset_locks[str(target_path)]
 
         try:
@@ -1282,24 +1302,37 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
                 if not (target_path.exists() and target_path.stat().st_mtime >= source_path.stat().st_mtime):
                     safe_source = _safe_ffmpeg_input(source_path)
                     workspace = _workspace_dir(source_path)
-                    tmp_path = workspace.joinpath(f"subtitle-{stream['index']}.tmp.vtt")
+                    tmp_path = workspace.joinpath(f"subtitle-{stream['index']}.tmp.{target_extension}")
                     if tmp_path.exists():
                         tmp_path.unlink()
 
-                    _run(
-                        [
-                            "ffmpeg",
-                            "-nostdin",
-                            "-y",
-                            "-i",
-                            str(safe_source),
-                            "-map",
-                            f"0:{stream['index']}",
-                            "-f",
-                            "webvtt",
-                            str(tmp_path),
-                        ]
-                    )
+                    command = [
+                        "ffmpeg",
+                        "-nostdin",
+                        "-y",
+                        "-i",
+                        str(safe_source),
+                        "-map",
+                        f"0:{stream['index']}",
+                    ]
+                    if target_extension in {"ass", "ssa"}:
+                        command.extend(
+                            [
+                                "-c:s",
+                                "copy",
+                                str(tmp_path),
+                            ]
+                        )
+                    else:
+                        command.extend(
+                            [
+                                "-f",
+                                "webvtt",
+                                str(tmp_path),
+                            ]
+                        )
+
+                    _run(command)
                     _replace_atomic(tmp_path, target_path)
         except Exception as exc:
             print(
@@ -1318,8 +1351,9 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
         subtitles.append(
             {
                 "path": relative_path,
-                "format": "vtt",
-                "source_format": str(stream.get("codec_name", "")).lower() or "vtt",
+                "original_path": relative_path if target_extension in {"ass", "ssa"} else None,
+                "format": target_extension,
+                "source_format": stream_codec,
                 "language": language,
                 "label": label,
                 "default": bool(stream.get("disposition", {}).get("default", 0)),

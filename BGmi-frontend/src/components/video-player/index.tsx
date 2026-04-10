@@ -195,7 +195,8 @@ function disableNativeTracks(video: HTMLVideoElement) {
 }
 
 function usesAssRenderer(subtitle: SubtitleAsset | undefined) {
-  return Boolean(subtitle?.original_path && ['ass', 'ssa'].includes((subtitle?.source_format || '').toLowerCase()));
+  const subtitleFormat = (subtitle?.format || subtitle?.source_format || '').toLowerCase();
+  return ['ass', 'ssa'].includes(subtitleFormat);
 }
 
 function formatHlsStageLabel(stage: string) {
@@ -754,9 +755,7 @@ export default function VideoPlayer({
     disableNativeTracks(video);
     setSubtitleLines([]);
 
-    const subUrl = activeSubtitle.original_path
-      ? createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`)
-      : createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
+    const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
 
     const abortController = new AbortController();
     let cues: ParsedCue[] = [];
@@ -800,7 +799,7 @@ export default function VideoPlayer({
 
     assRendererRef.current?.destroy();
     assRendererRef.current = null;
-    if (!isAssSubtitle || !activeSubtitle?.original_path || !video) return;
+    if (!isAssSubtitle || !activeSubtitle || !video) return;
 
     disableNativeTracks(video);
     setSubtitleLines([]);
@@ -809,7 +808,8 @@ export default function VideoPlayer({
     if (!container) return;
 
     const abortController = new AbortController();
-    const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`);
+    const assPath = activeSubtitle.original_path || activeSubtitle.path;
+    const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(assPath)}`);
 
     fetch(subUrl, { signal: abortController.signal })
       .then((res) => res.text())

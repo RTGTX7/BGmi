@@ -37,7 +37,11 @@ def test_ensure_subtitle_assets_loads_all_sidecar_subtitles(tmp_path, monkeypatc
     assert all(subtitle["source"] == "sidecar" for subtitle in subtitles)
     assert subtitles[0]["original_path"].endswith("episode.sc.ass")
     assert subtitles[1]["original_path"].endswith("episode.tc.ass")
-    assert subtitles[2]["original_path"].endswith("episode.jp.srt")
+    assert not subtitles[2]["original_path"]
+    assert subtitles[2]["path"].endswith(".vtt")
+    assert subtitles[0]["format"] == "ass"
+    assert subtitles[1]["format"] == "ass"
+    assert subtitles[2]["format"] == "vtt"
     assert subtitles[0]["render_style"]["font_family"] == "Microsoft JhengHei"
     assert subtitles[0]["render_style"]["font_weight"] == 700
     assert subtitles[1]["render_style"]["font_family"] == "Noto Sans CJK TC"
@@ -53,8 +57,8 @@ def test_ensure_subtitle_assets_skips_invalid_sidecar(tmp_path, monkeypatch):
     source_path = episode_dir / "episode.mkv"
     source_path.write_bytes(b"video")
 
-    bad_sidecar = episode_dir / "episode.sc.ass"
-    good_sidecar = episode_dir / "episode.tc.ass"
+    bad_sidecar = episode_dir / "episode.sc.srt"
+    good_sidecar = episode_dir / "episode.tc.srt"
     bad_sidecar.write_text("broken", encoding="utf-8")
     good_sidecar.write_text("good", encoding="utf-8")
 
