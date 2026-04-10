@@ -1231,16 +1231,23 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
     subtitle_order = 0
 
     for sidecar in _find_sidecar_subtitles(source_path):
-        target_path = sidecar if sidecar.suffix.lower() == ".vtt" else _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}")
-        try:
-            _convert_to_vtt(sidecar, target_path, source_path)
+        sidecar_ext = sidecar.suffix.lower()
+        sidecar_fmt = sidecar_ext.lstrip(".")
+        # Serve .vtt and .srt directly; convert other formats (e.g. .ass/.ssa) to VTT as fallback
+        if sidecar_ext in (".vtt", ".srt"):
+            target_path = sidecar
             relative_path = _relative_url(target_path)
-        except Exception as exc:
-            print(
-                f"[bgmi] Skip invalid sidecar subtitle for {source_path.name}: {sidecar.name} ({exc})",
-                flush=True,
-            )
-            continue
+        else:
+            target_path = _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}")
+            try:
+                _convert_to_vtt(sidecar, target_path, source_path)
+                relative_path = _relative_url(target_path)
+            except Exception as exc:
+                print(
+                    f"[bgmi] Skip invalid sidecar subtitle for {source_path.name}: {sidecar.name} ({exc})",
+                    flush=True,
+                )
+                continue
 
         if relative_path in seen_paths:
             continue
@@ -1249,8 +1256,8 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
             {
                 "path": relative_path,
                 "original_path": _relative_url(sidecar),
-                "format": "vtt",
-                "source_format": sidecar.suffix.lower().lstrip("."),
+                "format": sidecar_fmt,
+                "source_format": sidecar_fmt,
                 "language": "",
                 "label": sidecar.stem,
                 "default": sidecar.stem == source_path.stem,
