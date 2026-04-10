@@ -595,7 +595,7 @@ export default function VideoPlayer({
       assRendererRef.current?.destroy();
       assRendererRef.current = null;
     };
-  }, [activeSubtitle, currentSourceUrl, isAssSubtitle]);
+  }, [activeSubtitle, artMountSeq, isAssSubtitle]); // artMountSeq instead of currentSourceUrl to avoid double-run when both change simultaneously
 
   // Sync subtitle selector into ArtPlayer settings panel
   useEffect(() => {

@@ -1233,21 +1233,9 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
     for sidecar in _find_sidecar_subtitles(source_path):
         sidecar_ext = sidecar.suffix.lower()
         sidecar_fmt = sidecar_ext.lstrip(".")
-        # Serve .vtt and .srt directly; convert other formats (e.g. .ass/.ssa) to VTT as fallback
-        if sidecar_ext in (".vtt", ".srt"):
-            target_path = sidecar
-            relative_path = _relative_url(target_path)
-        else:
-            target_path = _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}")
-            try:
-                _convert_to_vtt(sidecar, target_path, source_path)
-                relative_path = _relative_url(target_path)
-            except Exception as exc:
-                print(
-                    f"[bgmi] Skip invalid sidecar subtitle for {source_path.name}: {sidecar.name} ({exc})",
-                    flush=True,
-                )
-                continue
+        # Serve all sidecar subtitle formats directly — frontend handles each type natively
+        target_path = sidecar
+        relative_path = _relative_url(target_path)
 
         if relative_path in seen_paths:
             continue
