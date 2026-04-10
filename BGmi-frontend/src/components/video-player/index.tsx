@@ -1,6 +1,5 @@
 ﻿import { Box, Button, Flex, HStack, Progress, Select, Spinner, Text, useToast } from '@chakra-ui/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
@@ -59,139 +58,10 @@ interface SubtitleOption {
   value: string;
 }
 
-interface SubtitleScaleState {
-  fontSize: number;
-  bottomOffset: number;
-  lineHeight: number;
-  maxWidth: string;
-  strokeWidth: number;
-}
-
-interface StyledSubtitleLine {
-  text: string;
-  variant: 'primary' | 'secondary';
-}
-
-interface SubtitleScaleContext {
-  isCoarsePointer?: boolean;
-  isFullscreen?: boolean;
-}
-
-type WebkitDocument = Document & {
-  webkitFullscreenElement?: Element | null;
-};
-
-type WebkitVideoElement = HTMLVideoElement & {
-  webkitDisplayingFullscreen?: boolean;
-  webkitPresentationMode?: 'fullscreen' | 'inline' | 'picture-in-picture';
-};
-
-interface ParsedCue {
-  start: number;
-  end: number;
-  text: string;
-}
-
-function parseSubtitleTimestamp(ts: string): number {
-  const trimmed = ts.trim();
-  const longMatch = trimmed.match(/^(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})$/);
-  if (longMatch) {
-    const [, h, m, s, ms] = longMatch;
-    return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms.padEnd(3, '0')) / 1000;
-  }
-  const shortMatch = trimmed.match(/^(\d{1,2}):(\d{2})[.,](\d{1,3})$/);
-  if (shortMatch) {
-    const [, m, s, ms] = shortMatch;
-    return Number(m) * 60 + Number(s) + Number(ms.padEnd(3, '0')) / 1000;
-  }
-  return 0;
-}
-
-function parseSubtitleText(content: string): ParsedCue[] {
-  const cues: ParsedCue[] = [];
-  const stripped = content
-    .replace(/^\uFEFF/, '')
-    .replace(/^WEBVTT[^\n]*\n/, '')
-    .replace(/^NOTE[\s\S]*?(?=\n\n)/gm, '');
-  const blocks = stripped.trim().replace(/\r\n/g, '\n').split(/\n\n+/);
-
-  for (const block of blocks) {
-    const lines = block.split('\n');
-    const tsIndex = lines.findIndex(line => line.includes(' --> '));
-    if (tsIndex < 0) continue;
-    const tsParts = lines[tsIndex].split(' --> ');
-    const start = parseSubtitleTimestamp(tsParts[0]);
-    const end = parseSubtitleTimestamp((tsParts[1] || '').split(/\s/)[0]);
-    const text = lines
-      .slice(tsIndex + 1)
-      .join('\n')
-      .trim();
-    if (text && end > start) cues.push({ start, end, text });
-  }
-  return cues;
-}
-
-function findActiveCueLines(cues: ParsedCue[], time: number): string[] {
-  const active = cues.filter(cue => time >= cue.start && time < cue.end);
-  return active.flatMap(cue => normalizeCueText(cue.text));
-}
-
 function formatSubtitleOptionLabel(label: string) {
   if (!label) return '更多语言';
   if (label === '关闭字幕') return '关闭字幕';
   return `${label} · 更多语言`;
-}
-
-function normalizeCueText(text: string) {
-  const decodeEntities = (value: string) => {
-    if (typeof document === 'undefined') return value;
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = value;
-    return textarea.value;
-  };
-
-  const stripMarkup = (value: string) =>
-    decodeEntities(value)
-      .replace(/\{\\[^}]+\}/g, ' ')
-      .replace(/\\h/gi, ' ')
-      .replace(/<\/?[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  return text.replace(/\\N/gi, '\n').replace(/\\n/g, '\n').split(/\r?\n/).map(stripMarkup).filter(Boolean);
-}
-
-function hasEastAsianGlyphs(value: string) {
-  return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af\uff66-\uff9f]/.test(value);
-}
-
-function latinCharacterRatio(value: string) {
-  const normalized = value.replace(/\s+/g, '');
-  if (!normalized) return 0;
-  const latinCount = normalized.match(/[A-Za-z]/g)?.length ?? 0;
-  return latinCount / normalized.length;
-}
-
-function buildSubtitleLineModels(lines: string[]): StyledSubtitleLine[] {
-  return lines.map((line, index) => {
-    const previousLine = lines[index - 1] ?? '';
-    const nextLine = lines[index + 1] ?? '';
-    const currentHasEastAsian = hasEastAsianGlyphs(line);
-    const neighboringEastAsian = hasEastAsianGlyphs(previousLine) || hasEastAsianGlyphs(nextLine);
-    const isAnnotation = /^[([{（【「『].+[)\]}）】」』]$/.test(line);
-    const isSecondary = !currentHasEastAsian && neighboringEastAsian && latinCharacterRatio(line) >= 0.55;
-
-    return {
-      text: line,
-      variant: isAnnotation || isSecondary ? 'secondary' : 'primary',
-    };
-  });
-}
-
-function disableNativeTracks(video: HTMLVideoElement) {
-  for (let index = 0; index < video.textTracks.length; index += 1) {
-    video.textTracks[index].mode = 'disabled';
-  }
 }
 
 function usesAssRenderer(subtitle: SubtitleAsset | undefined) {
@@ -293,91 +163,6 @@ function qualityOrder(profile: string) {
 const controlRailWidth = { base: 'full', xl: '28rem' } as const;
 const subtitleRailWidth = { base: 'full', xl: '14rem' } as const;
 const playerViewportAspectRatio = { base: 16 / 9, xl: undefined } as const;
-const defaultSubtitleScale: SubtitleScaleState = {
-  fontSize: 18,
-  bottomOffset: 72,
-  lineHeight: 1.42,
-  maxWidth: '82%',
-  strokeWidth: 1.5,
-};
-
-function clampNumber(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function detectCoarsePointer() {
-  if (typeof window === 'undefined') return false;
-  if (typeof window.matchMedia === 'function') {
-    return window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(hover: none)').matches;
-  }
-  return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
-}
-
-function isNativeVideoFullscreen(video: HTMLVideoElement | null | undefined) {
-  const target = video as WebkitVideoElement | null | undefined;
-  return Boolean(target?.webkitDisplayingFullscreen || target?.webkitPresentationMode === 'fullscreen');
-}
-
-function isPlayerInDocumentFullscreen(root: HTMLElement | null) {
-  if (!root || typeof document === 'undefined') return false;
-  const fullscreenElement = document.fullscreenElement || (document as WebkitDocument).webkitFullscreenElement || null;
-  if (!fullscreenElement) return false;
-  return fullscreenElement === root || root.contains(fullscreenElement) || fullscreenElement.contains(root);
-}
-
-function createSubtitleScale(width: number, height: number, context: SubtitleScaleContext = {}): SubtitleScaleState {
-  const safeHeight = Math.max(height, 1);
-  const shortEdge = Math.min(width, safeHeight);
-  const isCoarsePointer = context.isCoarsePointer ?? false;
-  const isFullscreen = context.isFullscreen ?? false;
-  const isLandscape = width > safeHeight * 1.08;
-  const isHandheld = isCoarsePointer && shortEdge <= 900;
-
-  let nextFontSize = clampNumber(Math.round(width * 0.021), 14, 28);
-  let nextBottomOffset = clampNumber(Math.round(safeHeight * 0.11), 48, 96);
-  let nextLineHeight = 1.38;
-  let nextMaxWidth = '84%';
-  let nextStrokeWidth = 1.5;
-
-  if (isHandheld && (isFullscreen || isLandscape)) {
-    nextFontSize = clampNumber(Math.round(shortEdge * (isLandscape ? 0.056 : 0.05)), 17, 24);
-    nextBottomOffset = clampNumber(Math.round(safeHeight * (isLandscape ? 0.1 : 0.082)), 20, 36);
-    nextLineHeight = 1.26;
-    nextMaxWidth = isLandscape ? '82%' : '88%';
-    nextStrokeWidth = 1.7;
-  } else if (isHandheld) {
-    nextFontSize = clampNumber(Math.round(width * 0.044), 15, 22);
-    nextBottomOffset = clampNumber(Math.round(safeHeight * 0.072), 14, 24);
-    nextLineHeight = 1.3;
-    nextMaxWidth = '92%';
-    nextStrokeWidth = 1.4;
-  } else if (isFullscreen) {
-    nextFontSize = clampNumber(Math.round(shortEdge * 0.035), 20, 32);
-    nextBottomOffset = clampNumber(Math.round(safeHeight * 0.1), 72, 130);
-    nextLineHeight = 1.48;
-    nextMaxWidth = width >= 1600 ? '72%' : '76%';
-    nextStrokeWidth = 1.78;
-  } else if (width >= 1400) {
-    nextLineHeight = 1.5;
-    nextMaxWidth = '74%';
-    nextStrokeWidth = 1.65;
-  } else if (width >= 1320) {
-    nextLineHeight = 1.46;
-    nextMaxWidth = '74%';
-  } else if (width >= 1000) {
-    nextLineHeight = 1.46;
-    nextMaxWidth = '80%';
-  }
-
-  return {
-    fontSize: nextFontSize,
-    bottomOffset: nextBottomOffset,
-    lineHeight: nextLineHeight,
-    maxWidth: nextMaxWidth,
-    strokeWidth: nextStrokeWidth,
-  };
-}
-
 
 export default function VideoPlayer({
   bangumiData,
@@ -404,10 +189,6 @@ export default function VideoPlayer({
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number>(0);
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
   const [currentSourceType, setCurrentSourceType] = useState('auto');
-  const [subtitleLines, setSubtitleLines] = useState<string[]>([]);
-  const [subtitleOverlayRoot, setSubtitleOverlayRoot] = useState<HTMLElement | null>(null);
-  const [subtitleScale, setSubtitleScale] = useState<SubtitleScaleState>(defaultSubtitleScale);
-  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const [hlsProgress, setHlsProgress] = useState<HlsProgressState>({
     active: false,
     profile: '',
@@ -479,8 +260,6 @@ export default function VideoPlayer({
       ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
       : undefined;
   const isAssSubtitle = usesAssRenderer(activeSubtitle);
-  const activeSubtitleRenderStyle = activeSubtitle?.render_style;
-  const subtitleLineModels = useMemo(() => buildSubtitleLineModels(subtitleLines), [subtitleLines]);
   const basePlaybackUrl = currentSourceUrl || directUrl;
   const externalUrl = basePlaybackUrl ? createAbsoluteUrl(basePlaybackUrl) : '';
   const downloadUrl = sourcePath ? createAbsoluteUrl(`.${toBangumiAssetPath(sourcePath)}`) : '';
@@ -713,12 +492,16 @@ export default function VideoPlayer({
         : {},
       screenshot: true,
       autoplay: false,
+      fullscreen: true,
+      setting: true,
+      playbackRate: true,
+      pip: true,
+      lang: 'zh-cn',
+      hotkey: true,
       plugins,
     });
 
     playerRef.current = art;
-    setSubtitleOverlayRoot(containerRef.current);
-    setSubtitleLines([]);
 
     const handleCanPlay = () => {
       setLoading(false);
@@ -742,8 +525,6 @@ export default function VideoPlayer({
       assRendererRef.current?.destroy();
       assRendererRef.current = null;
       playerRef.current = null;
-      setSubtitleOverlayRoot(null);
-      setSubtitleLines([]);
       art.video.removeEventListener('canplay', handleCanPlay);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
       art.destroy();
@@ -761,159 +542,39 @@ export default function VideoPlayer({
   ]);
 
   useEffect(() => {
-    const video = playerRef.current?.video;
-    if (!video) return;
-    if (isAssSubtitle || !activeSubtitle) {
-      disableNativeTracks(video);
-      setSubtitleLines([]);
-      return;
-    }
-
-    disableNativeTracks(video);
-    setSubtitleLines([]);
-
-    const subUrl = activeSubtitle.original_path
-      ? createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`)
-      : createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
-
-    const abortController = new AbortController();
-    let cues: ParsedCue[] = [];
-    let ready = false;
-
-    fetch(subUrl, { signal: abortController.signal })
-      .then(res => res.text())
-      .then(content => {
-        if (abortController.signal.aborted) return;
-        cues = parseSubtitleText(content);
-        ready = true;
-        const lines = findActiveCueLines(cues, video.currentTime);
-        setSubtitleLines(lines);
-      })
-      .catch(err => {
-        if (err.name !== 'AbortError') console.error('Failed to load subtitle:', err);
-      });
-
-    let prevLineKey = '';
-    const handleTimeUpdate = () => {
-      if (!ready) return;
-      const lines = findActiveCueLines(cues, video.currentTime);
-      const lineKey = lines.join('\n');
-      if (lineKey !== prevLineKey) {
-        prevLineKey = lineKey;
-        setSubtitleLines(lines);
-      }
-    };
-
-    video.addEventListener('timeupdate', handleTimeUpdate);
-
-    return () => {
-      abortController.abort();
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      setSubtitleLines([]);
-    };
-  }, [activeSubtitle, currentSourceUrl, isAssSubtitle]);
-
-  useEffect(() => {
-    const video = playerRef.current?.video;
-
+    const art = playerRef.current;
     assRendererRef.current?.destroy();
     assRendererRef.current = null;
-    if (!isAssSubtitle || !activeSubtitle?.original_path || !video) return;
-
-    disableNativeTracks(video);
-    setSubtitleLines([]);
-
-    const container = video.parentElement;
-    if (!container) return;
-
-    const abortController = new AbortController();
-    const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`);
-
-    fetch(subUrl, { signal: abortController.signal })
-      .then((res) => res.text())
-      .then((content) => {
-        if (abortController.signal.aborted) return;
-        const renderer = new ASS(content, video, { container });
-        assRendererRef.current = renderer;
-      })
-      .catch((err) => {
-        if (err.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
-      });
-
+    if (!art || !activeSubtitle) {
+      art?.subtitle.switch('', { type: 'vtt' });
+      return;
+    }
+    if (isAssSubtitle) {
+      if (!activeSubtitle.original_path) return;
+      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`);
+      fetch(subUrl)
+        .then(res => res.text())
+        .then(content => {
+          if (!playerRef.current) return;
+          const renderer = new ASS(content, art.video, { container: art.template.$player });
+          assRendererRef.current = renderer;
+        })
+        .catch(err => {
+          if (err.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
+        });
+    } else {
+      const subUrl = activeSubtitle.original_path
+        ? createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`)
+        : createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
+      const srcFmt = (activeSubtitle.source_format || '').toLowerCase();
+      const type: 'srt' | 'vtt' = srcFmt === 'srt' ? 'srt' : 'vtt';
+      void art.subtitle.switch(subUrl, { type, name: activeSubtitle.label });
+    }
     return () => {
-      abortController.abort();
       assRendererRef.current?.destroy();
       assRendererRef.current = null;
     };
   }, [activeSubtitle, currentSourceUrl, isAssSubtitle]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return;
-
-    const playerRoot = containerRef.current?.closest<HTMLElement>('.bgmi-player-shell') ?? containerRef.current;
-    const video = playerRef.current?.video ?? containerRef.current?.querySelector('video');
-    if (!playerRoot && !video) return;
-
-    const syncFullscreenState = () => {
-      setIsPlayerFullscreen(
-        isNativeVideoFullscreen(video) || isPlayerInDocumentFullscreen(playerRoot)
-      );
-    };
-
-    syncFullscreenState();
-    document.addEventListener('fullscreenchange', syncFullscreenState);
-    document.addEventListener('webkitfullscreenchange', syncFullscreenState as EventListener);
-    window.addEventListener('resize', syncFullscreenState);
-    window.addEventListener('orientationchange', syncFullscreenState);
-    window.visualViewport?.addEventListener('resize', syncFullscreenState);
-    video?.addEventListener('webkitbeginfullscreen', syncFullscreenState as EventListener);
-    video?.addEventListener('webkitendfullscreen', syncFullscreenState as EventListener);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', syncFullscreenState);
-      document.removeEventListener('webkitfullscreenchange', syncFullscreenState as EventListener);
-      window.removeEventListener('resize', syncFullscreenState);
-      window.removeEventListener('orientationchange', syncFullscreenState);
-      window.visualViewport?.removeEventListener('resize', syncFullscreenState);
-      video?.removeEventListener('webkitbeginfullscreen', syncFullscreenState as EventListener);
-      video?.removeEventListener('webkitendfullscreen', syncFullscreenState as EventListener);
-    };
-  }, [currentSourceUrl]);
-
-  useEffect(() => {
-    const target = subtitleOverlayRoot;
-    if (!target || typeof window === 'undefined') return;
-
-    const updateScale = () => {
-      const width = target.clientWidth || containerRef.current?.clientWidth || 960;
-      const height = target.clientHeight || Math.round(width * 0.5625);
-      setSubtitleScale(
-        createSubtitleScale(width, height, {
-          isCoarsePointer: detectCoarsePointer(),
-          isFullscreen: isPlayerFullscreen,
-        })
-      );
-    };
-
-    updateScale();
-    const observer =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(() => {
-            updateScale();
-          });
-    observer?.observe(target);
-    window.addEventListener('resize', updateScale);
-    window.addEventListener('orientationchange', updateScale);
-    window.visualViewport?.addEventListener('resize', updateScale);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', updateScale);
-      window.removeEventListener('orientationchange', updateScale);
-      window.visualViewport?.removeEventListener('resize', updateScale);
-    };
-  }, [isPlayerFullscreen, subtitleOverlayRoot]);
 
   const episodeCardProps = useMemo(
     () => ({
@@ -1077,89 +738,6 @@ export default function VideoPlayer({
             </Flex>
           ) : null}
         </Box>
-        {subtitleOverlayRoot && subtitleLineModels.length > 0 && !isAssSubtitle
-          ? createPortal(
-              <Flex
-                className="bgmi-subtitle-overlay"
-                position="absolute"
-                left="0"
-                right="0"
-                bottom={`${subtitleScale.bottomOffset}px`}
-                zIndex={12}
-                px={{ base: '0.75rem', md: '1.2rem', xl: '1.6rem' }}
-                pointerEvents="none"
-                justify="center"
-                transition="bottom 0.18s ease-out"
-              >
-                <Box
-                  maxW={subtitleScale.maxWidth}
-                  textAlign="center"
-                  position="relative"
-                  px={{ base: '0.25rem', md: '0.45rem' }}
-                  py={{ base: '0.1rem', md: '0.15rem' }}
-                  sx={{
-                    filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.18))',
-                  }}
-                  _before={{
-                    content: '""',
-                    position: 'absolute',
-                    inset: '-0.35rem -0.45rem',
-                    borderRadius: '1.3rem',
-                    background:
-                      'radial-gradient(circle at center, rgba(0,0,0,0.18), rgba(0,0,0,0.08) 48%, rgba(0,0,0,0) 82%)',
-                    filter: 'blur(8px)',
-                    opacity: 0.72,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {subtitleLineModels.map((line, index) => {
-                    const isSecondary = line.variant === 'secondary';
-                    const lineFontSize = Math.max(12, Math.round(subtitleScale.fontSize * (isSecondary ? 0.82 : 1)));
-                    const useSoftOutline = Boolean(activeSubtitleRenderStyle?.font_family);
-                    const strokeWidth = `${Math.max(
-                      0.42,
-                      Math.min(
-                        1.05,
-                        subtitleScale.strokeWidth *
-                          (isSecondary ? 0.56 : 0.72) *
-                          (useSoftOutline ? 0.74 : 1)
-                      )
-                    ).toFixed(2)}px`;
-
-                    return (
-                      <Text
-                        key={`${index}-${line.text}`}
-                        position="relative"
-                        color={isSecondary ? 'rgba(243,247,255,0.95)' : 'rgba(255,255,255,0.99)'}
-                        fontFamily={activeSubtitleRenderStyle?.font_family}
-                        fontSize={`${lineFontSize}px`}
-                        fontWeight={activeSubtitleRenderStyle?.font_weight ?? (isSecondary ? '500' : '600')}
-                        fontStyle={activeSubtitleRenderStyle?.font_style}
-                        letterSpacing={isSecondary ? '0.012em' : '0.016em'}
-                        lineHeight={subtitleScale.lineHeight}
-                        textShadow={
-                          isSecondary
-                            ? '0 1px 3px rgba(0,0,0,0.42), 0 0 6px rgba(151,182,255,0.10)'
-                            : useSoftOutline
-                            ? '0 1px 2px rgba(0,0,0,0.38), 0 0 5px rgba(0,0,0,0.16)'
-                            : '0 1px 4px rgba(0,0,0,0.46), 0 0 8px rgba(255,255,255,0.06), 0 0 14px rgba(106,168,255,0.08)'
-                        }
-                        mb={index === subtitleLineModels.length - 1 ? '0' : isSecondary ? '0.08rem' : '0.18rem'}
-                        sx={{
-                          WebkitTextStroke: `${strokeWidth} rgba(0,0,0,0.72)`,
-                          paintOrder: 'stroke fill',
-                        }}
-                      >
-                        {line.text}
-                      </Text>
-                    );
-                  })}
-                </Box>
-              </Flex>,
-              subtitleOverlayRoot
-            )
-          : null}
-
         {hasControlBar ? (
           <Box
             mt={{ base: '2.5', xl: '2.75' }}
