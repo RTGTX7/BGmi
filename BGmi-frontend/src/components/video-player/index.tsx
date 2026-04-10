@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import DPlayer from 'dplayer';
-import type { DPlayerOptions } from 'dplayer';
+import Artplayer from 'artplayer';
+import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
 import Hls from 'hls.js';
 import ASS from 'assjs';
 import md5 from 'md5';
@@ -378,32 +378,6 @@ function createSubtitleScale(width: number, height: number, context: SubtitleSca
   };
 }
 
-function createCustomHlsFactory(hls: Hls, fallbackUrl: string, toast: ReturnType<typeof useToast>, toastId: string) {
-  return {
-    customHls(video: HTMLVideoElement) {
-      if (Hls.isSupported()) {
-        hls.loadSource(video.src || video.currentSrc || fallbackUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => undefined);
-        });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal) {
-            console.error('HLS fatal error:', data.type, data.details);
-          }
-        });
-      } else if (!toast.isActive(toastId)) {
-        toast({
-          title: '浏览器暂不支持 HLS，建议使用最新版 Chrome 浏览器',
-          status: 'error',
-          duration: 3000,
-          position: 'top-right',
-          id: toastId,
-        });
-      }
-    },
-  };
-}
 
 export default function VideoPlayer({
   bangumiData,
@@ -421,7 +395,7 @@ export default function VideoPlayer({
   toastRef.current = toast;
   const pollTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<DPlayer | null>(null);
+  const playerRef = useRef<Artplayer | null>(null);
   const assRendererRef = useRef<ASS | null>(null);
   const restoredTimeRef = useRef(false);
 
@@ -677,29 +651,73 @@ export default function VideoPlayer({
     restoredTimeRef.current = false;
     setLoading(true);
 
+    const isHls = currentSourceType === 'customHls' || currentSourceUrl.endsWith('.m3u8');
     const hls = new Hls();
-    const customType = createCustomHlsFactory(hls, currentSourceUrl, toastRef.current, `HlsError-${episode}`);
-    const options: DPlayerOptions = {
-      container: containerRef.current,
-      video: {
-        url: currentSourceUrl,
-        type: currentSourceType === 'customHls' || currentSourceUrl.endsWith('.m3u8') ? 'customHls' : 'auto',
-        customType,
-      },
-      screenshot: true,
-      autoplay: false,
-    };
+    const toastId = `HlsError-${episode}`;
 
+    const plugins: Artplayer['option']['plugins'] = [];
     if (danmakuApi) {
-      options.danmaku = {
-        id: md5(`${bangumiData.bangumi_name}-${episode}-${selectedProfile}`),
-        api: danmakuApi,
-      };
+      const danmakuId = md5(`${bangumiData.bangumi_name}-${episode}-${selectedProfile}`);
+      plugins.push(
+        artplayerPluginDanmuku({
+          danmuku: async () => {
+            try {
+              const resp = await fetch(
+                `${danmakuApi}/v3/comment?id=${encodeURIComponent(danmakuId)}&max=100&unlimitedMax=true`,
+              );
+              const json = (await resp.json()) as { data?: [number, number, number, unknown, string][] } | [number, number, number, unknown, string][];
+              const items = Array.isArray(json) ? json : (json.data ?? []);
+              return items.map(([time, type, color, , text]) => ({
+                time: Number(time),
+                text: String(text),
+                mode: Number(type) as 0 | 1 | 2,
+                color: `#${Number(color).toString(16).padStart(6, '0').toUpperCase()}`,
+              }));
+            } catch {
+              return [];
+            }
+          },
+        }),
+      );
     }
 
-    const dp = new DPlayer(options);
-    playerRef.current = dp;
-    setSubtitleOverlayRoot(containerRef.current.querySelector<HTMLElement>('.dplayer-video-wrap'));
+    const art = new Artplayer({
+      container: containerRef.current,
+      url: currentSourceUrl,
+      type: isHls ? 'm3u8' : '',
+      customType: isHls
+        ? {
+            m3u8: (video: HTMLVideoElement, url: string) => {
+              if (Hls.isSupported()) {
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                  video.play().catch(() => undefined);
+                });
+                hls.on(Hls.Events.ERROR, (_event, data) => {
+                  if (data.fatal) {
+                    console.error('HLS fatal error:', data.type, data.details);
+                  }
+                });
+              } else if (!toastRef.current.isActive(toastId)) {
+                toastRef.current({
+                  title: '浏览器暂不支持 HLS，建议使用最新版 Chrome 浏览器',
+                  status: 'error',
+                  duration: 3000,
+                  position: 'top-right',
+                  id: toastId,
+                });
+              }
+            },
+          }
+        : {},
+      screenshot: true,
+      autoplay: false,
+      plugins,
+    });
+
+    playerRef.current = art;
+    setSubtitleOverlayRoot(containerRef.current);
     setSubtitleLines([]);
 
     const handleCanPlay = () => {
@@ -707,18 +725,18 @@ export default function VideoPlayer({
       if (!restoredTimeRef.current) {
         const currentTime = getCurrentTime();
         if (currentTime > 0) {
-          dp.seek(currentTime);
+          art.seek = currentTime;
         }
         restoredTimeRef.current = true;
       }
     };
 
     const handleTimeUpdate = () => {
-      updateCurrentTime(dp.video.currentTime);
+      updateCurrentTime(art.video.currentTime);
     };
 
-    dp.video.addEventListener('canplay', handleCanPlay);
-    dp.video.addEventListener('timeupdate', handleTimeUpdate);
+    art.video.addEventListener('canplay', handleCanPlay);
+    art.video.addEventListener('timeupdate', handleTimeUpdate);
 
     return () => {
       assRendererRef.current?.destroy();
@@ -726,9 +744,9 @@ export default function VideoPlayer({
       playerRef.current = null;
       setSubtitleOverlayRoot(null);
       setSubtitleLines([]);
-      dp.video.removeEventListener('canplay', handleCanPlay);
-      dp.video.removeEventListener('timeupdate', handleTimeUpdate);
-      dp.destroy();
+      art.video.removeEventListener('canplay', handleCanPlay);
+      art.video.removeEventListener('timeupdate', handleTimeUpdate);
+      art.destroy();
       hls.destroy();
     };
   }, [
@@ -949,41 +967,29 @@ export default function VideoPlayer({
                 : 'linear-gradient(180deg, rgba(255,255,255,0.52), rgba(206,232,242,0.16) 22%, rgba(255,255,255,0.04) 60%)',
           }}
           sx={{
-            '& .dplayer': {
+            '& .art-player': {
               width: '100%',
               height: '100%',
               overflow: 'hidden',
-            },
-            '& #DPlayer': {
-              width: '100%',
-            },
-            '& .dplayer-video-wrap': {
-              width: '100%',
-              height: '100%',
-              position: 'relative',
               background: '#000',
             },
-            '& .dplayer-video-wrap .JASSUB': {
+            '& .art-player .JASSUB': {
               position: 'absolute',
               inset: '0',
               pointerEvents: 'none',
               zIndex: 12,
             },
-            '& .dplayer-video-wrap video': {
+            '& .art-player video': {
               width: '100%',
               height: '100%',
               display: 'block',
               objectFit: 'contain',
             },
-            '& .dplayer-controller': {
+            '& .art-bottom': {
               paddingBottom: '4px',
             },
-            '& .dplayer-icons-right': {
-              display: 'flex',
-              gap: '6px',
-            },
-            '& .dplayer-menu': {
-              backdropFilter: 'blur(18px) saturate(165%)',
+            '& .bgmi-subtitle-overlay': {
+              zIndex: 25,
             },
           }}
         >
@@ -999,7 +1005,6 @@ export default function VideoPlayer({
             color={colorMode === 'dark' ? 'white' : 'blue.500'}
           />
           <Box
-            id="DPlayer"
             ref={containerRef}
             display={currentSourceUrl ? 'block' : 'none'}
             overflow="hidden"
