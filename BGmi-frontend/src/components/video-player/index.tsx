@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
-import Hls from 'hls.js';
 import ASS from 'assjs';
+import Hls from 'hls.js';
 import md5 from 'md5';
 
 import EpisodeCard from './episode-card';
@@ -56,6 +56,58 @@ interface HlsStatusResponse {
 function usesAssRenderer(subtitle: SubtitleAsset | undefined) {
   const subtitleFormat = (subtitle?.format || subtitle?.source_format || '').toLowerCase();
   return ['ass', 'ssa'].includes(subtitleFormat);
+}
+
+function getNativeSubtitleType(subtitle: SubtitleAsset | undefined) {
+  const subtitleFormat = (subtitle?.format || subtitle?.source_format || '').toLowerCase();
+  if (subtitleFormat === 'srt' || subtitleFormat === 'subrip') return 'srt';
+  if (subtitleFormat === 'ass' || subtitleFormat === 'ssa') return 'ass';
+  if (subtitleFormat === 'vtt' || subtitleFormat === 'webvtt') return 'vtt';
+
+  const subtitlePath = (subtitle?.path || subtitle?.original_path || '').toLowerCase();
+  if (subtitlePath.endsWith('.srt')) return 'srt';
+  if (subtitlePath.endsWith('.ass') || subtitlePath.endsWith('.ssa')) return 'ass';
+
+  return 'vtt';
+}
+
+function toSubtitleCssStyle(renderStyle?: SubtitleAsset['render_style']) {
+  const style: Partial<CSSStyleDeclaration> = {};
+
+  if (renderStyle?.font_family) {
+    style.fontFamily = renderStyle.font_family;
+  }
+  if (typeof renderStyle?.font_weight !== 'undefined') {
+    style.fontWeight = String(renderStyle.font_weight);
+  }
+  if (renderStyle?.font_style) {
+    style.fontStyle = renderStyle.font_style;
+  }
+
+  return style;
+}
+
+function getResponsiveSubtitleFontSize(width: number, height?: number, fullscreen?: boolean) {
+  const safeWidth = Number.isFinite(width) && width > 0 ? width : 960;
+  const safeHeight = Number.isFinite(height) && (height ?? 0) > 0 ? (height as number) : safeWidth * 0.5625;
+  const widthSize = safeWidth * 0.026;
+  const heightSize = safeHeight * 0.04;
+  const baseSize = Math.max(widthSize, heightSize);
+  const boostedSize = fullscreen ? baseSize * 1.1 : baseSize;
+
+  return `${Math.max(16, Math.min(fullscreen ? 42 : 34, Math.round(boostedSize)))}px`;
+}
+
+function buildNativeSubtitleStyle(
+  renderStyle: SubtitleAsset['render_style'] | undefined,
+  width: number,
+  height?: number,
+  fullscreen?: boolean
+) {
+  return {
+    ...toSubtitleCssStyle(renderStyle),
+    fontSize: getResponsiveSubtitleFontSize(width, height, fullscreen),
+  } as Partial<CSSStyleDeclaration>;
 }
 
 function formatHlsStageLabel(stage: string) {
@@ -170,10 +222,20 @@ export default function VideoPlayer({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<Artplayer | null>(null);
   const assRendererRef = useRef<ASS | null>(null);
+  const subtitleRequestRef = useRef(0);
   const restoredTimeRef = useRef(false);
+  const subtitleWidthRef = useRef(960);
+  const subtitleHeightRef = useRef(540);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressPointerIdRef = useRef<number | null>(null);
+  const longPressActivatedRef = useRef(false);
+  const longPressStartRateRef = useRef(1);
+  const longPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [artMountSeq, setArtMountSeq] = useState(0);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [showLongPressIndicator, setShowLongPressIndicator] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState('source');
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number>(0);
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
@@ -238,6 +300,14 @@ export default function VideoPlayer({
       ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
       : undefined;
   const isAssSubtitle = usesAssRenderer(activeSubtitle);
+  const activeNativeSubtitleType = getNativeSubtitleType(activeSubtitle);
+  const activeNativeSubtitlePath =
+    activeSubtitle && !isAssSubtitle ? createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`) : '';
+  const activeNativeSubtitleStyle = buildNativeSubtitleStyle(
+    activeSubtitle?.render_style,
+    subtitleWidthRef.current,
+    subtitleHeightRef.current
+  );
   const basePlaybackUrl = currentSourceUrl || directUrl;
   const externalUrl = basePlaybackUrl ? createAbsoluteUrl(basePlaybackUrl) : '';
   const downloadUrl = sourcePath ? createAbsoluteUrl(`.${toBangumiAssetPath(sourcePath)}`) : '';
@@ -254,6 +324,16 @@ export default function VideoPlayer({
   };
 
   useEffect(() => stopPolling, []);
+
+  useEffect(
+    () => () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const directOption = displayedQualityOptions.find(item => item.profile === 'source');
@@ -473,16 +553,28 @@ export default function VideoPlayer({
       fullscreen: true,
       setting: true,
       playbackRate: true,
+      aspectRatio: true,
+      flip: true,
+      subtitleOffset: true,
+      ...(activeNativeSubtitlePath
+        ? {
+            subtitle: {
+              url: activeNativeSubtitlePath,
+              type: activeNativeSubtitleType,
+              name: activeSubtitle?.label || '',
+              style: activeNativeSubtitleStyle,
+            },
+          }
+        : {}),
       pip: true,
       lang: 'zh-cn',
       hotkey: true,
       plugins,
-      autoHide: true,
-      autoHideTime: 2500,
     });
 
     playerRef.current = art;
     setArtMountSeq(n => n + 1);
+    setControlsVisible(true);
 
     const handleCanPlay = () => {
       setLoading(false);
@@ -498,92 +590,133 @@ export default function VideoPlayer({
     const handleTimeUpdate = () => {
       updateCurrentTime(art.video.currentTime);
     };
+    const clearLongPressTimer = () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+    const restoreLongPressRate = () => {
+      if (!longPressActivatedRef.current) return;
+      art.playbackRate = longPressStartRateRef.current;
+      longPressActivatedRef.current = false;
+      setShowLongPressIndicator(false);
+    };
+    const cancelLongPress = () => {
+      clearLongPressTimer();
+      restoreLongPressRate();
+      longPressPointerIdRef.current = null;
+      longPressStartPointRef.current = null;
+    };
+    const isGestureBlockedTarget = (eventTarget: EventTarget | null) => {
+      const element = eventTarget instanceof Element ? eventTarget : null;
+      if (!element) return false;
+
+      return Boolean(
+        element.closest(
+          '.art-controls, .art-setting, .art-contextmenu, .art-layer, .art-notice, .bgmi-quality-selector, button, [role="button"], input, .art-subtitle'
+        )
+      );
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return;
+      if (event.button !== 0) return;
+      if (isGestureBlockedTarget(event.target)) return;
+
+      clearLongPressTimer();
+      restoreLongPressRate();
+      longPressPointerIdRef.current = event.pointerId;
+      longPressStartPointRef.current = { x: event.clientX, y: event.clientY };
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = null;
+        if (longPressPointerIdRef.current !== event.pointerId) return;
+        longPressStartRateRef.current = art.playbackRate || 1;
+        art.playbackRate = 2;
+        longPressActivatedRef.current = true;
+        setShowLongPressIndicator(true);
+      }, 320);
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (longPressPointerIdRef.current !== event.pointerId) return;
+      const startPoint = longPressStartPointRef.current;
+      if (!startPoint) return;
+
+      const movedX = Math.abs(event.clientX - startPoint.x);
+      const movedY = Math.abs(event.clientY - startPoint.y);
+      if (movedX > 12 || movedY > 12) {
+        cancelLongPress();
+      }
+    };
+    const handlePointerUp = (event: PointerEvent) => {
+      if (longPressPointerIdRef.current !== event.pointerId) return;
+      cancelLongPress();
+    };
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (longPressPointerIdRef.current !== event.pointerId) return;
+      cancelLongPress();
+    };
+    const handleContextMenu = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest('.art-player')) {
+        event.preventDefault();
+      }
+    };
+    const handleDragStart = (event: DragEvent) => {
+      if (event.target instanceof Element && event.target.closest('.art-player')) {
+        event.preventDefault();
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) cancelLongPress();
+    };
+    const handleSeeking = () => {
+      cancelLongPress();
+    };
+
+    const syncControlsVisible = () => {
+      setControlsVisible(art.template.$player.classList.contains('art-control-show'));
+    };
+
+    const classObserver = new MutationObserver(syncControlsVisible);
+    classObserver.observe(art.template.$player, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    syncControlsVisible();
 
     art.video.addEventListener('canplay', handleCanPlay);
     art.video.addEventListener('timeupdate', handleTimeUpdate);
-
-
-    const isMobile = /mobile|android|iphone|ipad|ipod|phone|touch/i.test(navigator.userAgent);
-    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-    let longPressActive = false;
-    const LONG_PRESS_MS = 500;
-    const LONG_PRESS_RATE = 2;
-    let lastTap = 0;
-
-    // 桌面端长按 2x
-    const onPressStart = (e: PointerEvent) => {
-      if (isMobile) return;
-      longPressTimer = setTimeout(() => {
-        longPressActive = true;
-        art.playbackRate = LONG_PRESS_RATE;
-        art.notice.show = '2x 倍速';
-      }, LONG_PRESS_MS);
-    };
-    const onPressEnd = (e: PointerEvent) => {
-      if (isMobile) return;
-      if (longPressTimer !== null) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      if (longPressActive) {
-        longPressActive = false;
-        art.playbackRate = 1;
-        art.notice.show = '正常速度';
-      }
-    };
-    const onContextMenu = (e: Event) => {
-      if (isMobile) {
-        e.preventDefault();
-        return;
-      }
-      if (longPressActive) e.preventDefault();
-    };
-    art.video.addEventListener('pointerdown', onPressStart);
-    art.video.addEventListener('pointerup', onPressEnd);
-    art.video.addEventListener('pointerleave', onPressEnd);
-    art.video.addEventListener('pointercancel', onPressEnd);
-    art.video.addEventListener('contextmenu', onContextMenu);
-    // Prevent long-press menu on mobile
-    art.video.addEventListener('touchstart', e => isMobile && e.preventDefault(), { passive: false });
-    art.video.addEventListener('touchend', e => isMobile && e.preventDefault(), { passive: false });
-
-    // 移动端双击切换 2x/1x
-    const onMobileDoubleTap = (e: TouchEvent) => {
-      if (!isMobile) return;
-      const now = Date.now();
-      if (now - lastTap < 400) {
-        // 双击
-        if (art.playbackRate === 1) {
-          art.playbackRate = 2;
-          art.notice.show = '2x 倍速';
-        } else {
-          art.playbackRate = 1;
-          art.notice.show = '正常速度';
-        }
-        lastTap = 0;
-        e.preventDefault();
-      } else {
-        lastTap = now;
-      }
-    };
-    art.video.addEventListener('touchend', onMobileDoubleTap, { passive: false });
+    art.video.addEventListener('seeking', handleSeeking);
+    art.video.addEventListener('contextmenu', handleContextMenu);
+    art.video.addEventListener('dragstart', handleDragStart);
+    art.template.$player.addEventListener('pointerdown', handlePointerDown);
+    art.template.$player.addEventListener('pointermove', handlePointerMove);
+    art.template.$player.addEventListener('pointerup', handlePointerUp);
+    art.template.$player.addEventListener('pointercancel', handlePointerCancel);
+    art.template.$player.addEventListener('contextmenu', handleContextMenu);
+    art.template.$player.addEventListener('dragstart', handleDragStart);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (longPressTimer !== null) clearTimeout(longPressTimer);
+      cancelLongPress();
       assRendererRef.current?.destroy();
       assRendererRef.current = null;
       playerRef.current = null;
       setArtMountSeq(n => n + 1);
+      setControlsVisible(true);
+      setShowLongPressIndicator(false);
       art.video.removeEventListener('canplay', handleCanPlay);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
-      art.video.removeEventListener('pointerdown', onPressStart);
-      art.video.removeEventListener('pointerup', onPressEnd);
-      art.video.removeEventListener('pointerleave', onPressEnd);
-      art.video.removeEventListener('pointercancel', onPressEnd);
-      art.video.removeEventListener('contextmenu', onContextMenu);
-      art.video.removeEventListener('touchstart', e => isMobile && e.preventDefault());
-      art.video.removeEventListener('touchend', e => isMobile && e.preventDefault());
-      art.video.removeEventListener('touchend', onMobileDoubleTap);
+      art.video.removeEventListener('seeking', handleSeeking);
+      art.video.removeEventListener('contextmenu', handleContextMenu);
+      art.video.removeEventListener('dragstart', handleDragStart);
+      art.template.$player.removeEventListener('pointerdown', handlePointerDown);
+      art.template.$player.removeEventListener('pointermove', handlePointerMove);
+      art.template.$player.removeEventListener('pointerup', handlePointerUp);
+      art.template.$player.removeEventListener('pointercancel', handlePointerCancel);
+      art.template.$player.removeEventListener('contextmenu', handleContextMenu);
+      art.template.$player.removeEventListener('dragstart', handleDragStart);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      classObserver.disconnect();
       art.destroy();
       hls.destroy();
     };
@@ -598,70 +731,173 @@ export default function VideoPlayer({
     updateCurrentTime,
   ]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    const art = playerRef.current;
+    if (!container || !art) return;
+
+    const applyResponsiveSubtitleStyle = () => {
+      const nextWidth = container.clientWidth || art.video.clientWidth || 960;
+      const nextHeight = container.clientHeight || art.video.clientHeight || 540;
+      const isFullscreen =
+        art.fullscreen ||
+        art.fullscreenWeb ||
+        document.fullscreenElement === art.template.$player ||
+        document.fullscreenElement === container;
+      subtitleWidthRef.current = nextWidth;
+      subtitleHeightRef.current = nextHeight;
+
+      if (!activeSubtitle || usesAssRenderer(activeSubtitle)) return;
+
+      const nextStyle = buildNativeSubtitleStyle(
+        activeSubtitle.render_style,
+        nextWidth,
+        nextHeight,
+        isFullscreen
+      );
+      art.option.subtitle = {
+        ...art.option.subtitle,
+        style: nextStyle,
+      };
+      art.subtitle.style(nextStyle);
+    };
+
+    applyResponsiveSubtitleStyle();
+
+    const resizeObserver = new ResizeObserver(() => {
+      applyResponsiveSubtitleStyle();
+    });
+
+    resizeObserver.observe(container);
+    art.on('fullscreen', applyResponsiveSubtitleStyle);
+    art.on('fullscreenWeb', applyResponsiveSubtitleStyle);
+
+    return () => {
+      art.off('fullscreen', applyResponsiveSubtitleStyle);
+      art.off('fullscreenWeb', applyResponsiveSubtitleStyle);
+      resizeObserver.disconnect();
+    };
+  }, [activeSubtitle, artMountSeq]);
+
 
   useEffect(() => {
     const art = playerRef.current;
-    // 确保每次切换都销毁旧的 assjs 实例
-    assRendererRef.current?.destroy();
-    assRendererRef.current = null;
-    if (!art || !activeSubtitle) {
-      art?.subtitle.switch('', { type: 'vtt' });
-      return;
+    const requestId = ++subtitleRequestRef.current;
+    const subtitle = activeSubtitle;
+
+    if (!art) return;
+
+    const destroyAssRenderer = () => {
+      assRendererRef.current?.destroy();
+      assRendererRef.current = null;
+    };
+
+    if (!subtitle) {
+      destroyAssRenderer();
+      art.subtitle.show = false;
+      void art.subtitle.switch('', { type: 'vtt' }).catch(err => {
+        console.error('Failed to clear subtitle:', err);
+      });
+      return () => {
+        subtitleRequestRef.current += 1;
+      };
     }
+
     if (isAssSubtitle) {
-      const assPath = activeSubtitle.original_path || activeSubtitle.path;
-      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(assPath)}`);
-      fetch(subUrl)
+      const controller = new AbortController();
+      const assPath = subtitle.original_path || subtitle.path;
+      const subtitleUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(assPath)}`);
+
+      destroyAssRenderer();
+      art.subtitle.show = false;
+      void art.subtitle.switch('', { type: 'vtt' }).catch(err => {
+        console.error('Failed to clear native subtitle before ASS load:', err);
+      });
+
+      void fetch(subtitleUrl, { signal: controller.signal })
         .then(res => res.text())
         .then(content => {
-          if (!playerRef.current) return;
-          // 确保 container 存在且不会被 ArtPlayer 清空
-          let container = art.template.$player.querySelector('.JASSUB');
+          if (subtitleRequestRef.current !== requestId || !playerRef.current) return;
+
+          let container = art.template.$player.querySelector('.JASSUB') as HTMLDivElement | null;
           if (!container) {
             container = document.createElement('div');
             container.className = 'JASSUB';
+            container.style.position = 'absolute';
+            container.style.inset = '0';
+            container.style.pointerEvents = 'none';
+            container.style.zIndex = '20';
             art.template.$player.appendChild(container);
           }
-          // 重新挂载 assjs 到 container
-          const renderer = new ASS(content, art.video, { container });
-          assRendererRef.current = renderer;
 
-          // 监听 ArtPlayer 的 url、resize、subtitle 切换等事件，自动恢复 assjs 层
-          const restoreAssLayer = () => {
-            if (!playerRef.current) return;
-            let c = art.template.$player.querySelector('.JASSUB');
-            if (!c) {
-              c = document.createElement('div');
-              c.className = 'JASSUB';
-              art.template.$player.appendChild(c);
-              renderer.container = c;
-              renderer.resize();
-            }
-          };
-          art.on('url', restoreAssLayer);
-          art.on('resize', restoreAssLayer);
-          art.on('subtitle', restoreAssLayer);
-          renderer._artRestoreHandler = restoreAssLayer;
+          destroyAssRenderer();
+          assRendererRef.current = new ASS(content, art.video, { container });
         })
         .catch(err => {
-          if (err.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
+          if (err?.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
         });
-    } else {
-      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
-      void art.subtitle.switch(subUrl, { type: 'vtt', name: activeSubtitle.label });
+
+      return () => {
+        controller.abort();
+        subtitleRequestRef.current += 1;
+        destroyAssRenderer();
+      };
     }
+
+    destroyAssRenderer();
+    const subtitleUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(subtitle.path)}`);
+    const subtitleType = getNativeSubtitleType(subtitle);
+    const subtitleStyle = buildNativeSubtitleStyle(
+      subtitle.render_style,
+      containerRef.current?.clientWidth || art.video.clientWidth || subtitleWidthRef.current,
+      containerRef.current?.clientHeight || art.video.clientHeight || subtitleHeightRef.current,
+      art.fullscreen || art.fullscreenWeb
+    );
+    let disposed = false;
+    let subtitleLoaded = false;
+
+    const applyNativeSubtitle = () => {
+      if (disposed || subtitleRequestRef.current !== requestId) return;
+
+      art.subtitle.show = true;
+      art.option.subtitle = {
+        ...art.option.subtitle,
+        url: subtitleUrl,
+        type: subtitleType,
+        name: subtitle.label,
+        style: subtitleStyle,
+      };
+
+      void art.subtitle
+        .switch(subtitleUrl, {
+          type: subtitleType,
+          style: subtitleStyle,
+        })
+        .then(result => {
+          if (disposed || subtitleRequestRef.current !== requestId) return;
+          subtitleLoaded = Boolean(result);
+          if (Object.keys(subtitleStyle).length > 0) {
+            art.subtitle.style(subtitleStyle);
+          }
+        })
+        .catch(err => {
+          if (err?.name !== 'AbortError') console.error('Failed to load subtitle:', err);
+        });
+    };
+    const retryNativeSubtitle = () => {
+      if (!subtitleLoaded) applyNativeSubtitle();
+    };
+
+    applyNativeSubtitle();
+    art.video.addEventListener('loadedmetadata', retryNativeSubtitle);
+    art.video.addEventListener('canplay', retryNativeSubtitle);
+
     return () => {
-      // 移除事件监听，销毁 assjs
-      const art = playerRef.current;
-      if (assRendererRef.current) {
-        if (assRendererRef.current._artRestoreHandler && art) {
-          art.off('url', assRendererRef.current._artRestoreHandler);
-          art.off('resize', assRendererRef.current._artRestoreHandler);
-          art.off('subtitle', assRendererRef.current._artRestoreHandler);
-        }
-        assRendererRef.current.destroy();
-        assRendererRef.current = null;
-      }
+      disposed = true;
+      subtitleRequestRef.current += 1;
+      destroyAssRenderer();
+      art.video.removeEventListener('loadedmetadata', retryNativeSubtitle);
+      art.video.removeEventListener('canplay', retryNativeSubtitle);
     };
   }, [activeSubtitle, artMountSeq, isAssSubtitle]);
 
@@ -669,20 +905,26 @@ export default function VideoPlayer({
   useEffect(() => {
     const art = playerRef.current;
     if (!art) return;
-    try { art.setting.remove('切换字幕'); } catch {}
-    if (subtitleTracks.length === 0) return;
-    art.setting.add({
-      html: '切换字幕',
-      selector: [
-        { html: '关闭', default: selectedSubtitleIndex < 0, trackIndex: -1 } as Record<string, unknown>,
-        ...subtitleTracks.map((t, i) => ({ html: t.label, default: i === selectedSubtitleIndex, trackIndex: i }) as Record<string, unknown>),
-      ] as import('artplayer/types/setting').Setting[],
-      onSelect(item) {
-        setSelectedSubtitleIndex((item as unknown as { trackIndex: number }).trackIndex);
-        return item.html as string;
-      },
-    });
-  }, [artMountSeq, subtitleTracks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    try { art.setting.remove('subtitle'); } catch {}
+
+    if (subtitleTracks.length > 0) {
+      art.setting.add({
+        name: 'subtitle',
+        html: 'Subtitle',
+        width: 250,
+        selector: [
+          { html: 'Off', default: selectedSubtitleIndex < 0, trackIndex: -1 } as Record<string, unknown>,
+          ...subtitleTracks.map((t, i) => ({ html: t.label, default: i === selectedSubtitleIndex, trackIndex: i }) as Record<string, unknown>),
+        ] as import('artplayer/types/setting').Setting[],
+        onSelect(item) {
+          const trackIndex = (item as unknown as { trackIndex: number }).trackIndex;
+          setSelectedSubtitleIndex(trackIndex);
+          return item.html as string;
+        },
+      });
+    }
+  }, [artMountSeq, selectedSubtitleIndex, subtitleTracks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const episodeCardProps = useMemo(
     () => ({
@@ -736,24 +978,47 @@ export default function VideoPlayer({
               height: '100%',
               overflow: 'hidden',
               background: '#000',
+              WebkitTouchCallout: 'none',
+              userSelect: 'none',
             },
             '& .art-player .JASSUB': {
               position: 'absolute',
               inset: '0',
               pointerEvents: 'none',
-              zIndex: 12,
+              zIndex: 20,
             },
             '& .art-player video': {
               width: '100%',
               height: '100%',
               display: 'block',
               objectFit: 'contain',
+              WebkitTouchCallout: 'none',
+              userSelect: 'none',
             },
             '& .art-bottom': {
               paddingBottom: '4px',
             },
+            '& .bgmi-quality-selector': {
+              transition: 'opacity 180ms ease, transform 180ms ease',
+            },
             '& .bgmi-subtitle-overlay': {
               zIndex: 25,
+            },
+            '& .bgmi-long-press-speed-indicator': {
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 22,
+              pointerEvents: 'none',
+              padding: '0.5rem 0.9rem',
+              borderRadius: '999px',
+              background: 'rgba(15, 23, 42, 0.72)',
+              color: 'white',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              backdropFilter: 'blur(10px)',
+              letterSpacing: '0.02em',
             },
           }}
         >
@@ -844,12 +1109,15 @@ export default function VideoPlayer({
           {/* Quality selector overlay — top-right inside player, only when multiple options */}
           {currentSourceUrl && displayedQualityOptions.length > 1 ? (
             <HStack
+              className="bgmi-quality-selector"
               position="absolute"
               top="2.5"
               right="2.5"
               spacing="1.5"
               zIndex={20}
-              pointerEvents="auto"
+              opacity={controlsVisible ? 1 : 0}
+              transform={controlsVisible ? 'translateY(0)' : 'translateY(-6px)'}
+              pointerEvents={controlsVisible ? 'auto' : 'none'}
             >
               {displayedQualityOptions.map(option => {
                 const isActive = selectedProfile === option.profile;
@@ -877,6 +1145,10 @@ export default function VideoPlayer({
                 );
               })}
             </HStack>
+          ) : null}
+
+          {currentSourceUrl && showLongPressIndicator ? (
+            <Box className="bgmi-long-press-speed-indicator">2x 倍速中</Box>
           ) : null}
 
           {/* HLS progress overlay — bottom of player above ArtPlayer controls */}

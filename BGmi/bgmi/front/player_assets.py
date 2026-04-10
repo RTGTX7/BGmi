@@ -18,9 +18,9 @@ HLS_METADATA_FILE = ".bgmi-hls-meta.json"
 SUBTITLE_FILE_PREFIX = "bgmi-subtitle"
 SUBTITLE_CODEC_EXTENSIONS = {
     "ass": "ass",
-    "ssa": "ssa",
-    "subrip": "vtt",
-    "srt": "vtt",
+    "ssa": "ass",
+    "subrip": "srt",
+    "srt": "srt",
     "webvtt": "vtt",
 }
 SIDECAR_SUBTITLE_EXTENSIONS = [".vtt", ".srt", ".ass", ".ssa"]
@@ -1235,23 +1235,26 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
         source_extension = sidecar.suffix.lower().lstrip(".")
         if source_extension in {"ass", "ssa"}:
             target_path = sidecar
-            should_convert_to_vtt = False
             subtitle_format = source_extension
             original_path = _relative_url(sidecar)
+        elif source_extension in {"srt", "subrip"}:
+            target_path = sidecar
+            subtitle_format = "srt"
+            original_path = None
         elif source_extension in {"vtt"}:
             target_path = sidecar
-            should_convert_to_vtt = False
             subtitle_format = "vtt"
             original_path = None
         else:
             target_path = _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}", "vtt")
-            should_convert_to_vtt = True
             subtitle_format = "vtt"
             original_path = None
 
         try:
-            if should_convert_to_vtt:
+            if source_extension not in {"ass", "ssa", "srt", "subrip", "vtt"}:
                 _convert_to_vtt(sidecar, target_path, source_path)
+            else:
+                _read_subtitle_text(sidecar)
             relative_path = _relative_url(target_path)
         except Exception as exc:
             print(
@@ -1315,7 +1318,7 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
                         "-map",
                         f"0:{stream['index']}",
                     ]
-                    if target_extension in {"ass", "ssa"}:
+                    if target_extension in {"ass", "ssa", "srt"}:
                         command.extend(
                             [
                                 "-c:s",
@@ -1352,13 +1355,13 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
             {
                 "path": relative_path,
                 "original_path": relative_path if target_extension in {"ass", "ssa"} else None,
-                "format": target_extension,
+                "format": "ass" if target_extension == "ass" else target_extension,
                 "source_format": stream_codec,
                 "language": language,
                 "label": label,
                 "default": bool(stream.get("disposition", {}).get("default", 0)),
                 "source": "embedded",
-                "render_style": {},
+                "render_style": _parse_ass_default_style(target_path),
                 "_order": subtitle_order,
             }
         )
