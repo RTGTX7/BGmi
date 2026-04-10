@@ -1,4 +1,4 @@
-﻿import { Box, Button, Flex, HStack, Progress, Select, Spinner, Text, useToast } from '@chakra-ui/react';
+﻿import { Box, Button, Flex, HStack, Progress, Spinner, Text, useToast } from '@chakra-ui/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import Artplayer from 'artplayer';
@@ -51,17 +51,6 @@ interface HlsStatusResponse {
     error?: string;
     stage?: string;
   };
-}
-
-interface SubtitleOption {
-  label: string;
-  value: string;
-}
-
-function formatSubtitleOptionLabel(label: string) {
-  if (!label) return '更多语言';
-  if (label === '关闭字幕') return '关闭字幕';
-  return `${label} · 更多语言`;
 }
 
 function usesAssRenderer(subtitle: SubtitleAsset | undefined) {
@@ -133,7 +122,7 @@ function extractQualityProfile(item: QualityAsset) {
 function formatQualityLabel(profile: string, fallback: string) {
   switch (profile) {
     case 'source':
-      return 'Direct Play';
+      return '原画';
     case '720p':
       return '720p';
     case '1080p':
@@ -160,8 +149,6 @@ function qualityOrder(profile: string) {
   }
 }
 
-const controlRailWidth = { base: 'full', xl: '28rem' } as const;
-const subtitleRailWidth = { base: 'full', xl: '14rem' } as const;
 const playerViewportAspectRatio = { base: 16 / 9, xl: undefined } as const;
 
 export default function VideoPlayer({
@@ -185,6 +172,7 @@ export default function VideoPlayer({
   const restoredTimeRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
+  const [artMountSeq, setArtMountSeq] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState('source');
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number>(0);
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
@@ -240,21 +228,10 @@ export default function VideoPlayer({
     ];
   }, [directUrl]);
   const displayedQualityOptions = qualityOptions.length > 0 ? qualityOptions : fallbackQualityOptions;
-  const subtitleOptions = useMemo<SubtitleOption[]>(
-    () => [
-      { label: '关闭字幕', value: '-1' },
-      ...subtitleTracks.map((track, index) => ({
-        label: track.label,
-        value: String(index),
-      })),
-    ],
-    [subtitleTracks]
-  );
   const defaultSubtitleIndex = useMemo(() => {
     const index = subtitleTracks.findIndex(track => track.default);
     return index >= 0 ? index : 0;
   }, [subtitleTracks]);
-  const selectedSubtitleValue = selectedSubtitleIndex >= 0 ? String(selectedSubtitleIndex) : '-1';
   const activeSubtitle =
     subtitleTracks.length > 0 && selectedSubtitleIndex >= 0
       ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
@@ -502,6 +479,7 @@ export default function VideoPlayer({
     });
 
     playerRef.current = art;
+    setArtMountSeq(n => n + 1);
 
     const handleCanPlay = () => {
       setLoading(false);
@@ -525,6 +503,7 @@ export default function VideoPlayer({
       assRendererRef.current?.destroy();
       assRendererRef.current = null;
       playerRef.current = null;
+      setArtMountSeq(n => n + 1);
       art.video.removeEventListener('canplay', handleCanPlay);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
       art.destroy();
@@ -576,6 +555,25 @@ export default function VideoPlayer({
     };
   }, [activeSubtitle, currentSourceUrl, isAssSubtitle]);
 
+  // Sync subtitle selector into ArtPlayer settings panel
+  useEffect(() => {
+    const art = playerRef.current;
+    if (!art) return;
+    try { art.setting.remove('切换字幕'); } catch {}
+    if (subtitleTracks.length === 0) return;
+    art.setting.add({
+      html: '切换字幕',
+      selector: [
+        { html: '关闭', default: selectedSubtitleIndex < 0, trackIndex: -1 } as Record<string, unknown>,
+        ...subtitleTracks.map((t, i) => ({ html: t.label, default: i === selectedSubtitleIndex, trackIndex: i }) as Record<string, unknown>),
+      ] as import('artplayer/types/setting').Setting[],
+      onSelect(item) {
+        setSelectedSubtitleIndex((item as unknown as { trackIndex: number }).trackIndex);
+        return item.html as string;
+      },
+    });
+  }, [artMountSeq, subtitleTracks]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const episodeCardProps = useMemo(
     () => ({
       totalEpisode: Object.keys(bangumiData.player),
@@ -591,11 +589,6 @@ export default function VideoPlayer({
     !currentSourceUrl && !playerAssetLoading && !playerAssetMissing && !playerAssetErrorMessage;
   const playerShellMinH = currentSourceUrl ? { base: 'auto', xl: '26rem' } : { base: '14rem', xl: '26rem' };
   const playerStateMinH = { base: '14rem', xl: '26rem' } as const;
-  const hasControlBar = displayedQualityOptions.length > 0 || subtitleTracks.length > 0 || Boolean(externalUrl);
-  const isControlBarEnhancing =
-    playerAssetLoading && qualityOptions.length === 0 && subtitleTracks.length === 0 && displayedQualityOptions.length > 0;
-  const controlBarEnhanceError =
-    playerAssetErrorMessage && displayedQualityOptions.length > 0 && qualityOptions.length === 0 && subtitleTracks.length === 0;
 
   return (
     <>
@@ -737,171 +730,96 @@ export default function VideoPlayer({
               </Text>
             </Flex>
           ) : null}
-        </Box>
-        {hasControlBar ? (
-          <Box
-            mt={{ base: '2.5', xl: '2.75' }}
-            p={{ base: '2.5', md: '3.5' }}
-            w="full"
-            alignSelf="stretch"
-            rounded={{ base: '1.5rem', xl: '1.75rem' }}
-            bg={colorMode === 'dark' ? 'rgba(20,26,38,0.72)' : 'rgba(239,247,250,0.9)'}
-            borderWidth="1px"
-            borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(203,222,229,0.9)'}
-            backdropFilter="blur(10px) saturate(135%)"
-            boxShadow={
-              colorMode === 'dark'
-                ? '0 14px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05)'
-                : '0 14px 30px rgba(58,98,110,0.08), inset 0 1px 0 rgba(255,255,255,0.46)'
-            }
-            position="relative"
-            overflow="visible"
-          >
-            <Flex gap={{ base: '2', xl: '4' }} direction="column" position="relative" zIndex={1}>
-              {isControlBarEnhancing ? (
-                <Text fontSize="sm" color={colorMode === 'dark' ? 'whiteAlpha.760' : 'rgba(36,48,66,0.76)'}>
-                  正在检查字幕并准备更多画质...
-                </Text>
-              ) : null}
-              {controlBarEnhanceError ? (
-                <Text fontSize="sm" color={colorMode === 'dark' ? 'orange.200' : 'orange.600'}>
-                  字幕或 HLS 画质信息暂未返回，当前先使用 Direct Play。
-                </Text>
-              ) : null}
 
-              {/* Row 1: quality buttons + external player icons on the same line */}
-              <Flex align="center" gap={{ base: '2', xl: '3' }} wrap="wrap">
-                {displayedQualityOptions.length > 0 ? (
-                  <HStack spacing="2" flexWrap="wrap" flex="1" minW="0">
-                    {displayedQualityOptions.map(option => (
-                      <Button
-                        key={option.profile}
-                        size="sm"
-                        minH={{ base: '1.78rem', md: '2.55rem' }}
-                        px={{ base: '0.68rem', md: '1.15rem' }}
-                        fontSize={{ base: '0.72rem', md: '0.92rem' }}
-                        rounded="full"
-                        variant={selectedProfile === option.profile ? 'solid' : 'outline'}
-                        colorScheme={selectedProfile === option.profile ? 'blue' : undefined}
-                        borderColor={
-                          selectedProfile === option.profile
-                            ? undefined
-                            : colorMode === 'dark'
-                            ? 'rgba(255,255,255,0.18)'
-                            : 'rgba(174,200,210,0.92)'
-                        }
-                        bg={
-                          selectedProfile === option.profile
-                            ? undefined
-                            : colorMode === 'dark'
-                            ? 'rgba(255,255,255,0.05)'
-                            : 'rgba(255,255,255,0.72)'
-                        }
-                        boxShadow={
-                          selectedProfile === option.profile
-                            ? colorMode === 'dark'
-                              ? '0 10px 22px rgba(86,163,255,0.22), inset 0 1px 0 rgba(255,255,255,0.18)'
-                              : '0 10px 24px rgba(94,188,214,0.18), 0 3px 10px rgba(59,130,246,0.14), inset 0 1px 0 rgba(255,255,255,0.38)'
-                            : colorMode === 'dark'
-                            ? '0 6px 14px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.04)'
-                            : '0 6px 14px rgba(39,87,116,0.05), inset 0 1px 0 rgba(255,255,255,0.34)'
-                        }
-                        backdropFilter="blur(8px) saturate(140%)"
-                        position="relative"
-                        _after={
-                          selectedProfile === option.profile
-                            ? {
-                                content: '""',
-                                position: 'absolute',
-                                left: '18%',
-                                right: '18%',
-                                bottom: '0.28rem',
-                                height: '2px',
-                                borderRadius: '999px',
-                                background:
-                                  colorMode === 'dark' ? 'rgba(191,219,254,0.95)' : 'rgba(255,255,255,0.92)',
-                              }
-                            : undefined
-                        }
-                        onClick={() => void handleQualitySelect(option)}
-                      >
-                        {option.displayName}
-                      </Button>
-                    ))}
-                  </HStack>
-                ) : null}
-
-                <Box flexShrink={0} ml={displayedQualityOptions.length > 0 ? 'auto' : undefined}>
-                  <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} />
-                </Box>
-              </Flex>
-
-              {/* Row 2: subtitle selector full width */}
-              {subtitleTracks.length > 0 ? (
-                <Box w="full" maxW={subtitleRailWidth}>
-                  <Select
-                    value={selectedSubtitleValue}
-                    onChange={e => setSelectedSubtitleIndex(Number(e.target.value))}
-                    size="sm"
-                    borderRadius="999px"
-                    bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.72)'}
-                    borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(174,200,210,0.92)'}
-                    color={colorMode === 'dark' ? 'rgba(255,255,255,0.94)' : '#243042'}
+          {/* Quality selector overlay — top-right inside player, only when multiple options */}
+          {currentSourceUrl && displayedQualityOptions.length > 1 ? (
+            <HStack
+              position="absolute"
+              top="2.5"
+              right="2.5"
+              spacing="1.5"
+              zIndex={20}
+              pointerEvents="auto"
+            >
+              {displayedQualityOptions.map(option => {
+                const isActive = selectedProfile === option.profile;
+                const isProcessing = hlsProgress.active && hlsProgress.profile === option.profile;
+                return (
+                  <Button
+                    key={option.profile}
+                    size="xs"
+                    rounded="full"
+                    onClick={() => void handleQualitySelect(option)}
+                    bg={isActive ? 'rgba(59,130,246,0.88)' : 'rgba(0,0,0,0.58)'}
+                    color="white"
+                    borderWidth="1px"
+                    borderColor={isActive ? 'rgba(147,197,253,0.65)' : 'rgba(255,255,255,0.28)'}
+                    _hover={{ bg: isActive ? 'rgba(59,130,246,1)' : 'rgba(0,0,0,0.74)' }}
+                    px={{ base: '1.5', md: '2' }}
+                    minH={{ base: '1.3rem', md: '1.5rem' }}
+                    fontSize={{ base: '0.65rem', md: '0.7rem' }}
                     fontWeight={600}
-                    fontSize="0.86rem"
-                    h="2.55rem"
-                    cursor="pointer"
-                    sx={{
-                      backdropFilter: 'blur(8px) saturate(145%)',
-                      boxShadow:
-                        colorMode === 'dark'
-                          ? '0 6px 14px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.05)'
-                          : '0 6px 14px rgba(39,87,116,0.05), inset 0 1px 0 rgba(255,255,255,0.40)',
-                    }}
+                    backdropFilter="blur(10px)"
+                    leftIcon={isProcessing ? <Spinner size="xs" /> : undefined}
                   >
-                    {subtitleOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.value === selectedSubtitleValue
-                          ? formatSubtitleOptionLabel(opt.label)
-                          : opt.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Box>
-              ) : null}
-            </Flex>
-          </Box>
-        ) : null}
+                    {isProcessing ? `${hlsProgress.progress.toFixed(0)}%` : option.displayName}
+                  </Button>
+                );
+              })}
+            </HStack>
+          ) : null}
 
-        {hlsProgress.active ? (
-          <Box
-            mt="3"
-            p="3.5"
-            rounded="2xl"
-            bg={colorMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.58)'}
-            borderWidth="1px"
-            borderColor={colorMode === 'dark' ? 'whiteAlpha.140' : 'whiteAlpha.900'}
-            backdropFilter="blur(18px) saturate(165%)"
-            boxShadow={
-              colorMode === 'dark'
-                ? '0 14px 30px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.06)'
-                : '0 14px 30px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.48)'
-            }
-          >
-            <Text mb="2" fontSize="sm" color={colorMode === 'dark' ? 'blue.200' : 'blue.700'}>
-              服务器正在优化 {hlsProgress.label}，当前阶段：{formatHlsStageLabel(hlsProgress.stage || 'running')}
-            </Text>
-            <Progress value={hlsProgress.progress} size="sm" rounded="md" colorScheme="blue" />
-            <Text mt="1" fontSize="xs" opacity="0.8">
-              {hlsProgress.progress.toFixed(1)}%
-            </Text>
-          </Box>
-        ) : null}
+          {/* HLS progress overlay — bottom of player above ArtPlayer controls */}
+          {hlsProgress.active ? (
+            <Box
+              position="absolute"
+              bottom="14"
+              left="3"
+              right="3"
+              zIndex={20}
+              bg="rgba(0,0,0,0.70)"
+              rounded="lg"
+              px="3"
+              py="2"
+              backdropFilter="blur(12px)"
+            >
+              <Flex align="center" gap="2" mb="1.5">
+                <Text color="rgba(191,219,254,0.95)" fontSize="xs" flex="1" fontWeight={500}>
+                  {hlsProgress.label} · {formatHlsStageLabel(hlsProgress.stage || 'running')}
+                </Text>
+                <Text color="rgba(191,219,254,0.95)" fontSize="xs" fontWeight={700}>
+                  {hlsProgress.progress.toFixed(0)}%
+                </Text>
+              </Flex>
+              <Progress value={hlsProgress.progress} size="xs" rounded="full" colorScheme="blue" />
+            </Box>
+          ) : null}
 
-        {hlsProgress.error ? (
-          <Text mt="3" fontSize="sm" color="red.400">
-            {hlsProgress.error}
-          </Text>
+          {/* HLS error overlay */}
+          {hlsProgress.error && !hlsProgress.active ? (
+            <Box
+              position="absolute"
+              bottom="14"
+              left="3"
+              right="3"
+              zIndex={20}
+              bg="rgba(127,29,29,0.82)"
+              rounded="lg"
+              px="3"
+              py="1.5"
+              backdropFilter="blur(12px)"
+            >
+              <Text color="rgba(252,165,165,0.95)" fontSize="xs">
+                {hlsProgress.error}
+              </Text>
+            </Box>
+          ) : null}
+        </Box>
+
+        {externalUrl ? (
+          <Flex justify="flex-end" mt="2" px="0.5">
+            <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} />
+          </Flex>
         ) : null}
       </Flex>
       <EpisodeCard flexShrink={0} setPlayState={() => undefined} bangumiData={episodeCardProps} />
