@@ -477,6 +477,8 @@ export default function VideoPlayer({
       lang: 'zh-cn',
       hotkey: true,
       plugins,
+      autoHide: true,
+      autoHideTime: 2500,
     });
 
     playerRef.current = art;
@@ -596,8 +598,10 @@ export default function VideoPlayer({
     updateCurrentTime,
   ]);
 
+
   useEffect(() => {
     const art = playerRef.current;
+    // 确保每次切换都销毁旧的 assjs 实例
     assRendererRef.current?.destroy();
     assRendererRef.current = null;
     if (!art || !activeSubtitle) {
@@ -611,8 +615,33 @@ export default function VideoPlayer({
         .then(res => res.text())
         .then(content => {
           if (!playerRef.current) return;
-          const renderer = new ASS(content, art.video, { container: art.template.$player });
+          // 确保 container 存在且不会被 ArtPlayer 清空
+          let container = art.template.$player.querySelector('.JASSUB');
+          if (!container) {
+            container = document.createElement('div');
+            container.className = 'JASSUB';
+            art.template.$player.appendChild(container);
+          }
+          // 重新挂载 assjs 到 container
+          const renderer = new ASS(content, art.video, { container });
           assRendererRef.current = renderer;
+
+          // 监听 ArtPlayer 的 url、resize、subtitle 切换等事件，自动恢复 assjs 层
+          const restoreAssLayer = () => {
+            if (!playerRef.current) return;
+            let c = art.template.$player.querySelector('.JASSUB');
+            if (!c) {
+              c = document.createElement('div');
+              c.className = 'JASSUB';
+              art.template.$player.appendChild(c);
+              renderer.container = c;
+              renderer.resize();
+            }
+          };
+          art.on('url', restoreAssLayer);
+          art.on('resize', restoreAssLayer);
+          art.on('subtitle', restoreAssLayer);
+          renderer._artRestoreHandler = restoreAssLayer;
         })
         .catch(err => {
           if (err.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
@@ -625,10 +654,19 @@ export default function VideoPlayer({
       void art.subtitle.switch(subUrl, { type, name: activeSubtitle.label });
     }
     return () => {
-      assRendererRef.current?.destroy();
-      assRendererRef.current = null;
+      // 移除事件监听，销毁 assjs
+      const art = playerRef.current;
+      if (assRendererRef.current) {
+        if (assRendererRef.current._artRestoreHandler && art) {
+          art.off('url', assRendererRef.current._artRestoreHandler);
+          art.off('resize', assRendererRef.current._artRestoreHandler);
+          art.off('subtitle', assRendererRef.current._artRestoreHandler);
+        }
+        assRendererRef.current.destroy();
+        assRendererRef.current = null;
+      }
     };
-  }, [activeSubtitle, artMountSeq, isAssSubtitle]); // artMountSeq instead of currentSourceUrl to avoid double-run when both change simultaneously
+  }, [activeSubtitle, artMountSeq, isAssSubtitle]);
 
   // Sync subtitle selector into ArtPlayer settings panel
   useEffect(() => {
