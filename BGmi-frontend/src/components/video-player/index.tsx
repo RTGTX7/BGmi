@@ -501,31 +501,24 @@ export default function VideoPlayer({
     art.video.addEventListener('timeupdate', handleTimeUpdate);
 
 
-    // Only enable long-press 2x on desktop
     const isMobile = /mobile|android|iphone|ipad|ipod|phone|touch/i.test(navigator.userAgent);
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
     let longPressActive = false;
     const LONG_PRESS_MS = 500;
     const LONG_PRESS_RATE = 2;
+    let lastTap = 0;
 
+    // 桌面端长按 2x
     const onPressStart = (e: PointerEvent) => {
-      if (isMobile) {
-        // Prevent long-press menu on mobile
-        e.preventDefault();
-        return;
-      }
+      if (isMobile) return;
       longPressTimer = setTimeout(() => {
         longPressActive = true;
         art.playbackRate = LONG_PRESS_RATE;
         art.notice.show = '2x 倍速';
       }, LONG_PRESS_MS);
     };
-
     const onPressEnd = (e: PointerEvent) => {
-      if (isMobile) {
-        e.preventDefault();
-        return;
-      }
+      if (isMobile) return;
       if (longPressTimer !== null) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
@@ -536,7 +529,6 @@ export default function VideoPlayer({
         art.notice.show = '正常速度';
       }
     };
-
     const onContextMenu = (e: Event) => {
       if (isMobile) {
         e.preventDefault();
@@ -544,7 +536,6 @@ export default function VideoPlayer({
       }
       if (longPressActive) e.preventDefault();
     };
-
     art.video.addEventListener('pointerdown', onPressStart);
     art.video.addEventListener('pointerup', onPressEnd);
     art.video.addEventListener('pointerleave', onPressEnd);
@@ -553,6 +544,27 @@ export default function VideoPlayer({
     // Prevent long-press menu on mobile
     art.video.addEventListener('touchstart', e => isMobile && e.preventDefault(), { passive: false });
     art.video.addEventListener('touchend', e => isMobile && e.preventDefault(), { passive: false });
+
+    // 移动端双击切换 2x/1x
+    const onMobileDoubleTap = (e: TouchEvent) => {
+      if (!isMobile) return;
+      const now = Date.now();
+      if (now - lastTap < 400) {
+        // 双击
+        if (art.playbackRate === 1) {
+          art.playbackRate = 2;
+          art.notice.show = '2x 倍速';
+        } else {
+          art.playbackRate = 1;
+          art.notice.show = '正常速度';
+        }
+        lastTap = 0;
+        e.preventDefault();
+      } else {
+        lastTap = now;
+      }
+    };
+    art.video.addEventListener('touchend', onMobileDoubleTap, { passive: false });
 
     return () => {
       if (longPressTimer !== null) clearTimeout(longPressTimer);
@@ -569,6 +581,7 @@ export default function VideoPlayer({
       art.video.removeEventListener('contextmenu', onContextMenu);
       art.video.removeEventListener('touchstart', e => isMobile && e.preventDefault());
       art.video.removeEventListener('touchend', e => isMobile && e.preventDefault());
+      art.video.removeEventListener('touchend', onMobileDoubleTap);
       art.destroy();
       hls.destroy();
     };
