@@ -54,8 +54,8 @@ interface HlsStatusResponse {
 }
 
 function usesAssRenderer(subtitle: SubtitleAsset | undefined) {
-  const fmt = (subtitle?.source_format || subtitle?.format || '').toLowerCase();
-  return Boolean(subtitle?.original_path && ['ass', 'ssa'].includes(fmt));
+  const subtitleFormat = (subtitle?.format || subtitle?.source_format || '').toLowerCase();
+  return ['ass', 'ssa'].includes(subtitleFormat);
 }
 
 function formatHlsStageLabel(stage: string) {
@@ -609,8 +609,8 @@ export default function VideoPlayer({
       return;
     }
     if (isAssSubtitle) {
-      if (!activeSubtitle.original_path) return;
-      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.original_path)}`);
+      const assPath = activeSubtitle.original_path || activeSubtitle.path;
+      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(assPath)}`);
       fetch(subUrl)
         .then(res => res.text())
         .then(content => {
@@ -647,11 +647,8 @@ export default function VideoPlayer({
           if (err.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
         });
     } else {
-      const subPath = activeSubtitle.original_path ?? activeSubtitle.path;
-      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(subPath)}`);
-      const srcFmt = (activeSubtitle.source_format || activeSubtitle.format || '').toLowerCase();
-      const type: 'srt' | 'vtt' = srcFmt === 'srt' ? 'srt' : 'vtt';
-      void art.subtitle.switch(subUrl, { type, name: activeSubtitle.label });
+      const subUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`);
+      void art.subtitle.switch(subUrl, { type: 'vtt', name: activeSubtitle.label });
     }
     return () => {
       // 移除事件监听，销毁 assjs
