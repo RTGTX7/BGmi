@@ -25,6 +25,7 @@
 
 - Added swipe-based weekday switching improvements for Calendar / Subscribe tabs.
 - Improved Subscribe mobile card/modal interactions and Bangumi mobile header/navigation details.
+- Fixed the mobile player tap/long-press gesture split so tap toggles controls again while long-press 2x and Chrome context-menu blocking still work together.
 
 ## 2026-04-20
 
