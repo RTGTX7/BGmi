@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',
       proxy: {
         '/api': {
           target: env.API_URL || 'http://localhost:8888',
@@ -36,6 +37,9 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
       },
+    },
+    preview: {
+      host: '0.0.0.0',
     },
     plugins: [react(), generouted()],
     resolve: {

@@ -572,6 +572,17 @@ export default function VideoPlayer({
       plugins,
     });
 
+    // Let the player shell receive touch gestures instead of the native <video> element,
+    // otherwise Chrome on mobile may hijack long-press with the browser's save/download menu.
+    art.template.$player.style.touchAction = 'manipulation';
+    art.template.$player.style.setProperty('-webkit-tap-highlight-color', 'transparent');
+    art.video.style.pointerEvents = 'none';
+    art.video.style.setProperty('-webkit-touch-callout', 'none');
+    art.video.style.webkitUserSelect = 'none';
+    art.video.style.userSelect = 'none';
+    art.video.style.setProperty('-webkit-user-drag', 'none');
+    art.video.setAttribute('draggable', 'false');
+
     playerRef.current = art;
     setArtMountSeq(n => n + 1);
     setControlsVisible(true);
@@ -978,8 +989,15 @@ export default function VideoPlayer({
               height: '100%',
               overflow: 'hidden',
               background: '#000',
+              touchAction: 'manipulation',
               WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              WebkitTapHighlightColor: 'transparent',
               userSelect: 'none',
+            },
+            '& .art-player .art-video-player': {
+              touchAction: 'manipulation',
+              WebkitTouchCallout: 'none',
             },
             '& .art-player .JASSUB': {
               position: 'absolute',
@@ -992,7 +1010,11 @@ export default function VideoPlayer({
               height: '100%',
               display: 'block',
               objectFit: 'contain',
+              pointerEvents: 'none',
+              touchAction: 'none',
               WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              WebkitUserDrag: 'none',
               userSelect: 'none',
             },
             '& .art-bottom': {

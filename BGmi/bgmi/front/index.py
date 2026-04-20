@@ -11,7 +11,7 @@ from bgmi.front.player_assets import (
     start_hls_profile_generation,
 )
 from bgmi.lib.models import STATUS_DELETED, STATUS_END, STATUS_UPDATING, Followed
-from bgmi.utils import bangumi_save_path, web_cover_url
+from bgmi.utils import bangumi_save_path, resolve_cover_season, web_cover_url
 
 
 def get_player(bangumi_name: str) -> Dict[int, Dict[str, str]]:
@@ -98,6 +98,10 @@ class BangumiListHandler(BaseHandler):
 
         for bangumi in data:
             bangumi["cover"] = web_cover_url(bangumi["cover"])
+            year, quarter, season = resolve_cover_season(bangumi["cover"])
+            bangumi["year"] = year
+            bangumi["quarter"] = quarter
+            bangumi["season"] = season
 
         data.reverse()
 

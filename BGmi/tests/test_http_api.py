@@ -142,6 +142,9 @@ class ApiTestCase(AsyncHTTPTestCase):
         assert response.code == 200
         r = self.parse_response(response)
         assert COVER_URL + "/2333" == r["data"][0]["cover"], json.dumps(r["data"])
+        assert r["data"][0]["year"] is None
+        assert r["data"][0]["quarter"] is None
+        assert r["data"][0]["season"] is None
         m.assert_has_calls(
             [
                 mock.call("233"),
@@ -151,6 +154,34 @@ class ApiTestCase(AsyncHTTPTestCase):
             any_order=True,
         )
         assert m.call_count == 3
+
+    def test_e_index_resolves_season_from_cover_url(self):
+        m = mock.Mock(return_value={})
+        m2 = mock.Mock(
+            return_value=[
+                {
+                    "bangumi_name": "2026-spring",
+                    "updated_time": 3,
+                    "cover": "https://mikanani.me/images/Bangumi/202604/cover.jpg",
+                },
+                {
+                    "bangumi_name": "2026-late-winter",
+                    "updated_time": 2,
+                    "cover": "https://mikanani.me/images/Bangumi/202603/cover.jpg",
+                },
+            ]
+        )
+        with mock.patch("bgmi.front.index.get_player", m), mock.patch("bgmi.lib.models.Followed.get_all_followed", m2):
+            response = self.fetch("/api/index", method="GET")
+        assert response.code == 200
+        r = self.parse_response(response)
+        spring = next(item for item in r["data"] if item["bangumi_name"] == "2026-spring")
+        late_winter = next(item for item in r["data"] if item["bangumi_name"] == "2026-late-winter")
+        assert spring["season"] == "202604"
+        assert spring["year"] == 2026
+        assert spring["quarter"] == 4
+        assert late_winter["season"] == "202601"
+        assert late_winter["quarter"] == 1
 
     def test_resource_ics(self):
         r = self.fetch("/resource/feed.xml")

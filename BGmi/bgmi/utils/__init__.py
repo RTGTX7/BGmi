@@ -339,6 +339,49 @@ def convert_cover_url_to_path(cover_url: str) -> Tuple[str, str]:
     return dir_path, file_path
 
 
+def extract_cover_date_token(cover_url: str) -> Optional[str]:
+    normalized_cover_url = normalize_path(cover_url)
+    matched = re.search(r"(?:^|/)Bangumi/(\d{6})(?:/|$)", normalized_cover_url)
+    if not matched:
+        return None
+
+    return matched.group(1)
+
+
+def normalize_cover_date_token_to_season(token: str) -> Optional[str]:
+    if not re.fullmatch(r"\d{6}", token):
+        return None
+
+    year = int(token[:4])
+    month = int(token[4:])
+
+    if month < 1 or month > 12:
+        return None
+
+    if month <= 3:
+        season_month = 1
+    elif month <= 6:
+        season_month = 4
+    elif month <= 9:
+        season_month = 7
+    else:
+        season_month = 10
+
+    return f"{year}{season_month:02d}"
+
+
+def resolve_cover_season(cover_url: str) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+    raw_token = extract_cover_date_token(cover_url)
+    if raw_token is None:
+        return None, None, None
+
+    season_token = normalize_cover_date_token_to_season(raw_token)
+    if season_token is None:
+        return None, None, None
+
+    return int(season_token[:4]), int(season_token[4:]), season_token
+
+
 def web_cover_url(cover_url: str) -> str:
     normalized_cover_url = normalize_path(cover_url)
     dir_path, file_path = convert_cover_url_to_path(cover_url)

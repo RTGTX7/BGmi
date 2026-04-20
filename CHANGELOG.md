@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-04-20
+
+### Bangumi
+
+- Reworked the Bangumi homepage into season-based groups driven by the existing Mikan cover season source.
+- Added season detail pages and kept the grouping logic aligned with cover cache season paths.
+- Improved desktop season-group responsiveness so cards reflow correctly when the browser window size changes.
+- Fixed season cards stretching incorrectly when a group only contains a single title.
+- Optimized mobile season detail pages for a proper two-column poster layout with larger cards.
+
+### Player
+
+- Fixed mobile Chrome long-press conflicts on the player so the custom 2x speed gesture is no longer hijacked by the browser video context menu.
+
+### Dev / Preview
+
+- Enabled Vite dev/preview LAN access for mobile-device testing.
+- Bumped the custom release line to **RTGTX7 定制版 1.1.0**.
+
 ## 2026-04-09
 
 ### Subtitle Rendering

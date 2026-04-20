@@ -7,7 +7,14 @@ import pytest
 
 from bgmi.config import cfg
 from bgmi.front.index import get_player
-from bgmi.utils import bangumi_save_path, episode_filter_regex, parse_episode
+from bgmi.utils import (
+    bangumi_save_path,
+    episode_filter_regex,
+    extract_cover_date_token,
+    normalize_cover_date_token_to_season,
+    parse_episode,
+    resolve_cover_season,
+)
 from bgmi.website.model import Episode
 
 _episode_cases: List[Tuple[str, int]] = [
@@ -113,3 +120,31 @@ def test_bangumi_save_path_rejects_windows_absolute_path_on_non_windows():
 
     with mock.patch("bgmi.utils.IS_WINDOWS", False):
         assert bangumi_save_path("test-windows-absolute") == cfg.save_path.joinpath("test-windows-absolute")
+
+
+def test_extract_cover_date_token_from_mikan_cover_url():
+    cover_url = "https://mikanani.me/images/Bangumi/202604/7892f7c2.jpg"
+    assert extract_cover_date_token(cover_url) == "202604"
+
+
+@pytest.mark.parametrize(
+    ("token", "expected"),
+    [
+        ("202601", "202601"),
+        ("202602", "202601"),
+        ("202603", "202601"),
+        ("202604", "202604"),
+        ("202606", "202604"),
+        ("202607", "202607"),
+        ("202509", "202507"),
+        ("202510", "202510"),
+        ("202512", "202510"),
+    ],
+)
+def test_normalize_cover_date_token_to_season(token, expected):
+    assert normalize_cover_date_token_to_season(token) == expected
+
+
+def test_resolve_cover_season_from_local_cover_proxy_path():
+    cover_url = "/bangumi/cover/https/mikanani.me/images/Bangumi/202603/abcd.jpg"
+    assert resolve_cover_season(cover_url) == (2026, 1, "202601")

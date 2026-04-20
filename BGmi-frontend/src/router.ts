@@ -6,12 +6,14 @@ import { components, hooks, utils } from '@generouted/react-router/client'
 export type Path =
   | `/`
   | `/about`
+  | `/bangumi-group/:season`
   | `/calendar`
   | `/player/:bangumi`
   | `/resource`
   | `/subscribe`
 
 export type Params = {
+  '/bangumi-group/:season': { season: string }
   '/player/:bangumi': { bangumi: string }
 }
 
