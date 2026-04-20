@@ -45,13 +45,13 @@
 ### Bangumi / 当季新番
 
 <p align="center">
-  <img src="./root-page.png" alt="Bangumi 当前季页面预览" width="88%" />
+  <img src="./images/bangumi.png.png" alt="Bangumi 当前季页面预览" width="88%" />
 </p>
 
 ### Subscribe / 订阅页
 
 <p align="center">
-  <img src="./BGmi-frontend/.github/images/example2.png" alt="Subscribe 页面预览" width="88%" />
+  <img src="./images/sub.png" alt="Subscribe 页面预览" width="88%" />
 </p>
 
 > 说明：截图可能与最新小版本存在轻微差异，但整体交互方向一致。
