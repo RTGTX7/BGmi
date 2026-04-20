@@ -163,7 +163,7 @@ export default function BangumiGroupPage() {
             </Button>
             <Button
               as={RouterLink}
-              to={`/bangumi-group/${season}?sort=recent&from=today`}
+              to={isTodayView ? `/bangumi-group/${season}?sort=recent&from=today` : `/bangumi-group/${season}?sort=recent`}
               rounded="full"
               variant={sortMode === 'recent' ? 'solid' : 'ghost'}
               colorScheme="blue"
