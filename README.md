@@ -221,49 +221,81 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 
 ---
 
-## 常用维护命令
+• ## 常用维护命令
 
-如果你要在容器里手动执行：
+  ### 手动执行维护任务
 
-```bash
-docker exec -it bgmi-custom bgmi update --download
-```
+  ```bash
+  docker exec -it bgmi-custom bgmi update --download
 
-```bash
-docker exec -it bgmi-custom bgmi cal --force-update --download-cover
-```
+  提交当前订阅番剧的下载任务。
 
-### 更新到最新镜像
+  docker exec -it bgmi-custom bgmi cal --force-update --download-cover
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  强制刷新当季番剧日历，并下载/更新封面缓存。
 
-如果你使用 `docker run`，可以先停止旧容器，再重新拉起：
+  ### 常用 BGmi 命令
 
-```bash
-docker pull rtgtx7/bgmi-custom:latest
-```
+  bgmi update --download
 
-### 定时任务
+  更新番剧并提交下载任务。
 
-容器启动后默认会后台执行：
+  bgmi cal
 
-- 每 **30 分钟**：
-  - `bgmi update --download`
-- 每 **4 小时**：
-  - `bgmi cal --force-update --download-cover`
+  查看当前正在更新的新番。
 
-可通过环境变量调整：
+  bgmi cal --download-cover
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `BGMI_UPDATE_INTERVAL` | `1800` | 自动下载任务提交间隔，单位秒 |
-| `BGMI_CAL_INTERVAL` | `14400` | 日历/海报刷新间隔，单位秒 |
-| `BGMI_ADMIN_TOKEN` | 无 | 管理员操作 token |
-| `BGMI_PORT` | `8899` | 对外暴露端口（compose 中使用） |
-| `TZ` | `America/Toronto` | 时区 |
+  下载当前新番封面，常用于初始化或补全海报缓存。
+
+  bgmi resolve-bangumi "番剧名"
+
+  从 Mikan 解析番剧元数据，返回匹配到的番剧名、keyword 和封面地址，适合调试重建仓库番剧 / 海报恢复。
+
+  ### 更换数据源
+
+  bgmi source mikan_project
+
+  使用 bgmi source 切换数据源。
+  不要手动修改配置文件里的数据源，否则可能导致 BGmi 报错。
+
+  注意：
+
+  - 更换数据源会清空番剧数据库
+  - bgmi script 不受影响
+  - 已下载的视频文件不会删除
+  - 但旧数据不会继续在前端显示
+  - 如果切换到 mikan_project，需先配置：
+      - MIKAN_USERNAME
+      - MIKAN_PASSWORD
+
+  ### 更新到最新镜像
+
+  docker compose pull
+  docker compose up -d
+
+  如果你使用 docker run，先拉取新镜像再重建容器：
+
+  docker pull rtgtx7/bgmi-custom:latest
+
+  ### 定时任务
+
+  容器启动后默认会后台执行：
+
+  - 每 30 分钟
+      - bgmi update --download
+  - 每 4 小时
+      - bgmi cal --force-update --download-cover
+
+  可通过环境变量调整：
+
+  | 变量 | 默认值 | 说明 |
+  | --- | --- | --- |
+  | BGMI_UPDATE_INTERVAL | 1800 | 自动下载任务提交间隔，单位秒 |
+  | BGMI_CAL_INTERVAL | 14400 | 日历/海报刷新间隔，单位秒 |
+  | BGMI_ADMIN_TOKEN | 无 | 管理员操作 token |
+  | BGMI_PORT | 8899 | 对外暴露端口 |
+  | TZ | America/Toronto | 时区 |
 
 ---
 
