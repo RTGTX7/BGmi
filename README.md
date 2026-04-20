@@ -221,41 +221,40 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 
 ---
 
-• ## 常用维护命令
+## 常用维护命令
 
   ### 手动执行维护任务
-
-  ```bash
+```
   docker exec -it bgmi-custom bgmi update --download
-
+```
   提交当前订阅番剧的下载任务。
-
+```
   docker exec -it bgmi-custom bgmi cal --force-update --download-cover
-
+```
   强制刷新当季番剧日历，并下载/更新封面缓存。
 
   ### 常用 BGmi 命令
-
+```
   bgmi update --download
-
+```
   更新番剧并提交下载任务。
-
+```
   bgmi cal
-
+```
   查看当前正在更新的新番。
-
+```
   bgmi cal --download-cover
-
+```
   下载当前新番封面，常用于初始化或补全海报缓存。
-
+```
   bgmi resolve-bangumi "番剧名"
-
+```
   从 Mikan 解析番剧元数据，返回匹配到的番剧名、keyword 和封面地址，适合调试重建仓库番剧 / 海报恢复。
 
   ### 更换数据源
-
+```
   bgmi source mikan_project
-
+```
   使用 bgmi source 切换数据源。
   不要手动修改配置文件里的数据源，否则可能导致 BGmi 报错。
 
@@ -270,10 +269,10 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
       - MIKAN_PASSWORD
 
   ### 更新到最新镜像
-
+```
   docker compose pull
   docker compose up -d
-
+```
   如果你使用 docker run，先拉取新镜像再重建容器：
 
   docker pull rtgtx7/bgmi-custom:latest
@@ -283,9 +282,9 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
   容器启动后默认会后台执行：
 
   - 每 30 分钟
-      - bgmi update --download
+      - `bgmi update --download`
   - 每 4 小时
-      - bgmi cal --force-update --download-cover
+      - `bgmi cal --force-update --download-cover`
 
   可通过环境变量调整：
 
