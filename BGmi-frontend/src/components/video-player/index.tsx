@@ -231,6 +231,8 @@ export default function VideoPlayer({
   const longPressActivatedRef = useRef(false);
   const longPressStartRateRef = useRef(1);
   const longPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const ignoreNextClickRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [artMountSeq, setArtMountSeq] = useState(0);
@@ -607,6 +609,13 @@ export default function VideoPlayer({
         longPressTimerRef.current = null;
       }
     };
+    const setPlayerControlsVisible = (visible: boolean) => {
+      art.template.$player.classList.toggle('art-control-show', visible);
+      setControlsVisible(visible);
+    };
+    const togglePlayerControlsVisible = () => {
+      setPlayerControlsVisible(!art.template.$player.classList.contains('art-control-show'));
+    };
     const restoreLongPressRate = () => {
       if (!longPressActivatedRef.current) return;
       art.playbackRate = longPressStartRateRef.current;
@@ -616,6 +625,7 @@ export default function VideoPlayer({
     const cancelLongPress = () => {
       clearLongPressTimer();
       restoreLongPressRate();
+      longPressTriggeredRef.current = false;
       longPressPointerIdRef.current = null;
       longPressStartPointRef.current = null;
     };
@@ -636,6 +646,7 @@ export default function VideoPlayer({
 
       clearLongPressTimer();
       restoreLongPressRate();
+      longPressTriggeredRef.current = false;
       longPressPointerIdRef.current = event.pointerId;
       longPressStartPointRef.current = { x: event.clientX, y: event.clientY };
       longPressTimerRef.current = window.setTimeout(() => {
@@ -644,6 +655,8 @@ export default function VideoPlayer({
         longPressStartRateRef.current = art.playbackRate || 1;
         art.playbackRate = 2;
         longPressActivatedRef.current = true;
+        longPressTriggeredRef.current = true;
+        ignoreNextClickRef.current = true;
         setShowLongPressIndicator(true);
       }, 320);
     };
@@ -659,12 +672,35 @@ export default function VideoPlayer({
       }
     };
     const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return;
+      if (isGestureBlockedTarget(event.target)) return;
       if (longPressPointerIdRef.current !== event.pointerId) return;
-      cancelLongPress();
+      clearLongPressTimer();
+
+      if (longPressTriggeredRef.current) {
+        restoreLongPressRate();
+        longPressTriggeredRef.current = false;
+        ignoreNextClickRef.current = true;
+        longPressPointerIdRef.current = null;
+        longPressStartPointRef.current = null;
+        return;
+      }
+
+      longPressPointerIdRef.current = null;
+      longPressStartPointRef.current = null;
+      togglePlayerControlsVisible();
     };
     const handlePointerCancel = (event: PointerEvent) => {
       if (longPressPointerIdRef.current !== event.pointerId) return;
       cancelLongPress();
+    };
+    const handlePlayerClick = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      if (isGestureBlockedTarget(event.target)) return;
+      if (ignoreNextClickRef.current) {
+        ignoreNextClickRef.current = false;
+        return;
+      }
     };
     const handleContextMenu = (event: MouseEvent) => {
       if (event.target instanceof Element && event.target.closest('.art-player')) {
@@ -703,6 +739,7 @@ export default function VideoPlayer({
     art.template.$player.addEventListener('pointermove', handlePointerMove);
     art.template.$player.addEventListener('pointerup', handlePointerUp);
     art.template.$player.addEventListener('pointercancel', handlePointerCancel);
+    art.template.$player.addEventListener('click', handlePlayerClick, true);
     art.template.$player.addEventListener('contextmenu', handleContextMenu);
     art.template.$player.addEventListener('dragstart', handleDragStart);
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -724,6 +761,7 @@ export default function VideoPlayer({
       art.template.$player.removeEventListener('pointermove', handlePointerMove);
       art.template.$player.removeEventListener('pointerup', handlePointerUp);
       art.template.$player.removeEventListener('pointercancel', handlePointerCancel);
+      art.template.$player.removeEventListener('click', handlePlayerClick, true);
       art.template.$player.removeEventListener('contextmenu', handleContextMenu);
       art.template.$player.removeEventListener('dragstart', handleDragStart);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
