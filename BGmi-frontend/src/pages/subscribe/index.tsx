@@ -209,6 +209,7 @@ function SearchPanel({
           <CiSearch size="20" />
         </Box>
         <Input
+          autoFocus
           placeholder="搜索动画片"
           value={keyword}
           onChange={event => onKeywordChange(event.target.value)}

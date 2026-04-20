@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 import time
 from collections import defaultdict
 from typing import List, Optional
@@ -45,6 +46,37 @@ _DAY_OF_WEEK = {
     6: "星期六",
     8: "OVA",
 }
+
+
+def _normalize_mikan_cover_url(raw_url: str) -> str:
+    cover = str(raw_url or "").strip().split("?")[0]
+    if not cover:
+        return ""
+    if cover.startswith("/"):
+        return _COVER_URL + cover
+    return cover
+
+
+def _extract_cover_from_search_link(link: bs4.Tag) -> str:
+    image = link.select_one("img[data-src], img[src], .b-lazy[data-src], span[data-src]")
+    if image is None:
+        return ""
+    return _normalize_mikan_cover_url(str(image.get("data-src") or image.get("src") or ""))
+
+
+def _extract_cover_from_bangumi_page(soup: BeautifulSoup) -> str:
+    poster = soup.select_one(".leftbar-container .bangumi-poster")
+    if isinstance(poster, bs4.Tag):
+        style = str(poster.get("style", ""))
+        matched = re.search(r"url\((['\"]?)(.*?)\1\)", style)
+        if matched:
+            return _normalize_mikan_cover_url(matched.group(2))
+
+    image = soup.select_one(".leftbar-container img[src], .leftbar-container img[data-src], .leftbar-container .b-lazy[data-src]")
+    if image is None:
+        return ""
+
+    return _normalize_mikan_cover_url(str(image.get("data-src") or image.get("src") or ""))
 
 
 def get_weekly_bangumi():
@@ -147,7 +179,8 @@ def parser_day_bangumi(soup) -> List[WebsiteBangumi]:
             url = url["href"]
             bangumi_id = url.split("/")[-1]
             s.find("li")
-            li.append(WebsiteBangumi(name=name, keyword=bangumi_id, cover=_COVER_URL + span["data-src"]))
+            cover = _normalize_mikan_cover_url(str(span["data-src"])) if span else ""
+            li.append(WebsiteBangumi(name=name, keyword=bangumi_id, cover=cover))
     return li
 
 
@@ -207,6 +240,7 @@ class Mikanani(BaseWebsite):
         day = title.find_next_sibling("p", class_="bangumi-info")
         bangumi_info["name"] = title.text
         bangumi_info["update_time"] = _CN_WEEK[day.text[-3:]]
+        bangumi_info["cover"] = _extract_cover_from_bangumi_page(soup)
 
         ######
         soup = BeautifulSoup(r, "html.parser")
@@ -406,5 +440,6 @@ class Mikanani(BaseWebsite):
             status=info["status"],
             update_time=info["update_time"],
             subtitle_group=info["subtitle_group"],
+            cover=info.get("cover", ""),
             episodes=parse_episodes(html, bangumi_id, subtitle_list),
         )

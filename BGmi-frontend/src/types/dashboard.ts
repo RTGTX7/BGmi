@@ -8,6 +8,9 @@ export interface DashboardStats {
   localFolderTotal: number;
   lastSyncTime?: string | null;
   currentSeasonKey: string;
+  workingDirectory?: string;
+  configPath?: string;
+  bgmiPath?: string;
 }
 
 export interface DashboardAnomalyItem {
@@ -41,4 +44,19 @@ export interface DashboardActionResponse<T = any> {
   data: T;
   status: string;
   message?: string;
+}
+
+export interface DashboardCommandResult {
+  ok: boolean;
+  status: 'success' | 'error';
+  command: string;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  workingDirectory: string;
+  configPath: string;
+  bgmiPath: string;
 }

@@ -20,6 +20,7 @@ from bgmi.lib import controllers as ctl
 from bgmi.lib.constants import BANGUMI_UPDATE_TIME, SPACIAL_APPEND_CHARS, SPACIAL_REMOVE_CHARS, SUPPORT_WEBSITE
 from bgmi.lib.download import download_prepare
 from bgmi.lib.fetch import website
+from bgmi.lib.mikan_resolver import resolve_bangumi
 from bgmi.lib.models import STATUS_DELETED, STATUS_FOLLOWED, STATUS_UPDATED, Bangumi, Filter, Followed, Subtitle
 from bgmi.lib.update import update_database
 from bgmi.script import ScriptRunner
@@ -199,6 +200,33 @@ def search(
         print(i.title)
     if download:
         download_prepare(data)
+
+
+@cli.command("resolve-bangumi", help="Resolve bangumi metadata from Mikan bangumi pages")
+@click.argument("name")
+def resolve_bangumi_cli(name: str) -> None:
+    chosen, candidates, queries = resolve_bangumi(name)
+
+    print("Queries:")
+    for query in queries:
+        print(f"  - {query}")
+
+    if chosen is None:
+        if not candidates:
+            print_warning(f"No bangumi matched on Mikan for keyword: {name}")
+            return
+
+        print_warning(f"Multiple or low-confidence matches for: {name}")
+        for candidate in candidates:
+            print(f"  - {candidate['name']} | keyword={candidate['keyword']} | cover={candidate.get('cover', '')}")
+        return
+
+    print_success("Resolved bangumi:")
+    print(f"  name: {chosen['name']}")
+    print(f"  keyword: {chosen['keyword']}")
+    print(f"  cover: {chosen.get('cover', '')}")
+    print(f"  query: {chosen.get('query', '')}")
+    print(f"  match: {chosen.get('matchType', '')}")
 
 
 @cli.command("mark")

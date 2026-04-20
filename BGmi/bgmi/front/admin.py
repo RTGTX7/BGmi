@@ -46,6 +46,7 @@ API_MAP_POST: Dict[str, Callable] = {
     "dashboard-rebuild-preview": preview_rebuild_repository,
     "dashboard-rebuild": execute_rebuild_repository,
     "dashboard-sync": sync_mikan_data,
+    "dashboard/submit-download-jobs": submit_download_jobs,
     "dashboard-submit-downloads": submit_download_jobs,
     "dashboard-refresh-metadata": refresh_episodes_and_posters,
     "dashboard-anomalies": check_anomalies,
@@ -77,6 +78,8 @@ def auth(f):  # type: ignore
 
 
 class AdminApiHandler(BaseHandler):
+    executor = ThreadPoolExecutor(2)  # pylint: disable=consider-using-with
+
     @auth
     def get(self, action: str) -> None:
         try:
@@ -88,12 +91,16 @@ class AdminApiHandler(BaseHandler):
             raise HTTPError(400)
         self.finish(self.jsonify(**result))
 
+    @run_on_executor
+    def _run_post_action(self, action: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        return API_MAP_POST[action](**data)
+
     @auth
-    def post(self, action: str) -> None:
+    async def post(self, action: str) -> None:
         data = self.get_json()
 
         try:
-            result = API_MAP_POST[action](**data)
+            result = await self._run_post_action(action, data)
             if result["status"] == "error":
                 raise HTTPError(400)
         except HTTPError:

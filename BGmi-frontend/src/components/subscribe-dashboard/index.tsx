@@ -26,7 +26,12 @@ import useSWRMutation from 'swr/mutation';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { fetcher, fetcherWithMutation } from '~/lib/fetcher';
 
-import type { DashboardActionResponse, DashboardAnomalyItem, DashboardOverviewResponse } from '~/types/dashboard';
+import type {
+  DashboardActionResponse,
+  DashboardAnomalyItem,
+  DashboardCommandResult,
+  DashboardOverviewResponse,
+} from '~/types/dashboard';
 
 type ConfirmActionKey = 'reset' | 'rebuild' | 'submit-downloads' | 'refresh-metadata' | null;
 type Tone = 'cyan' | 'blue' | 'green' | 'amber' | 'red';
@@ -146,8 +151,29 @@ function formatTime(value?: string | null) {
   }).format(date);
 }
 
+function formatSeasonKeyLabel(value?: string | null) {
+  if (!value) return '--';
+  const normalized = String(value).trim();
+  const matched = normalized.match(/^(\d{4})(\d{2})$/);
+  if (!matched) return normalized;
+
+  const [, year, quarter] = matched;
+  const quarterMap: Record<string, string> = {
+    '01': '冬季',
+    '04': '春季',
+    '07': '夏季',
+    '10': '秋季',
+  };
+
+  return `${year}${quarterMap[quarter] ?? ''}`.trim();
+}
+
 function buildSummaryText(result: any) {
   if (!result) return '';
+
+  if ('command' in result) {
+    return `Command result: ${result.ok ? 'success' : 'failed'} / exitCode=${result.exitCode ?? '--'} / ${result.durationMs ?? 0}ms`;
+  }
 
   if ('submittedCount' in result) {
     return `下载任务：已提交 ${result.submittedCount ?? 0} / 已跳过 ${result.skippedCount ?? 0} / 失败 ${result.failedCount ?? 0}`;
@@ -158,6 +184,13 @@ function buildSummaryText(result: any) {
   }
 
   return `维护结果：成功 ${result?.successCount ?? 0} / 失败 ${result?.failedCount ?? 0} / 跳过 ${result?.skippedCount ?? 0}`;
+}
+
+function summarizeOutput(output?: string) {
+  if (!output) return '--';
+  const normalized = output.trim();
+  if (!normalized) return '--';
+  return normalized.length > 400 ? `${normalized.slice(0, 400)}...` : normalized;
 }
 
 export default function SubscribeDashboard() {
@@ -204,8 +237,13 @@ export default function SubscribeDashboard() {
     fetcherWithMutation
   );
 
-  const { trigger: submitDownloads, isMutating: submitDownloadsMutating } = useSWRMutation<DashboardActionResponse, Error, [string, string | undefined], Record<string, never>>(
-    ['/api/dashboard-submit-downloads', authToken],
+  const { trigger: submitDownloads, isMutating: submitDownloadsMutating } = useSWRMutation<
+    DashboardActionResponse<DashboardCommandResult>,
+    Error,
+    [string, string | undefined],
+    Record<string, never>
+  >(
+    ['/api/dashboard/submit-download-jobs', authToken],
     fetcherWithMutation
   );
 
@@ -277,7 +315,7 @@ export default function SubscribeDashboard() {
     openConfirm({
       actionKey: 'submit-downloads',
       title: '确认提交下载任务',
-      description: '将根据当前订阅状态与缺失剧集情况生成下载任务，并提交到下载队列。',
+      description: 'Run bgmi update --download on the backend and return stdout / stderr, exit code, and status.',
     });
   };
 
@@ -308,7 +346,7 @@ export default function SubscribeDashboard() {
       if (confirmState.actionKey === 'submit-downloads') {
         const resp = await submitDownloads({});
         setLatestActionResult(resp?.data ?? null);
-        showSuccess(`已提交 ${resp?.data?.submittedCount ?? 0} 个下载任务`);
+        showSuccess(resp?.data?.ok ? 'bgmi update --download completed' : 'bgmi update --download failed');
       }
 
       if (confirmState.actionKey === 'refresh-metadata') {
@@ -380,7 +418,7 @@ export default function SubscribeDashboard() {
 
   const commandCards = [
     { title: '重新同步 Mikan 数据', subtitle: 'Fetch metadata', tone: 'cyan' as Tone, onClick: handleSync, loading: syncMutating },
-    { title: '提交下载任务', subtitle: 'Submit download jobs', tone: 'blue' as Tone, onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
+    { title: '提交下载任务', subtitle: 'bgmi update --download', tone: 'blue' as Tone, onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
     { title: '更新剧集和海报', subtitle: 'Refresh episodes & posters', tone: 'green' as Tone, onClick: handleOpenRefreshMetadataConfirm, loading: refreshMetadataMutating },
     { title: '检查异常数据', subtitle: 'Scan issues', tone: 'blue' as Tone, onClick: handleCheckAnomalies, loading: anomalyMutating },
     { title: '重建仓库番剧', subtitle: 'Match folders', tone: 'amber' as Tone, onClick: handlePreviewRebuild, loading: previewRebuildMutating || executeRebuildMutating },
@@ -449,7 +487,13 @@ export default function SubscribeDashboard() {
               Dashboard
             </Heading>
             <Text mt='1' fontSize='11px' color={theme.textSecondary} noOfLines={1}>
-              {String(stats.currentSeasonKey ?? '--')} ? Synced {formatTime(stats.lastSyncTime)}
+              {formatSeasonKeyLabel(stats.currentSeasonKey)} · Synced {formatTime(stats.lastSyncTime)}
+            </Text>
+            <Text mt='1' fontSize='10px' color={theme.textMuted} noOfLines={1}>
+              cwd: {stats.workingDirectory ?? '--'}
+            </Text>
+            <Text mt='0.5' fontSize='10px' color={theme.textMuted} noOfLines={1}>
+              config: {stats.configPath ?? '--'}
             </Text>
           </Box>
           <StatusChip label='SYNC OK' tone='green' isDark={isDark} />
@@ -709,6 +753,52 @@ export default function SubscribeDashboard() {
           <Text fontSize='sm' color={theme.textPrimary}>
             {buildSummaryText(latestActionResult)}
           </Text>
+          {'command' in latestActionResult ? (
+            <Stack spacing='2' mt='3'>
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing='2'>
+                <Box rounded='14px' px='3' py='2.5' bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.55)'}>
+                  <Text fontSize='10px' color={theme.textSecondary}>
+                    Status
+                  </Text>
+                  <Text mt='1' fontWeight='700' color={latestActionResult.ok ? '#86EFAC' : '#FCA5A5'}>
+                    {latestActionResult.ok ? 'SUCCESS' : 'FAILED'}
+                  </Text>
+                </Box>
+                <Box rounded='14px' px='3' py='2.5' bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.55)'}>
+                  <Text fontSize='10px' color={theme.textSecondary}>
+                    Exit Code
+                  </Text>
+                  <Text mt='1' fontWeight='700' color={theme.textPrimary}>
+                    {latestActionResult.exitCode ?? '--'}
+                  </Text>
+                </Box>
+              </SimpleGrid>
+              <Box rounded='14px' px='3' py='2.5' bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.55)'}>
+                <Text fontSize='10px' color={theme.textSecondary}>
+                  Command
+                </Text>
+                <Text mt='1' fontSize='sm' color={theme.textPrimary}>
+                  {latestActionResult.command}
+                </Text>
+              </Box>
+              <Box rounded='14px' px='3' py='2.5' bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.55)'}>
+                <Text fontSize='10px' color={theme.textSecondary}>
+                  stdout
+                </Text>
+                <Text mt='1' fontSize='sm' color={theme.textPrimary} whiteSpace='pre-wrap'>
+                  {summarizeOutput(latestActionResult.stdout)}
+                </Text>
+              </Box>
+              <Box rounded='14px' px='3' py='2.5' bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.55)'}>
+                <Text fontSize='10px' color={theme.textSecondary}>
+                  stderr
+                </Text>
+                <Text mt='1' fontSize='sm' color={theme.textPrimary} whiteSpace='pre-wrap'>
+                  {summarizeOutput(latestActionResult.stderr)}
+                </Text>
+              </Box>
+            </Stack>
+          ) : null}
         </Box>
       ) : null}
 
