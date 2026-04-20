@@ -10,6 +10,17 @@ from tornado.ioloop import IOLoop
 from tornado.web import HTTPError, RequestHandler
 
 from bgmi.front.base import BaseHandler
+from bgmi.lib.maintenance import (
+    check_anomalies,
+    execute_rebuild_repository,
+    execute_reset_episodes,
+    refresh_episodes_and_posters,
+    get_dashboard_overview,
+    submit_download_jobs,
+    preview_rebuild_repository,
+    preview_reset_episodes,
+    sync_mikan_data,
+)
 from bgmi.lib.controllers import add, cal, cfg, delete, filter_, mark, search, status_, update
 from bgmi.lib.download import download_prepare
 
@@ -30,11 +41,20 @@ API_MAP_POST: Dict[str, Callable] = {
     "mark": mark,
     "status": status_,
     "filter": filter_,
+    "dashboard-reset-preview": preview_reset_episodes,
+    "dashboard-reset": execute_reset_episodes,
+    "dashboard-rebuild-preview": preview_rebuild_repository,
+    "dashboard-rebuild": execute_rebuild_repository,
+    "dashboard-sync": sync_mikan_data,
+    "dashboard-submit-downloads": submit_download_jobs,
+    "dashboard-refresh-metadata": refresh_episodes_and_posters,
+    "dashboard-anomalies": check_anomalies,
 }
 
 API_MAP_GET = {
     "cal": lambda: {"data": cal()},
     "config": lambda: {"data": json.loads(cfg.model_dump_json())},
+    "dashboard": lambda: {"data": get_dashboard_overview()},
 }
 
 NO_AUTH_ACTION = ("cal", ACTION_AUTH)

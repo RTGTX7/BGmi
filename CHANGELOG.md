@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-04-20 — RTGTX7 定制版 1.1.5
+
+### Bangumi / Archive
+
+- Split the Bangumi experience into a current-season homepage and a dedicated **Archive** page for historical seasonal groups.
+- Refined Bangumi and Archive desktop poster grids so cards respond to available width and fill the main content area more naturally.
+- Cleaned up the season headers by removing extra subtitle/sort controls and simplifying the entry flow into Archive.
+- Added season detail-page polish and kept the quarter grouping aligned with the existing Mikan-derived season source.
+
+### Subscribe Dashboard
+
+- Added a dedicated **Dashboard** tab inside Subscribe with overview stats, diagnostics, and maintenance actions.
+- Added Command Center actions for:
+  - resyncing Mikan metadata
+  - anomaly checks
+  - repository rebuild preview / execute
+  - episode progress reset
+  - submit download jobs
+  - refresh episodes and posters
+- Improved Dashboard glassmorphism styling, status chips, and dark/light-mode readability.
+
+### Mobile / Interaction
+
+- Added swipe-based weekday switching improvements for Calendar / Subscribe tabs.
+- Improved Subscribe mobile card/modal interactions and Bangumi mobile header/navigation details.
+
 ## 2026-04-20
 
 ### Bangumi

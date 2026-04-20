@@ -1,0 +1,44 @@
+export interface DashboardStats {
+  subscribedTotal: number;
+  bangumiTotal: number;
+  currentSeasonTotal: number;
+  todayUpdatedTotal: number;
+  matchedMikanTotal: number;
+  anomalyTotal: number;
+  localFolderTotal: number;
+  lastSyncTime?: string | null;
+  currentSeasonKey: string;
+}
+
+export interface DashboardAnomalyItem {
+  type: string;
+  name: string;
+  detail: string;
+}
+
+export interface DashboardOverview {
+  stats: DashboardStats;
+  anomalies: {
+    summary: {
+      total: number;
+      missingPoster: number;
+      missingSeason: number;
+      missingKeyword: number;
+      danglingFollowed: number;
+      duplicateRecords: number;
+    };
+    items: DashboardAnomalyItem[];
+  };
+}
+
+export interface DashboardOverviewResponse {
+  data: DashboardOverview;
+  status: string;
+  message?: string;
+}
+
+export interface DashboardActionResponse<T = any> {
+  data: T;
+  status: string;
+  message?: string;
+}

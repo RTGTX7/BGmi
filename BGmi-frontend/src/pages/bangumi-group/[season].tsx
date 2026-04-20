@@ -2,7 +2,6 @@ import {
   Badge,
   Box,
   Button,
-  ButtonGroup,
   Flex,
   Heading,
   Spinner,
@@ -16,7 +15,13 @@ import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom
 
 import BangumiCard from '~/components/bangumi/card';
 import { bangumiFilterAtom, useBangumi } from '~/hooks/use-bangumi';
-import { buildSeasonGroups, buildTodayPreview, getCurrentSeasonKey, sortBangumis } from '~/lib/bangumi';
+import {
+  buildSeasonGroups,
+  buildTodayPreview,
+  getCurrentSeasonKey,
+  getSeasonThemeByKey,
+  sortBangumis,
+} from '~/lib/bangumi';
 import { useColorMode } from '~/hooks/use-color-mode';
 
 export default function BangumiGroupPage() {
@@ -45,6 +50,10 @@ export default function BangumiGroupPage() {
   const currentSeasonKey = groupedData ? getCurrentSeasonKey(groupedData.seasonGroups) : undefined;
   const allowRecentSort = isTodayView || (!isUnknownSeason && season === currentSeasonKey);
   const sortMode = allowRecentSort && searchParams.get('sort') === 'recent' ? 'recent' : 'default';
+  const seasonTheme = useMemo(
+    () => (!isUnknownSeason ? getSeasonThemeByKey(season, isDark) : undefined),
+    [isDark, isUnknownSeason, season]
+  );
 
   const currentGroup = useMemo(() => {
     if (!groupedData || !bangumiData?.data?.length) return undefined;
@@ -56,8 +65,8 @@ export default function BangumiGroupPage() {
     if (isUnknownSeason) {
       return groupedData.unknownItems.length > 0
         ? {
-            title: '其他番剧',
-            longTitle: '未匹配到季度来源的条目',
+            title: '未知季度',
+            longTitle: '未识别季度信息的番剧',
             items: groupedData.unknownItems,
           }
         : undefined;
@@ -82,8 +91,8 @@ export default function BangumiGroupPage() {
   if (!currentGroup) {
     return (
       <Stack spacing="4">
-        <Button as={RouterLink} to="/" w="fit-content" rounded="full" variant="ghost">
-          返回 Bangumi
+        <Button as={RouterLink} to="/bangumi-files" w="fit-content" rounded="full" variant="ghost">
+          ← 返回 Archive
         </Button>
         <Box
           rounded="3xl"
@@ -94,19 +103,19 @@ export default function BangumiGroupPage() {
           py={{ base: '6', md: '8' }}
           backdropFilter="blur(22px) saturate(170%)"
         >
-          <Heading size="md">未找到对应分类</Heading>
+          <Heading size="md">未找到对应季度</Heading>
           <Text mt="3" color={isDark ? 'whiteAlpha.720' : 'rgba(64,84,100,0.80)'}>
-            这个季度分类不存在，或者当前筛选条件下没有番剧数据。
+            当前季度分组不存在，可能已被移除，或者当前筛选条件下没有可显示内容。
           </Text>
         </Box>
       </Stack>
     );
   }
 
-  const pageTitle = allowRecentSort && sortMode === 'recent' ? `今日更新 · ${currentGroup.title}` : currentGroup.title;
+  const pageTitle = allowRecentSort && sortMode === 'recent' ? `最近更新 · ${currentGroup.title}` : currentGroup.title;
 
   return (
-    <Stack spacing={{ base: '4', md: '6' }}>
+    <Stack spacing={{ base: '4', md: '6' }} w="100%" maxW="none">
       <Helmet>
         <title>{`BGmi - ${pageTitle}`}</title>
       </Helmet>
@@ -115,81 +124,66 @@ export default function BangumiGroupPage() {
         <Stack spacing="2">
           <Button
             as={RouterLink}
-            to="/"
+            to="/bangumi-files"
             w="fit-content"
             rounded="full"
             variant="ghost"
             px="0"
             _hover={{ bg: 'transparent' }}
           >
-            ← 返回 Bangumi
+            ← 返回 Archive
           </Button>
 
           <Flex align="center" gap="2" wrap="wrap">
-            <Heading size={{ base: 'md', md: 'lg' }} color={isDark ? 'whiteAlpha.950' : '#263544'}>
+            <Heading
+              size={{ base: 'md', md: 'lg' }}
+              bgGradient={seasonTheme?.titleGradient}
+              bgClip={seasonTheme ? 'text' : undefined}
+              color={seasonTheme?.textColor ?? (isDark ? 'whiteAlpha.950' : '#263544')}
+            >
               {currentGroup.title}
             </Heading>
             {allowRecentSort && sortMode === 'recent' ? (
-              <Badge colorScheme="yellow" rounded="full" px="3" py="1">
-                今日更新排序
+              <Badge
+                rounded="full"
+                px="3"
+                py="1"
+                bg={seasonTheme?.backgroundColor ?? (isDark ? 'rgba(250,204,21,0.16)' : 'rgba(254,240,138,0.68)')}
+                color={seasonTheme?.badgeTextColor ?? (isDark ? '#FEF3C7' : '#854D0E')}
+                borderWidth="1px"
+                borderColor={seasonTheme?.borderColor ?? (isDark ? 'rgba(250,204,21,0.22)' : 'rgba(253,224,71,0.78)')}
+                textTransform="none"
+              >
+                最近更新
               </Badge>
             ) : null}
           </Flex>
 
-          <Text color={isDark ? 'whiteAlpha.720' : 'rgba(64,84,100,0.80)'}>
+          <Text color={seasonTheme?.softTextColor ?? (isDark ? 'whiteAlpha.720' : 'rgba(64,84,100,0.80)')}>
             {currentGroup.longTitle} · 共 {currentGroup.items.length} 部番剧
           </Text>
         </Stack>
 
-        {allowRecentSort ? (
-          <ButtonGroup
-            isAttached
-            alignSelf={{ base: 'stretch', md: 'flex-start' }}
-            size="sm"
-            bg={isDark ? 'rgba(17,24,39,0.56)' : 'rgba(244,250,252,0.52)'}
-            rounded="full"
-            p="1"
-            borderWidth="1px"
-            borderColor={isDark ? 'whiteAlpha.140' : 'rgba(255,255,255,0.72)'}
-          >
-            <Button
-              as={RouterLink}
-              to={isTodayView ? `/bangumi-group/${season}?from=today` : `/bangumi-group/${season}`}
-              rounded="full"
-              variant={sortMode === 'default' ? 'solid' : 'ghost'}
-              colorScheme="blue"
-            >
-              默认排序
-            </Button>
-            <Button
-              as={RouterLink}
-              to={isTodayView ? `/bangumi-group/${season}?sort=recent&from=today` : `/bangumi-group/${season}?sort=recent`}
-              rounded="full"
-              variant={sortMode === 'recent' ? 'solid' : 'ghost'}
-              colorScheme="blue"
-            >
-              最近更新
-            </Button>
-          </ButtonGroup>
-        ) : null}
       </Flex>
 
       <Box
         display="grid"
         gridTemplateColumns={{
           base: 'repeat(2, minmax(0, 1fr))',
-          md: 'repeat(auto-fit, minmax(min(100%, 13.75rem), 13.75rem))',
+          md: 'repeat(auto-fill, minmax(min(100%, 13.75rem), 1fr))',
         }}
-        gap={{ base: 3, md: 4, xl: 5 }}
+        gap={{ base: 3, md: 5 }}
         alignItems="start"
-        justifyContent={{ base: 'stretch', md: 'start' }}
+        justifyContent={{ base: 'stretch', md: 'stretch' }}
+        width="100%"
       >
         {displayItems.map(bangumi => (
           <Box
             key={bangumi.id}
             minW="0"
-            w={{ base: 'full', md: '13.75rem' }}
-            maxW={{ base: 'none', md: '13.75rem' }}
+            w="full"
+            maxW={{ base: 'none', md: '17rem' }}
+            justifySelf={{ base: 'stretch', md: 'start' }}
           >
             <BangumiCard bangumiData={bangumi} />
           </Box>

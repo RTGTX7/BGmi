@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { CiFilter, CiSearch } from 'react-icons/ci';
 import {
   Box,
@@ -18,6 +18,7 @@ import { useAtom } from 'jotai';
 
 import Auth from '~/components/auth';
 import CalendarTab from '~/components/calendar-tab';
+import SubscribeDashboard from '~/components/subscribe-dashboard';
 import SubscribePanel from '~/components/subscribe-panel';
 import { bangumiFilterAtom, type DataKind } from '~/hooks/use-bangumi';
 import { useCalendar } from '~/hooks/use-calendar';
@@ -238,6 +239,8 @@ export default function Subscribe() {
   const [state, dispatch] = useReducer(filterOptionsReducer, initialFilterOptionsState);
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('');
+  const [didInitializeTab, setDidInitializeTab] = useState(false);
 
   const calendarData = useMemo(() => {
     if (!data) return;
@@ -264,8 +267,23 @@ export default function Subscribe() {
     return filterData;
   }, [data, keyword, state]);
 
-  const tabListItems = useMemo(() => Object.keys(calendarData ?? []) as CalendarDataKey[], [calendarData]);
+  const weekdayTabItems = useMemo(() => {
+    const keys = new Set(Object.keys(calendarData ?? []));
+    const ordered: string[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].filter(key => keys.has(key));
+    if (keys.has('unknown')) ordered.push('unknown');
+    return ordered as CalendarDataKey[];
+  }, [calendarData]);
+  const tabListItems = useMemo(() => ['dashboard', ...weekdayTabItems], [weekdayTabItems]);
   const tabPanelsItems = useMemo(() => Object.entries(calendarData ?? []) as CalendarDataEntries, [calendarData]);
+  const todayWeekday = useMemo(
+    () => ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()] ?? 'sun',
+    []
+  );
+  const resolvedActiveTab = useMemo(() => {
+    if (activeTab && tabListItems.includes(activeTab)) return activeTab;
+    if (weekdayTabItems.includes(todayWeekday as CalendarDataKey)) return todayWeekday;
+    return weekdayTabItems[0] ?? 'dashboard';
+  }, [activeTab, tabListItems, todayWeekday, weekdayTabItems]);
   const globalSearchResults = useMemo(() => {
     const deduped = new Map<number, WeekCalendar>();
 
@@ -278,7 +296,53 @@ export default function Subscribe() {
     return Array.from(deduped.values());
   }, [tabPanelsItems]);
 
-  if (!calendarData || tabListItems.length === 0 || tabPanelsItems.length === 0) {
+  useEffect(() => {
+    if (tabListItems.length === 0 || didInitializeTab) return;
+    const fallbackTab = weekdayTabItems.includes(todayWeekday as CalendarDataKey)
+      ? todayWeekday
+      : weekdayTabItems[0] ?? 'dashboard';
+
+    setActiveTab(fallbackTab);
+    setDidInitializeTab(true);
+  }, [didInitializeTab, tabListItems, todayWeekday, weekdayTabItems]);
+
+  useEffect(() => {
+    if (!didInitializeTab || !activeTab || tabListItems.includes(activeTab)) return;
+    const fallbackTab = weekdayTabItems.includes(todayWeekday as CalendarDataKey)
+      ? todayWeekday
+      : weekdayTabItems[0] ?? 'dashboard';
+    setActiveTab(fallbackTab);
+  }, [activeTab, didInitializeTab, tabListItems, todayWeekday, weekdayTabItems]);
+
+  const handleActiveTabChange = (nextTab: string) => {
+    const fallbackTab = weekdayTabItems.includes(todayWeekday as CalendarDataKey)
+      ? todayWeekday
+      : weekdayTabItems[0] ?? 'dashboard';
+
+    if (!didInitializeTab && nextTab === 'dashboard' && fallbackTab !== 'dashboard') {
+      setDidInitializeTab(true);
+      setActiveTab(fallbackTab);
+      return;
+    }
+
+    setDidInitializeTab(true);
+    setActiveTab(nextTab);
+  };
+
+  const activeContent = useMemo(() => {
+    if (keyword.trim()) {
+      return <SubscribePanel bangumis={globalSearchResults} standalone />;
+    }
+
+    if (resolvedActiveTab === 'dashboard') {
+      return <SubscribeDashboard />;
+    }
+
+    const bangumis = calendarData?.[resolvedActiveTab as CalendarDataKey];
+    return <SubscribePanel bangumis={bangumis} standalone />;
+  }, [calendarData, globalSearchResults, keyword, resolvedActiveTab]);
+
+  if (!calendarData || weekdayTabItems.length === 0 || tabPanelsItems.length === 0) {
     return (
       <Flex justifyContent="center" alignContent="center" mt={{ base: '28', md: '44' }}>
         <Spinner />
@@ -290,19 +354,18 @@ export default function Subscribe() {
     <Auth to="/subscribe">
       <CalendarTab
         customElement={<FilterOptionsMenu state={state} dispatch={dispatch} mutate={mutate} />}
+        activeTabKey={resolvedActiveTab}
+        onActiveTabChange={handleActiveTabChange}
         searchOpen={searchOpen}
         searchPanel={<SearchPanel keyword={keyword} onKeywordChange={setKeyword} />}
-        standaloneContent={keyword.trim() ? <SubscribePanel bangumis={globalSearchResults} standalone /> : undefined}
+        standaloneContent={activeContent}
+        contentKey={keyword.trim() ? 'search' : resolvedActiveTab || 'subscribe'}
         onSearchToggle={() => setSearchOpen(value => !value)}
         tabListItems={tabListItems}
         tabListProps={{ mr: 0 }}
         boxProps={{ mt: 3 }}
         type="subscribe"
-      >
-        {tabPanelsItems.map(([week, bangumis]) => (
-          <SubscribePanel key={week} bangumis={bangumis} />
-        ))}
-      </CalendarTab>
+      />
     </Auth>
   );
 }
