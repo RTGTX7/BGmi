@@ -45,7 +45,7 @@
 ### Bangumi / 当季新番
 
 <p align="center">
-  <img src="./images/bangumi.png.png" alt="Bangumi 当前季页面预览" width="88%" />
+  <img src="./images/bangumi.png" alt="Bangumi 当前季页面预览" width="88%" />
 </p>
 
 ### Subscribe / 订阅页
