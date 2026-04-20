@@ -351,13 +351,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ├─ BGmi/                 # 后端源码（基于官方 BGmi 定制）
 ├─ BGmi-frontend/        # 前端源码（Vite + React + Chakra UI）
 ├─ scripts/              # 本地开发脚本
+├─ images/              # 图片
 ├─ docker-compose.yml    # 常规容器启动
 ├─ docker-compose.gpu.yml# GPU 覆盖配置
 ├─ Dockerfile            # 多阶段构建镜像
 ├─ docker-entrypoint.sh  # 运行时初始化与定时任务
 ├─ CHANGELOG.md          # 变更记录
-├─ RELEASE_1.1.0.md      # 1.1.0 发布说明
-└─ RELEASE_1.1.5.md      # 1.1.5 发布说明
+
 ```
 
 ---
@@ -365,8 +365,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ## 相关文档
 
 - [CHANGELOG.md](./CHANGELOG.md)
-- [RELEASE_1.1.0.md](./RELEASE_1.1.0.md)
-- [RELEASE_1.1.5.md](./RELEASE_1.1.5.md)
 - [MAINTENANCE.md](./MAINTENANCE.md)
 - [GITHUB_SETUP.md](./GITHUB_SETUP.md)
 
