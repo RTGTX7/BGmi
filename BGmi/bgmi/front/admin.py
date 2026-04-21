@@ -23,6 +23,7 @@ from bgmi.lib.maintenance import (
     preview_reset_episodes,
     sync_mikan_data,
 )
+from bgmi.lib.database_editor import database_search
 from bgmi.lib.controllers import add, cal, cfg, delete, filter_, mark, search, status_, update
 from bgmi.lib.download import download_prepare
 
@@ -52,6 +53,7 @@ API_MAP_POST: Dict[str, Callable] = {
     "dashboard-submit-downloads": submit_download_jobs,
     "dashboard-refresh-metadata": refresh_episodes_and_posters,
     "dashboard-anomalies": check_anomalies,
+    "dashboard-database-search": database_search,
     "player/mark-missing-episodes": mark_missing_episodes,
     "player/clear-missing-episodes": clear_missing_episodes,
 }

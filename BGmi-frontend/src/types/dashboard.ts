@@ -33,11 +33,22 @@ export interface DashboardOverview {
       danglingFollowed: number;
       duplicateRecords: number;
       missingEpisodes: number;
+      missingPlayableSource: number;
       emptyLocalFolder: number;
       missingFolder: number;
       permissionDenied: number;
     };
     items: DashboardAnomalyItem[];
+    localScan?: {
+      checkedCount: number;
+      emptyLocalFolderCount: number;
+      missingFolderCount: number;
+      permissionDeniedCount: number;
+      missingPlayableSourceCount: number;
+      clearedCount: number;
+      failedCount: number;
+      errors: { bangumi?: string; error: string }[];
+    };
   };
 }
 
@@ -66,4 +77,30 @@ export interface DashboardCommandResult {
   workingDirectory: string;
   configPath: string;
   bgmiPath: string;
+}
+
+export interface DashboardDatabaseSearchItem {
+  id: number;
+  name: string;
+  keyword: string;
+  status: number;
+  source: string;
+  inLibrary: boolean;
+  libraryPath: string;
+  isSubscribed: boolean;
+  episode: number;
+  subtitleGroups: string[];
+  updateTime: string;
+}
+
+export interface DashboardDatabaseSearchResponse {
+  status: string;
+  message?: string;
+  data: {
+    items: DashboardDatabaseSearchItem[];
+    count: number;
+    query: string;
+    id?: number | null;
+    limit: number;
+  };
 }

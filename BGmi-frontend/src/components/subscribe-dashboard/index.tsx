@@ -31,6 +31,8 @@ import type {
   DashboardActionResponse,
   DashboardAnomalyItem,
   DashboardCommandResult,
+  DashboardDatabaseSearchItem,
+  DashboardDatabaseSearchResponse,
   DashboardOverviewResponse,
 } from '~/types/dashboard';
 
@@ -212,6 +214,8 @@ export default function SubscribeDashboard() {
   const [anomalyItems, setAnomalyItems] = useState<DashboardAnomalyItem[]>([]);
   const [rebuildPreview, setRebuildPreview] = useState<any>(null);
   const [showDiagnosticsDetail, setShowDiagnosticsDetail] = useState(false);
+  const [databaseSearchInput, setDatabaseSearchInput] = useState('');
+  const [databaseSearchResults, setDatabaseSearchResults] = useState<DashboardDatabaseSearchItem[]>([]);
 
   const { data, error, isLoading, mutate } = useSWR<DashboardOverviewResponse>(['/api/dashboard', authToken], fetcher, {
     revalidateOnFocus: false,
@@ -268,6 +272,13 @@ export default function SubscribeDashboard() {
     [string, string | undefined],
     { bangumiName: string }
   >(['/api/player/clear-missing-episodes', authToken], fetcherWithMutation);
+
+  const { trigger: searchDatabase, isMutating: databaseSearchMutating } = useSWRMutation<
+    DashboardDatabaseSearchResponse,
+    Error,
+    [string, string | undefined],
+    { query?: string; bangumiId?: number; limit: number }
+  >(['/api/dashboard-database-search', authToken], fetcherWithMutation);
 
   const showError = (title: string, err: unknown) => {
     console.error(err);
@@ -399,6 +410,24 @@ export default function SubscribeDashboard() {
     }
   };
 
+  const handleDatabaseSearch = async () => {
+    const raw = databaseSearchInput.trim();
+    if (!raw) {
+      setDatabaseSearchResults([]);
+      showError('请输入番剧名、keyword 或 id', new Error('missing query'));
+      return;
+    }
+
+    try {
+      const numericId = /^\d+$/.test(raw) ? Number(raw) : undefined;
+      const resp = await searchDatabase({ query: numericId ? undefined : raw, bangumiId: numericId, limit: 20 });
+      setDatabaseSearchResults(resp?.data?.items ?? []);
+      showSuccess(`数据库查询完成：${resp?.data?.count ?? 0} 条`);
+    } catch (err) {
+      showError('数据库查询失败', err);
+    }
+  };
+
 
   const handleClearMissingEpisodes = async (bangumiName: string) => {
     try {
@@ -423,6 +452,7 @@ export default function SubscribeDashboard() {
     (anomalySummary.danglingFollowed ?? 0) === 0 &&
     (anomalySummary.duplicateRecords ?? 0) === 0 &&
     (anomalySummary.missingEpisodes ?? 0) === 0 &&
+    (anomalySummary.missingPlayableSource ?? 0) === 0 &&
     (anomalySummary.emptyLocalFolder ?? 0) === 0 &&
     (anomalySummary.missingFolder ?? 0) === 0 &&
     (anomalySummary.permissionDenied ?? 0) === 0;
@@ -443,6 +473,7 @@ export default function SubscribeDashboard() {
     { label: 'Dangling followed', value: anomalySummary.danglingFollowed ?? 0 },
     { label: 'Duplicate records', value: anomalySummary.duplicateRecords ?? 0 },
     { label: 'Missing episodes', value: anomalySummary.missingEpisodes ?? 0 },
+    { label: 'Missing playable source', value: anomalySummary.missingPlayableSource ?? 0 },
     { label: 'Empty local folder', value: anomalySummary.emptyLocalFolder ?? 0 },
     { label: 'Missing folder', value: anomalySummary.missingFolder ?? 0 },
     { label: 'Permission denied', value: anomalySummary.permissionDenied ?? 0 },
@@ -669,6 +700,95 @@ export default function SubscribeDashboard() {
             ))}
           </SimpleGrid>
         ) : null}
+      </Box>
+
+      <Box
+        rounded='22px'
+        borderWidth='1px'
+        borderColor={getPanelBorder(isDark)}
+        bg={getPanelBg(isDark)}
+        px={{ base: 3.5, md: 5 }}
+        py={{ base: 3.5, md: 4.5 }}
+        boxShadow={getPanelShadow(isDark)}
+        backdropFilter='blur(18px)'
+      >
+        <Flex align='center' justify='space-between' gap='3' mb='3'>
+          <Box>
+            <Heading size='sm' color={theme.textPrimary}>
+              Database Search
+            </Heading>
+            <Text mt='1' fontSize='11px' color={theme.textSecondary}>
+              查询番剧 id，方便 SSH / CLI 按 id 删除
+            </Text>
+          </Box>
+          <StatusChip label='LOOKUP' tone='blue' isDark={isDark} />
+        </Flex>
+
+        <Flex gap='2' direction={{ base: 'column', md: 'row' }}>
+          <Input
+            value={databaseSearchInput}
+            onChange={e => setDatabaseSearchInput(e.target.value)}
+            placeholder='输入番剧名、keyword 或 id'
+            rounded='16px'
+            borderColor={getPanelBorder(isDark)}
+            bg={isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)'}
+            _focusVisible={{ borderColor: 'rgba(59,130,246,0.42)', boxShadow: '0 0 0 1px rgba(59,130,246,0.24)' }}
+            onKeyDown={event => {
+              if (event.key === 'Enter' && !databaseSearchMutating) {
+                void handleDatabaseSearch();
+              }
+            }}
+          />
+          <Button
+            onClick={() => void handleDatabaseSearch()}
+            isLoading={databaseSearchMutating}
+            rounded='16px'
+            minW={{ base: '100%', md: '112px' }}
+            bg={isDark ? 'rgba(20, 58, 122, 0.72)' : 'rgba(59,130,246,0.14)'}
+            borderWidth='1px'
+            borderColor='rgba(59,130,246,0.24)'
+            _hover={{ bg: isDark ? 'rgba(28, 82, 180, 0.76)' : 'rgba(59,130,246,0.22)' }}
+          >
+            查询
+          </Button>
+        </Flex>
+
+        <Stack spacing='2' mt='3'>
+          {databaseSearchResults.length ? (
+            databaseSearchResults.map(item => (
+              <Box
+                key={`${item.id}-${item.name}`}
+                rounded='16px'
+                px='3.5'
+                py='3'
+                bg={isDark ? 'rgba(14, 20, 40, 0.86)' : 'rgba(255,255,255,0.42)'}
+                borderWidth='1px'
+                borderColor={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(132,169,235,0.16)'}
+              >
+                <Flex justify='space-between' gap='3' align={{ base: 'flex-start', md: 'center' }} direction={{ base: 'column', md: 'row' }}>
+                  <Box minW='0'>
+                    <Text fontWeight='700' color={theme.textPrimary}>
+                      #{item.id} · {item.name}
+                    </Text>
+                    <Text mt='1' fontSize='xs' color={theme.textSecondary}>
+                      keyword={item.keyword || '--'} · source={item.source} · subscribed={item.isSubscribed ? 'yes' : 'no'} · inLibrary={item.inLibrary ? 'yes' : 'no'}
+                    </Text>
+                    <Text mt='1' fontSize='xs' color={theme.textMuted} wordBreak='break-all'>
+                      path: {item.libraryPath || '--'}
+                    </Text>
+                  </Box>
+                  <Text fontSize='xs' color={theme.textSecondary} flexShrink={0}>
+                    update: {item.updateTime || '--'}
+                  </Text>
+                </Flex>
+              </Box>
+            ))
+          ) : (
+            <Text fontSize='sm' color={theme.textSecondary}>
+              暂无查询结果
+            </Text>
+          )}
+        </Stack>
       </Box>
 
       <Box

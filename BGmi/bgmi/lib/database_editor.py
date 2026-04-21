@@ -21,6 +21,33 @@ from bgmi.utils import download_cover
 from bgmi.website.model import SubtitleGroup, WebsiteBangumi
 
 
+def database_search(
+    query: Optional[str] = None,
+    bangumiId: Optional[int] = None,
+    source: Optional[str] = None,
+    subscribed: Optional[bool] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    rows = list_database_bangumi(
+        bangumi_id=bangumiId,
+        query=query,
+        source=source,
+        subscribed=subscribed,
+        limit=limit,
+    )
+    return {
+        "status": "success",
+        "message": "Database search completed",
+        "data": {
+            "items": rows,
+            "count": len(rows),
+            "query": query or "",
+            "id": bangumiId,
+            "limit": max(limit, 1),
+        },
+    }
+
+
 def prepare_database_bangumi(name: str, keyword: Optional[str] = None) -> Dict[str, Any]:
     queries: List[str] = []
     candidates: List[Dict[str, Any]] = []
@@ -246,7 +273,42 @@ def delete_database_bangumi(name: str, delete_downloads: bool = True) -> Dict[st
     }
 
 
+def delete_database_bangumi_by_id(bangumi_id: int, delete_downloads: bool = True) -> Dict[str, Any]:
+    bangumi = Bangumi.select().where(Bangumi.id == bangumi_id).first()
+    if bangumi is None:
+        return {"status": "error", "message": f"Bangumi id {bangumi_id} does not exist in database"}
+
+    delete_counts = {
+        "bangumi": 0,
+        "followed": 0,
+        "filter": 0,
+        "issues": 0,
+        "scripts": 0,
+        "downloads": 0,
+    }
+
+    delete_counts["followed"] = Followed.delete().where(Followed.bangumi_name == bangumi.name).execute()
+    delete_counts["filter"] = Filter.delete().where(Filter.bangumi_name == bangumi.name).execute()
+    delete_counts["issues"] = BangumiIssue.delete().where(BangumiIssue.bangumi_name == bangumi.name).execute()
+    delete_counts["scripts"] = Scripts.delete().where(Scripts.bangumi_name == bangumi.name).execute()
+    if delete_downloads:
+        delete_counts["downloads"] = Download.delete().where(Download.name == bangumi.name).execute()
+    delete_counts["bangumi"] = bangumi.delete_instance()
+
+    return {
+        "status": "success",
+        "message": f"Bangumi #{bangumi_id} deleted from database",
+        "data": {
+            "id": bangumi_id,
+            "name": bangumi.name,
+            "keyword": bangumi.keyword,
+            "deleted": delete_counts,
+        },
+    }
+
+
 def list_database_bangumi(
+    bangumi_id: Optional[int] = None,
     query: Optional[str] = None,
     source: Optional[str] = None,
     subscribed: Optional[bool] = None,
@@ -258,6 +320,8 @@ def list_database_bangumi(
         .order_by(Bangumi.id.desc())
     )
 
+    if bangumi_id is not None:
+        bangumi_query = bangumi_query.where(Bangumi.id == bangumi_id)
     if query:
         bangumi_query = bangumi_query.where(Bangumi.name.contains(query) | Bangumi.keyword.contains(query))
     if source:

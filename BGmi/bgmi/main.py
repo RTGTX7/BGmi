@@ -19,6 +19,7 @@ from bgmi.config import BGMI_PATH, CONFIG_FILE_PATH, Config, cfg, normalize_conf
 from bgmi.lib import controllers as ctl
 from bgmi.lib.constants import BANGUMI_UPDATE_TIME, SPACIAL_APPEND_CHARS, SPACIAL_REMOVE_CHARS, SUPPORT_WEBSITE
 from bgmi.lib.database_editor import (
+    delete_database_bangumi_by_id,
     delete_database_bangumi,
     list_database_bangumi,
     parse_subtitle_selection,
@@ -499,6 +500,7 @@ def database_cli() -> None: ...
 
 
 @database_cli.command("list", help="List bangumi records in database")
+@click.option("--id", "bangumi_id", type=int, help="Filter by bangumi database id.")
 @click.option("--query", type=str, help="Filter by bangumi name or keyword.")
 @click.option("--source", type=click.Choice(["remote", "local", "hybrid"]), help="Filter by bangumi source.")
 @click.option(
@@ -509,9 +511,9 @@ def database_cli() -> None: ...
     help="Filter by whether bangumi has a subscription record.",
 )
 @click.option("--limit", type=int, default=20, show_default=True, help="Maximum number of rows to print.")
-def database_list_command(query: Optional[str], source: Optional[str], subscribed: str, limit: int) -> None:
+def database_list_command(bangumi_id: Optional[int], query: Optional[str], source: Optional[str], subscribed: str, limit: int) -> None:
     subscribed_filter = None if subscribed == "all" else subscribed == "yes"
-    rows = list_database_bangumi(query=query, source=source, subscribed=subscribed_filter, limit=limit)
+    rows = list_database_bangumi(bangumi_id=bangumi_id, query=query, source=source, subscribed=subscribed_filter, limit=limit)
     if not rows:
         print_warning("No bangumi rows matched the current filters")
         return
@@ -668,32 +670,51 @@ def database_add_command(
 
 
 @database_cli.command("delete", help="Delete a bangumi row and its related metadata from database")
-@click.argument("name", required=True)
+@click.argument("name", required=False)
+@click.option("--id", "bangumi_id", type=int, help="Delete by bangumi database id.")
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
 @click.option("--keep-downloads", is_flag=True, default=False, help="Do not delete related download rows.")
-def database_delete_command(name: str, yes: bool, keep_downloads: bool) -> None:
-    try:
-        bangumi = Bangumi.fuzzy_get(name=name)
-    except Bangumi.DoesNotExist:
-        print_error(f"Bangumi {name} does not exist in database", stop=False)
+def database_delete_command(name: Optional[str], bangumi_id: Optional[int], yes: bool, keep_downloads: bool) -> None:
+    if bangumi_id is None and not name:
+        print_error("please provide a bangumi name or --id", stop=False)
         return
+
+    if bangumi_id is not None:
+        bangumi = Bangumi.select().where(Bangumi.id == bangumi_id).first()
+        if bangumi is None:
+            print_error(f"Bangumi id {bangumi_id} does not exist in database", stop=False)
+            return
+        target_label = f"#{bangumi.id} {bangumi.name}"
+    else:
+        try:
+            bangumi = Bangumi.fuzzy_get(name=name or "")
+        except Bangumi.DoesNotExist:
+            print_error(f"Bangumi {name} does not exist in database", stop=False)
+            return
+        target_label = bangumi.name
 
     if not yes:
         confirmed = click.confirm(
-            f"Delete bangumi '{bangumi.name}' from database and related metadata?",
+            f"Delete bangumi '{target_label}' from database and related metadata?",
             default=False,
         )
         if not confirmed:
             print_warning("database delete canceled")
             return
 
-    result = delete_database_bangumi(name=bangumi.name, delete_downloads=not keep_downloads)
+    result = (
+        delete_database_bangumi_by_id(bangumi_id=bangumi.id, delete_downloads=not keep_downloads)
+        if bangumi_id is not None
+        else delete_database_bangumi(name=bangumi.name, delete_downloads=not keep_downloads)
+    )
     if result["status"] != "success":
         print_error(result["message"], stop=False)
         return
 
     payload = result["data"]
     print_success(result["message"])
+    if payload.get("id") is not None:
+        print(f"ID        : {payload.get('id')}")
     print(f"Name      : {payload.get('name')}")
     print(f"Keyword   : {payload.get('keyword')}")
     for key, value in payload.get("deleted", {}).items():

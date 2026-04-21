@@ -13,6 +13,7 @@ from bgmi.front.player_assets import (
     start_hls_profile_generation,
 )
 from bgmi.lib.models import (
+    ISSUE_MISSING_PLAYABLE_SOURCE,
     ISSUE_MISSING_EPISODES,
     STATUS_DELETED,
     STATUS_END,
@@ -24,6 +25,32 @@ from bgmi.lib.models import (
 from bgmi.utils import bangumi_save_path, resolve_cover_season, web_cover_url
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".webm", ".flv", ".ts", ".m2ts"}
+
+
+def set_missing_playable_source_issue(bangumi_name: str, episode: str, file_path: Optional[str] = None) -> None:
+    BangumiIssue.set_issue(
+        bangumi_name=bangumi_name,
+        issue_type=ISSUE_MISSING_PLAYABLE_SOURCE,
+        episode=str(episode).strip() if episode is not None else None,
+        file_path=file_path,
+        note="episode source not found",
+        marked_at=None,
+    )
+
+
+def clear_missing_playable_source_issue(bangumi_name: str, episode: Optional[str] = None) -> None:
+    issue = (
+        BangumiIssue.select()
+        .where(
+            (BangumiIssue.bangumi_name == bangumi_name)
+            & (BangumiIssue.issue_type == ISSUE_MISSING_PLAYABLE_SOURCE)
+        )
+        .first()
+    )
+    if issue is None:
+        return
+    if episode is None or not issue.episode or issue.episode == str(episode).strip():
+        BangumiIssue.clear_issue(bangumi_name, ISSUE_MISSING_PLAYABLE_SOURCE)
 
 
 def get_player(bangumi_name: str) -> Dict[int, Dict[str, str]]:
@@ -165,9 +192,11 @@ class PlayerAssetHandler(BaseHandler):
 
         source_path = find_episode_source(bangumi_name, episode)
         if source_path is None or not source_path.exists():
+            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
             self.set_status(404)
             self.finish(self.jsonify(status="error", message="episode source not found"))
             return
+        clear_missing_playable_source_issue(bangumi_name, episode)
 
         try:
             data = build_browser_assets(source_path, bangumi_name, episode)
@@ -192,9 +221,11 @@ class PlayerHlsHandler(BaseHandler):
 
         source_path = find_episode_source(bangumi_name, episode)
         if source_path is None or not source_path.exists():
+            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
             self.set_status(404)
             self.finish(self.jsonify(status="error", message="episode source not found"))
             return
+        clear_missing_playable_source_issue(bangumi_name, episode)
 
         try:
             hls_path = ensure_hls_profile(source_path, profile)
@@ -219,9 +250,11 @@ class PlayerHlsStartHandler(BaseHandler):
 
         source_path = find_episode_source(bangumi_name, episode)
         if source_path is None or not source_path.exists():
+            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
             self.set_status(404)
             self.finish(self.jsonify(status="error", message="episode source not found"))
             return
+        clear_missing_playable_source_issue(bangumi_name, episode)
 
         try:
             data = start_hls_profile_generation(source_path, profile)
@@ -246,9 +279,11 @@ class PlayerHlsStatusHandler(BaseHandler):
 
         source_path = find_episode_source(bangumi_name, episode)
         if source_path is None or not source_path.exists():
+            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
             self.set_status(404)
             self.finish(self.jsonify(status="error", message="episode source not found"))
             return
+        clear_missing_playable_source_issue(bangumi_name, episode)
 
         try:
             data = get_hls_profile_status(source_path, profile)
