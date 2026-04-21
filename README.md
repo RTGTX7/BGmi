@@ -220,7 +220,54 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
    - 手机端支持轻点呼出控制栏、长按 2x
 
 ---
+• ## 数据库管理命令
 
+  可以直接通过命令行编辑番剧数据库，而不进入 SQLite。
+
+  ### 查看数据库中的番剧
+
+  ```
+  bgmi database list
+```
+  按名称或关键词筛选：
+```
+  bgmi database list --query 番剧
+```
+  ### 添加番剧元数据到数据库
+
+  这个命令会把整部番剧写入数据库，不会自动订阅。
+```
+  bgmi database add "埃及神明们的日常"
+```
+  跳过字幕组：
+```
+  bgmi database add "埃及神明们的日常" --subtitle skip
+```
+  选择全部字幕组：
+```
+  bgmi database add "埃及神明们的日常" --subtitle all
+```
+  指定字幕组：
+```
+  bgmi database add "埃及神明们的日常" --subtitle 1,3
+```
+  自动解析不准时可手动指定 keyword：
+```
+  bgmi database add "妻子变成小学生。" --keyword 3445 --yes
+```
+  ### 删除数据库中的番剧
+```
+  bgmi database delete "妻子变成小学生。"
+```
+  跳过确认：
+```
+  bgmi database delete "妻子变成小学生。" --yes
+```
+  保留下载记录：
+```
+  bgmi database delete "妻子变成小学生。" --yes --keep-downloads
+```
+---
 ## 常用维护命令
 
   ### 手动执行维护任务
