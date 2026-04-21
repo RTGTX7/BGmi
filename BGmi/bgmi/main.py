@@ -20,6 +20,7 @@ from bgmi.lib import controllers as ctl
 from bgmi.lib.constants import BANGUMI_UPDATE_TIME, SPACIAL_APPEND_CHARS, SPACIAL_REMOVE_CHARS, SUPPORT_WEBSITE
 from bgmi.lib.download import download_prepare
 from bgmi.lib.fetch import website
+from bgmi.lib.maintenance import execute_rebuild_repository, preview_rebuild_repository
 from bgmi.lib.mikan_resolver import resolve_bangumi
 from bgmi.lib.models import STATUS_DELETED, STATUS_FOLLOWED, STATUS_UPDATED, Bangumi, Filter, Followed, Subtitle
 from bgmi.lib.update import update_database
@@ -227,6 +228,159 @@ def resolve_bangumi_cli(name: str) -> None:
     print(f"  cover: {chosen.get('cover', '')}")
     print(f"  query: {chosen.get('query', '')}")
     print(f"  match: {chosen.get('matchType', '')}")
+
+
+@cli.command("rebuild-repository", help="Rebuild local repository bangumi records from local bangumi folders")
+@click.option("--execute", "do_execute", is_flag=True, default=False, help="Execute rebuild instead of dry-run preview")
+@click.option("--show-items", is_flag=True, default=False, help="Print per-folder preview/result items")
+@click.option("--offset", type=int, default=0, show_default=True, help="Start folder offset for the current batch")
+@click.option("--limit", type=int, default=None, help="Max folders to process in the current batch")
+@click.option("--batch-size", type=int, default=None, help="Process all folders in repeated batches of this size")
+def rebuild_repository_cli(
+    do_execute: bool, show_items: bool, offset: int, limit: Optional[int], batch_size: Optional[int]
+) -> None:
+    if batch_size is not None and batch_size <= 0:
+        print_error("--batch-size must be greater than 0")
+        return
+
+    if limit is not None and limit < 0:
+        print_error("--limit must be greater than or equal to 0")
+        return
+
+    if batch_size is not None:
+        current_offset = max(offset, 0)
+        batch_index = 1
+        total_success = 0
+        total_failed = 0
+        total_skipped = 0
+
+        while True:
+            if do_execute:
+                result = execute_rebuild_repository(confirmText="REBUILD", offset=current_offset, limit=batch_size)
+            else:
+                result = preview_rebuild_repository(offset=current_offset, limit=batch_size)
+
+            if result["status"] == "error":
+                print_error(result["message"])
+                return
+
+            payload = result["data"]
+            print_info(
+                f"Batch {batch_index}: offset={payload.get('offset', current_offset)} "
+                f"scanned={payload.get('foldersScanned', payload.get('affectedCount', 0))} "
+                f"/ total={payload.get('totalFolders', payload.get('affectedCount', 0))}"
+            )
+
+            if do_execute:
+                print(
+                    f"  success={payload.get('successCount', 0)} "
+                    f"skipped={payload.get('skippedCount', 0)} "
+                    f"failed={payload.get('failedCount', 0)}"
+                )
+                total_success += payload.get("successCount", 0)
+                total_failed += payload.get("failedCount", 0)
+                total_skipped += payload.get("skippedCount", 0)
+            else:
+                print(
+                    f"  matched={payload.get('matchedCount', 0)} "
+                    f"unmatched={payload.get('unmatchedCount', 0)} "
+                    f"multiple={payload.get('multiCandidateCount', 0)} "
+                    f"failed={payload.get('failedCount', 0)}"
+                )
+
+            if show_items:
+                for item in payload.get("items", []):
+                    match_type = item.get("matchType", "unknown")
+                    folder_name = item.get("folderName", "")
+                    matched_name = item.get("matchedName", "")
+                    keyword = item.get("keyword", "")
+                    if matched_name:
+                        print(f"  - [{match_type}] {folder_name} -> {matched_name} ({keyword})")
+                    else:
+                        print(f"  - [{match_type}] {folder_name}")
+
+            current_offset += payload.get("foldersScanned", payload.get("affectedCount", 0))
+            batch_index += 1
+            if not payload.get("hasMore") or payload.get("foldersScanned", payload.get("affectedCount", 0)) == 0:
+                if do_execute:
+                    print_success("Rebuild repository finished for all batches.")
+                    print(f"Total success : {total_success}")
+                    print(f"Total skipped : {total_skipped}")
+                    print(f"Total failed  : {total_failed}")
+                else:
+                    print_success("Preview finished for all batches.")
+                break
+        return
+
+    if do_execute:
+        result = execute_rebuild_repository(confirmText="REBUILD", offset=offset, limit=limit)
+        if result["status"] == "error":
+            print_error(result["message"])
+            return
+
+        payload = result["data"]
+        preview = payload.get("preview", {})
+        print_success(result["message"])
+        print(f"Folders scanned : {payload.get('affectedCount', 0)}")
+        print(f"Total folders   : {payload.get('totalFolders', payload.get('affectedCount', 0))}")
+        print(f"Offset/Limit    : {payload.get('offset', offset)} / {payload.get('limit')}")
+        print(f"Has more        : {payload.get('hasMore', False)}")
+        print(f"Success         : {payload.get('successCount', 0)}")
+        print(f"Skipped         : {payload.get('skippedCount', 0)}")
+        print(f"Failed          : {payload.get('failedCount', 0)}")
+        print(f"Poster updated  : {payload.get('posterUpdatedCount', 0)}")
+        print(
+            "Matched/Unmatched/Multiple : "
+            f"{preview.get('matchedCount', 0)} / {preview.get('unmatchedCount', 0)} / {preview.get('multiCandidateCount', 0)}"
+        )
+
+        errors = payload.get("errors", [])
+        if errors:
+            print_warning("Errors:")
+            for error in errors[:50]:
+                print(f"  - {error.get('folderName') or error.get('bangumi') or 'unknown'}: {error.get('error', '')}")
+            if len(errors) > 50:
+                print(f"  ... {len(errors) - 50} more errors omitted")
+        return
+
+    result = preview_rebuild_repository(offset=offset, limit=limit)
+    if result["status"] == "error":
+        print_error(result["message"])
+        return
+
+    payload = result["data"]
+    print_success(result["message"])
+    print(f"Folders scanned : {payload.get('foldersScanned', 0)}")
+    print(f"Total folders   : {payload.get('totalFolders', payload.get('foldersScanned', 0))}")
+    print(f"Offset/Limit    : {payload.get('offset', offset)} / {payload.get('limit')}")
+    print(f"Has more        : {payload.get('hasMore', False)}")
+    print(f"Matched         : {payload.get('matchedCount', 0)}")
+    print(f"Unmatched       : {payload.get('unmatchedCount', 0)}")
+    print(f"Multiple        : {payload.get('multiCandidateCount', 0)}")
+    print(f"Create          : {payload.get('createCount', 0)}")
+    print(f"Update          : {payload.get('updateCount', 0)}")
+    print(f"Skip            : {payload.get('skipCount', 0)}")
+    print(f"Failed          : {payload.get('failedCount', 0)}")
+
+    if show_items:
+        print_info("Items:")
+        for item in payload.get("items", []):
+            match_type = item.get("matchType", "unknown")
+            folder_name = item.get("folderName", "")
+            matched_name = item.get("matchedName", "")
+            keyword = item.get("keyword", "")
+            if matched_name:
+                print(f"  - [{match_type}] {folder_name} -> {matched_name} ({keyword})")
+            else:
+                print(f"  - [{match_type}] {folder_name}")
+
+    errors = payload.get("errors", [])
+    if errors:
+        print_warning("Errors:")
+        for error in errors[:50]:
+            print(f"  - {error.get('folderName') or 'unknown'}: {error.get('error', '')}")
+        if len(errors) > 50:
+            print(f"  ... {len(errors) - 50} more errors omitted")
 
 
 @cli.command("mark")
