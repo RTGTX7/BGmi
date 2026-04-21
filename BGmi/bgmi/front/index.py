@@ -100,12 +100,16 @@ class IndexHandler(BaseHandler):
 class BangumiListHandler(BaseHandler):
     def get(self, type_: str = "") -> None:
         bangumi_status = STATUS_END if type_ == "old" else STATUS_UPDATING
-        data = list(
+        query = (
             Bangumi.select(Bangumi, Followed.episode, Followed.status.alias("follow_status"), Followed.updated_time)
             .join(Followed, join_type=peewee.JOIN.LEFT_OUTER, on=(Bangumi.name == Followed.bangumi_name))
             .where(Bangumi.status == bangumi_status)
-            .dicts()
         )
+
+        if type_ != "old":
+            query = query.where((Followed.status.is_null(False)) & (Followed.status != STATUS_DELETED))
+
+        data = list(query.dicts())
 
         if type_ == "index":
             data.extend(self.patch_list)
