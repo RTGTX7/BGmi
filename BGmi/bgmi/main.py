@@ -18,6 +18,13 @@ from bgmi import __version__
 from bgmi.config import BGMI_PATH, CONFIG_FILE_PATH, Config, cfg, normalize_config_path_value, write_default_config
 from bgmi.lib import controllers as ctl
 from bgmi.lib.constants import BANGUMI_UPDATE_TIME, SPACIAL_APPEND_CHARS, SPACIAL_REMOVE_CHARS, SUPPORT_WEBSITE
+from bgmi.lib.database_editor import (
+    delete_database_bangumi,
+    list_database_bangumi,
+    parse_subtitle_selection,
+    prepare_database_bangumi,
+    upsert_database_bangumi,
+)
 from bgmi.lib.download import download_prepare
 from bgmi.lib.fetch import website
 from bgmi.lib.maintenance import execute_rebuild_repository, preview_rebuild_repository
@@ -44,7 +51,23 @@ from bgmi.utils import (
 __all__ = ["main_for_test", "main", "print_success"]
 
 
+def _configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None:
+            continue
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            encoding = (getattr(stream, "encoding", None) or "").lower()
+            if encoding != "utf-8":
+                reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+
 def main() -> None:
+    _configure_stdio()
     logger.remove()
     logger.add(
         sys.stderr, format="<blue>{time:YYYY-MM-DD HH:mm:ss}</blue> {level:7} | <level>{message}</level>", level="INFO"
@@ -55,6 +78,7 @@ def main() -> None:
 
 
 def main_for_test(args: Optional[List[str]] = None) -> None:
+    _configure_stdio()
     cli.main(args=args, prog_name="bgmi", standalone_mode=False)
 
 
@@ -290,14 +314,22 @@ def rebuild_repository_cli(
 
             if show_items:
                 for item in payload.get("items", []):
-                    match_type = item.get("matchType", "unknown")
+                    match_type = item.get("status") or item.get("matchType", "unknown")
+                    action = item.get("action", "skip")
+                    reason = item.get("reason", "")
                     folder_name = item.get("folderName", "")
                     matched_name = item.get("matchedName", "")
                     keyword = item.get("keyword", "")
                     if matched_name:
-                        print(f"  - [{match_type}] {folder_name} -> {matched_name} ({keyword})")
+                        suffix = f" | action={action}"
+                        if reason:
+                            suffix += f" | reason={reason}"
+                        print(f"  - [{match_type}] {folder_name} -> {matched_name} ({keyword}){suffix}")
                     else:
-                        print(f"  - [{match_type}] {folder_name}")
+                        suffix = f" | action={action}"
+                        if reason:
+                            suffix += f" | reason={reason}"
+                        print(f"  - [{match_type}] {folder_name}{suffix}")
 
             current_offset += payload.get("foldersScanned", payload.get("affectedCount", 0))
             batch_index += 1
@@ -329,6 +361,9 @@ def rebuild_repository_cli(
         print(f"Skipped         : {payload.get('skippedCount', 0)}")
         print(f"Failed          : {payload.get('failedCount', 0)}")
         print(f"Poster updated  : {payload.get('posterUpdatedCount', 0)}")
+        print(f"Deleted empty   : {payload.get('deletedEmptyLocalCount', 0)}")
+        print(f"Protected empty : {payload.get('skippedProtectedEmptyCount', 0)}")
+        print(f"Delete failed   : {payload.get('failedDeleteCount', 0)}")
         print(
             "Matched/Unmatched/Multiple : "
             f"{preview.get('matchedCount', 0)} / {preview.get('unmatchedCount', 0)} / {preview.get('multiCandidateCount', 0)}"
@@ -361,18 +396,29 @@ def rebuild_repository_cli(
     print(f"Update          : {payload.get('updateCount', 0)}")
     print(f"Skip            : {payload.get('skipCount', 0)}")
     print(f"Failed          : {payload.get('failedCount', 0)}")
+    print(f"Empty folders   : {payload.get('emptyFolderCount', 0)}")
+    print(f"Delete empty    : {payload.get('willDeleteEmptyLocalCount', 0)}")
+    print(f"Protected empty : {payload.get('willSkipProtectedEmptyCount', 0)}")
 
     if show_items:
         print_info("Items:")
         for item in payload.get("items", []):
-            match_type = item.get("matchType", "unknown")
+            match_type = item.get("status") or item.get("matchType", "unknown")
+            action = item.get("action", "skip")
+            reason = item.get("reason", "")
             folder_name = item.get("folderName", "")
             matched_name = item.get("matchedName", "")
             keyword = item.get("keyword", "")
             if matched_name:
-                print(f"  - [{match_type}] {folder_name} -> {matched_name} ({keyword})")
+                suffix = f" | action={action}"
+                if reason:
+                    suffix += f" | reason={reason}"
+                print(f"  - [{match_type}] {folder_name} -> {matched_name} ({keyword}){suffix}")
             else:
-                print(f"  - [{match_type}] {folder_name}")
+                suffix = f" | action={action}"
+                if reason:
+                    suffix += f" | reason={reason}"
+                print(f"  - [{match_type}] {folder_name}{suffix}")
 
     errors = payload.get("errors", [])
     if errors:
@@ -446,6 +492,212 @@ def delete(name: List[str], clear: bool, yes: bool) -> None:
 def list_command() -> None:
     result = ctl.list_()
     print(result["message"])
+
+
+@cli.group("database", help="Inspect and edit bangumi metadata stored in the database")
+def database_cli() -> None: ...
+
+
+@database_cli.command("list", help="List bangumi records in database")
+@click.option("--query", type=str, help="Filter by bangumi name or keyword.")
+@click.option("--source", type=click.Choice(["remote", "local", "hybrid"]), help="Filter by bangumi source.")
+@click.option(
+    "--subscribed",
+    type=click.Choice(["all", "yes", "no"]),
+    default="all",
+    show_default=True,
+    help="Filter by whether bangumi has a subscription record.",
+)
+@click.option("--limit", type=int, default=20, show_default=True, help="Maximum number of rows to print.")
+def database_list_command(query: Optional[str], source: Optional[str], subscribed: str, limit: int) -> None:
+    subscribed_filter = None if subscribed == "all" else subscribed == "yes"
+    rows = list_database_bangumi(query=query, source=source, subscribed=subscribed_filter, limit=limit)
+    if not rows:
+        print_warning("No bangumi rows matched the current filters")
+        return
+
+    for row in rows:
+        subscribed_label = "yes" if row["isSubscribed"] else "no"
+        in_library_label = "yes" if row["inLibrary"] else "no"
+        subtitle_label = ", ".join(row["subtitleGroups"]) if row["subtitleGroups"] else "None"
+        print(
+            f"[{row['id']}] {row['name']} | keyword={row['keyword']} | source={row['source']} | "
+            f"status={row['status']} | subscribed={subscribed_label} | inLibrary={in_library_label} | "
+            f"update={row['updateTime']} | subtitles={subtitle_label}"
+        )
+
+
+def _prompt_candidate_choice(candidates: List[dict]) -> Optional[dict]:
+    if not candidates:
+        return None
+
+    print_info("Multiple candidates matched:")
+    for index, candidate in enumerate(candidates, start=1):
+        print(
+            f"  {index}. {candidate.get('name', '')} | keyword={candidate.get('keyword', '')} | "
+            f"match={candidate.get('matchType', '')} | cover={candidate.get('cover', '')}"
+        )
+
+    choice = click.prompt("Select candidate number or type skip", default="skip", show_default=True)
+    if str(choice).strip().lower() == "skip":
+        return None
+    if not str(choice).strip().isdigit():
+        print_error("invalid candidate selection", stop=False)
+        return None
+    selected_index = int(str(choice).strip()) - 1
+    if selected_index < 0 or selected_index >= len(candidates):
+        print_error("candidate selection out of range", stop=False)
+        return None
+    return candidates[selected_index]
+
+
+def _choose_subtitle_groups(
+    subtitle_groups: List[object],
+    subtitle_selection: Optional[str],
+    yes: bool,
+) -> List[object]:
+    if not subtitle_groups:
+        return []
+
+    if subtitle_selection is None and not yes:
+        print_info("Available subtitle groups:")
+        for index, group in enumerate(subtitle_groups, start=1):
+            print(f"  {index}. {group.name} ({group.id})")
+        subtitle_selection = click.prompt(
+            "Select subtitles: all / skip / comma-separated indexes, ids, or names",
+            default="all",
+            show_default=True,
+        )
+
+    if subtitle_selection is None:
+        subtitle_selection = "all"
+
+    return parse_subtitle_selection(subtitle_selection, subtitle_groups)  # type: ignore[arg-type]
+
+
+@database_cli.command("add", help="Add or update a bangumi metadata row without subscribing it")
+@click.argument("name", required=True)
+@click.option("--keyword", type=str, help="Use an explicit bangumi keyword instead of automatic resolve.")
+@click.option(
+    "--subtitle",
+    "subtitle_selection",
+    type=str,
+    help='Subtitle selection: "all", "skip", or comma-separated indexes / ids / names.',
+)
+@click.option("--yes", is_flag=True, default=False, help="Do not ask interactive questions.")
+@click.option("--download-cover/--no-download-cover", default=True, show_default=True, help="Cache cover after save.")
+def database_add_command(
+    name: str,
+    keyword: Optional[str],
+    subtitle_selection: Optional[str],
+    yes: bool,
+    download_cover: bool,
+) -> None:
+    prepared = prepare_database_bangumi(name=name, keyword=keyword)
+    if prepared["status"] != "success":
+        print_error(prepared["message"], stop=False)
+        for query in prepared.get("data", {}).get("queries", []):
+            print(f"  query: {query}")
+        return
+
+    data = prepared["data"]
+    chosen = data.get("chosen")
+    candidates = data.get("candidates", [])
+    bangumi_info = data.get("bangumi")
+
+    if chosen is None and candidates:
+        if yes:
+            print_error("multiple candidates matched, rerun without --yes or pass --keyword", stop=False)
+            return
+        chosen = _prompt_candidate_choice(candidates)
+        if chosen is None:
+            print_warning("database add canceled")
+            return
+        prepared = prepare_database_bangumi(name=str(chosen.get("name") or name), keyword=str(chosen.get("keyword") or ""))
+        if prepared["status"] != "success":
+            print_error(prepared["message"], stop=False)
+            return
+        data = prepared["data"]
+        bangumi_info = data.get("bangumi")
+        chosen = data.get("chosen")
+
+    if bangumi_info is None:
+        print_error("failed to fetch bangumi metadata", stop=False)
+        return
+
+    if data.get("fetchError"):
+        print_warning(f"Fetch metadata warning: {data['fetchError']}")
+
+    if chosen:
+        print_info(
+            f"Resolved bangumi: {bangumi_info.name} | keyword={bangumi_info.keyword} | "
+            f"update={bangumi_info.update_time} | cover={bangumi_info.cover}"
+        )
+
+    try:
+        selected_subtitles = _choose_subtitle_groups(
+            subtitle_groups=list(bangumi_info.subtitle_group),
+            subtitle_selection=subtitle_selection,
+            yes=yes,
+        )
+    except ValueError as exc:
+        print_error(str(exc), stop=False)
+        return
+
+    result = upsert_database_bangumi(
+        bangumi_info=bangumi_info,
+        subtitle_groups=selected_subtitles,
+        download_cover_image=download_cover,
+    )
+    if result["status"] != "success":
+        print_error(result["message"], stop=False)
+        return
+
+    payload = result["data"]
+    subtitle_names = [item["name"] for item in payload.get("subtitleGroups", [])]
+    print_success(result["message"])
+    print(f"Name           : {payload.get('name')}")
+    print(f"Keyword        : {payload.get('keyword')}")
+    print(f"Source         : {payload.get('source')}")
+    print(f"Status         : {payload.get('statusValue')}")
+    print(f"Subtitle count : {payload.get('subtitleGroupCount')}")
+    print(f"Subtitles      : {', '.join(subtitle_names) if subtitle_names else 'None'}")
+    print(f"Cover          : {payload.get('cover')}")
+    if payload.get("coverError"):
+        print_warning(f"Cover cache warning: {payload['coverError']}")
+
+
+@database_cli.command("delete", help="Delete a bangumi row and its related metadata from database")
+@click.argument("name", required=True)
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt.")
+@click.option("--keep-downloads", is_flag=True, default=False, help="Do not delete related download rows.")
+def database_delete_command(name: str, yes: bool, keep_downloads: bool) -> None:
+    try:
+        bangumi = Bangumi.fuzzy_get(name=name)
+    except Bangumi.DoesNotExist:
+        print_error(f"Bangumi {name} does not exist in database", stop=False)
+        return
+
+    if not yes:
+        confirmed = click.confirm(
+            f"Delete bangumi '{bangumi.name}' from database and related metadata?",
+            default=False,
+        )
+        if not confirmed:
+            print_warning("database delete canceled")
+            return
+
+    result = delete_database_bangumi(name=bangumi.name, delete_downloads=not keep_downloads)
+    if result["status"] != "success":
+        print_error(result["message"], stop=False)
+        return
+
+    payload = result["data"]
+    print_success(result["message"])
+    print(f"Name      : {payload.get('name')}")
+    print(f"Keyword   : {payload.get('keyword')}")
+    for key, value in payload.get("deleted", {}).items():
+        print(f"{key:10}: {value}")
 
 
 @cli.command("filter", help="set bangumi episode filters")
