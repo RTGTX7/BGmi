@@ -31,12 +31,18 @@ export interface BangumiData {
   cover: string;
   id: number;
   bangumi_name: string;
+  keyword?: string;
   episode: number;
   status: number;
   updated_time: number;
   year?: number | null;
   quarter?: number | null;
   season?: string | null;
+  isSubscribed?: boolean;
+  hasMissingEpisodes?: boolean;
+  inLibrary?: boolean;
+  libraryPath?: string;
+  source?: string;
   player: Record<string, Record<(string & {}) | 'path', string> | undefined>;
 }
 

@@ -25,6 +25,7 @@ import useSWRMutation from 'swr/mutation';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { fetcher, fetcherWithMutation } from '~/lib/fetcher';
+import { normalizePath } from '~/lib/utils';
 
 import type {
   DashboardActionResponse,
@@ -176,14 +177,18 @@ function buildSummaryText(result: any) {
   }
 
   if ('submittedCount' in result) {
-    return `下载任务：已提交 ${result.submittedCount ?? 0} / 已跳过 ${result.skippedCount ?? 0} / 失败 ${result.failedCount ?? 0}`;
+    return `Download jobs: submitted ${result.submittedCount ?? 0} / skipped ${result.skippedCount ?? 0} / failed ${result.failedCount ?? 0}`;
   }
 
   if ('updatedCount' in result || 'posterUpdatedCount' in result || 'episodeUpdatedCount' in result) {
-    return `元数据刷新：已更新 ${result.updatedCount ?? 0} / 海报 ${result.posterUpdatedCount ?? 0} / 剧集 ${result.episodeUpdatedCount ?? 0} / 跳过 ${result.skippedCount ?? 0} / 失败 ${result.failedCount ?? 0}`;
+    return `Metadata refresh: updated ${result.updatedCount ?? 0} / posters ${result.posterUpdatedCount ?? 0} / episodes ${result.episodeUpdatedCount ?? 0} / skipped ${result.skippedCount ?? 0} / failed ${result.failedCount ?? 0}`;
   }
 
-  return `维护结果：成功 ${result?.successCount ?? 0} / 失败 ${result?.failedCount ?? 0} / 跳过 ${result?.skippedCount ?? 0}`;
+  if ('deletedEmptyLocalCount' in result || 'skippedProtectedEmptyCount' in result) {
+    return `Rebuild result: success ${result.successCount ?? 0} / deleted empty local ${result.deletedEmptyLocalCount ?? 0} / protected skips ${result.skippedProtectedEmptyCount ?? 0} / skipped ${result.skippedCount ?? 0} / failed ${result.failedCount ?? 0}`;
+  }
+
+  return `Maintenance result: success ${result?.successCount ?? 0} / failed ${result?.failedCount ?? 0} / skipped ${result?.skippedCount ?? 0}`;
 }
 
 function summarizeOutput(output?: string) {
@@ -256,6 +261,13 @@ export default function SubscribeDashboard() {
     ['/api/dashboard-anomalies', authToken],
     fetcherWithMutation
   );
+
+  const { trigger: clearMissingEpisodeMark, isMutating: clearMissingEpisodeMarkMutating } = useSWRMutation<
+    DashboardActionResponse,
+    Error,
+    [string, string | undefined],
+    { bangumiName: string }
+  >(['/api/player/clear-missing-episodes', authToken], fetcherWithMutation);
 
   const showError = (title: string, err: unknown) => {
     console.error(err);
@@ -387,6 +399,18 @@ export default function SubscribeDashboard() {
     }
   };
 
+
+  const handleClearMissingEpisodes = async (bangumiName: string) => {
+    try {
+      await clearMissingEpisodeMark({ bangumiName });
+      setAnomalyItems(current => current.filter(item => !(item.type === 'missing_episodes' && item.name === bangumiName)));
+      showSuccess('Missing-episodes mark cleared');
+      await mutate();
+    } catch (err) {
+      showError('Failed to clear missing-episodes mark', err);
+    }
+  };
+
   const stats: any = data?.data?.stats ?? {};
   const anomalySummary: any = data?.data?.anomalies?.summary ?? {};
   const fallbackAnomalies = data?.data?.anomalies?.items ?? [];
@@ -397,7 +421,11 @@ export default function SubscribeDashboard() {
     (anomalySummary.missingSeason ?? 0) === 0 &&
     (anomalySummary.missingKeyword ?? 0) === 0 &&
     (anomalySummary.danglingFollowed ?? 0) === 0 &&
-    (anomalySummary.duplicateRecords ?? 0) === 0;
+    (anomalySummary.duplicateRecords ?? 0) === 0 &&
+    (anomalySummary.missingEpisodes ?? 0) === 0 &&
+    (anomalySummary.emptyLocalFolder ?? 0) === 0 &&
+    (anomalySummary.missingFolder ?? 0) === 0 &&
+    (anomalySummary.permissionDenied ?? 0) === 0;
 
   const statCards = [
     { label: '当前订阅', value: stats.subscribedTotal ?? 0, unit: '部', tone: 'cyan' as Tone },
@@ -409,11 +437,15 @@ export default function SubscribeDashboard() {
   ];
 
   const diagnostics = [
-    { label: '缺少海报', value: anomalySummary.missingPoster ?? 0 },
-    { label: '缺少季度', value: anomalySummary.missingSeason ?? 0 },
-    { label: '缺少关键词', value: anomalySummary.missingKeyword ?? 0 },
-    { label: '悬空订阅', value: anomalySummary.danglingFollowed ?? 0 },
-    { label: '重复记录', value: anomalySummary.duplicateRecords ?? 0 },
+    { label: 'Missing poster', value: anomalySummary.missingPoster ?? 0 },
+    { label: 'Missing season', value: anomalySummary.missingSeason ?? 0 },
+    { label: 'Missing keyword', value: anomalySummary.missingKeyword ?? 0 },
+    { label: 'Dangling followed', value: anomalySummary.danglingFollowed ?? 0 },
+    { label: 'Duplicate records', value: anomalySummary.duplicateRecords ?? 0 },
+    { label: 'Missing episodes', value: anomalySummary.missingEpisodes ?? 0 },
+    { label: 'Empty local folder', value: anomalySummary.emptyLocalFolder ?? 0 },
+    { label: 'Missing folder', value: anomalySummary.missingFolder ?? 0 },
+    { label: 'Permission denied', value: anomalySummary.permissionDenied ?? 0 },
   ];
 
   const commandCards = [
@@ -797,6 +829,20 @@ export default function SubscribeDashboard() {
                   {summarizeOutput(latestActionResult.stderr)}
                 </Text>
               </Box>
+            </Stack>
+          ) : null}
+          {Array.isArray(latestActionResult?.errors) && latestActionResult.errors.length ? (
+            <Stack spacing='2' mt='3'>
+              {latestActionResult.errors.slice(0, 6).map((errorItem: any, index: number) => (
+                <Box key={`${errorItem?.bangumi || errorItem?.folderName || 'error'}-${index}`} rounded='14px' px='3' py='2.5' bg={isDark ? 'rgba(127,29,29,0.22)' : 'rgba(254,226,226,0.72)'}>
+                  <Text fontSize='xs' color={theme.textSecondary}>
+                    {errorItem?.bangumi || errorItem?.folderName || 'Error'}
+                  </Text>
+                  <Text mt='1' fontSize='sm' color={theme.textPrimary}>
+                    {errorItem?.error || '--'}
+                  </Text>
+                </Box>
+              ))}
             </Stack>
           ) : null}
         </Box>

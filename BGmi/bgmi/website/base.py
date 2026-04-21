@@ -36,7 +36,15 @@ class BaseWebsite:
                     b.subtitle_group = subtitle_group
                 should_save = True
 
+            if b.source == "local":
+                b.source = "hybrid"
+                should_save = True
+
             if should_save:
+                b.save()
+        else:
+            if b.source not in ("remote", "hybrid"):
+                b.source = "remote"
                 b.save()
 
         for subtitle_group in data.subtitle_group:

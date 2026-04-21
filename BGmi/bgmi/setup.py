@@ -54,14 +54,4 @@ def create_dir() -> None:
 
 
 def init_db() -> None:
-    tables: List[Type[NeoDB]] = [
-        models.Scripts,
-        models.Bangumi,
-        models.Followed,
-        models.Subtitle,
-        models.Filter,
-        models.Download,
-    ]
-
-    for t in tables:
-        t.create_table()
+    models.ensure_runtime_schema()

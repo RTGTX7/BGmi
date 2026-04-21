@@ -17,6 +17,9 @@ export interface DashboardAnomalyItem {
   type: string;
   name: string;
   detail: string;
+  episode?: string | null;
+  filePath?: string | null;
+  markedAt?: string | null;
 }
 
 export interface DashboardOverview {
@@ -29,6 +32,10 @@ export interface DashboardOverview {
       missingKeyword: number;
       danglingFollowed: number;
       duplicateRecords: number;
+      missingEpisodes: number;
+      emptyLocalFolder: number;
+      missingFolder: number;
+      permissionDenied: number;
     };
     items: DashboardAnomalyItem[];
   };

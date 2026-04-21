@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import peewee
+
 from bgmi.config import cfg
 from bgmi.front.base import BaseHandler
 from bgmi.front.player_assets import (
@@ -10,8 +12,18 @@ from bgmi.front.player_assets import (
     get_hls_profile_status,
     start_hls_profile_generation,
 )
-from bgmi.lib.models import STATUS_DELETED, STATUS_END, STATUS_UPDATING, Followed
+from bgmi.lib.models import (
+    ISSUE_MISSING_EPISODES,
+    STATUS_DELETED,
+    STATUS_END,
+    STATUS_UPDATING,
+    Bangumi,
+    BangumiIssue,
+    Followed,
+)
 from bgmi.utils import bangumi_save_path, resolve_cover_season, web_cover_url
+
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".webm", ".flv", ".ts", ".m2ts"}
 
 
 def get_player(bangumi_name: str) -> Dict[int, Dict[str, str]]:
@@ -50,7 +62,7 @@ def find_largest_video_file(top_dir: Path) -> Optional[str]:
     for root, _, files in os.walk(top_dir):
         for file in files:
             _, ext = os.path.splitext(file)
-            if ext.lower() in [".mp4", ".mkv", ".webm"]:
+            if ext.lower() in VIDEO_EXTENSIONS:
                 p = Path(root).joinpath(file)
                 video_files.append((p.stat().st_size, p))
 
@@ -87,21 +99,46 @@ class IndexHandler(BaseHandler):
 
 class BangumiListHandler(BaseHandler):
     def get(self, type_: str = "") -> None:
-        data: List[dict] = Followed.get_all_followed(STATUS_DELETED, STATUS_END if type_ == "old" else STATUS_UPDATING)
-
-        def sorter(_: Dict[str, int]) -> int:
-            return _["updated_time"] if _["updated_time"] else 1
+        bangumi_status = STATUS_END if type_ == "old" else STATUS_UPDATING
+        data = list(
+            Bangumi.select(Bangumi, Followed.episode, Followed.status.alias("follow_status"), Followed.updated_time)
+            .join(Followed, join_type=peewee.JOIN.LEFT_OUTER, on=(Bangumi.name == Followed.bangumi_name))
+            .where(Bangumi.status == bangumi_status)
+            .dicts()
+        )
 
         if type_ == "index":
             data.extend(self.patch_list)
-            data.sort(key=sorter)
+
+        missing_episode_set = {
+            issue.bangumi_name
+            for issue in BangumiIssue.select(BangumiIssue.bangumi_name).where(
+                BangumiIssue.issue_type == ISSUE_MISSING_EPISODES
+            )
+        }
+
+        def sorter(item: Dict[str, int]) -> tuple[int, str]:
+            return (item.get("updated_time") or 0, item.get("bangumi_name") or item.get("name") or "")
+
+        data.sort(key=sorter)
 
         for bangumi in data:
+            bangumi_name = bangumi.get("bangumi_name") or bangumi.get("name")
+            bangumi["bangumi_name"] = bangumi_name
             bangumi["cover"] = web_cover_url(bangumi["cover"])
             year, quarter, season = resolve_cover_season(bangumi["cover"])
             bangumi["year"] = year
             bangumi["quarter"] = quarter
             bangumi["season"] = season
+            bangumi["episode"] = bangumi.get("episode") or 0
+            bangumi["updated_time"] = bangumi.get("updated_time") or 0
+            bangumi["status"] = bangumi.get("follow_status") or 0
+            bangumi["isSubscribed"] = bangumi["status"] != STATUS_DELETED and bangumi.get("follow_status") is not None
+            bangumi["hasMissingEpisodes"] = bangumi_name in missing_episode_set
+            bangumi.setdefault("keyword", "")
+            bangumi.setdefault("source", "remote")
+            bangumi["inLibrary"] = bool(bangumi.get("in_library"))
+            bangumi["libraryPath"] = bangumi.get("library_path") or ""
 
         data.reverse()
 

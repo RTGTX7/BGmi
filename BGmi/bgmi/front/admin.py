@@ -12,10 +12,12 @@ from tornado.web import HTTPError, RequestHandler
 from bgmi.front.base import BaseHandler
 from bgmi.lib.maintenance import (
     check_anomalies,
+    clear_missing_episodes,
     execute_rebuild_repository,
     execute_reset_episodes,
     refresh_episodes_and_posters,
     get_dashboard_overview,
+    mark_missing_episodes,
     submit_download_jobs,
     preview_rebuild_repository,
     preview_reset_episodes,
@@ -50,6 +52,8 @@ API_MAP_POST: Dict[str, Callable] = {
     "dashboard-submit-downloads": submit_download_jobs,
     "dashboard-refresh-metadata": refresh_episodes_and_posters,
     "dashboard-anomalies": check_anomalies,
+    "player/mark-missing-episodes": mark_missing_episodes,
+    "player/clear-missing-episodes": clear_missing_episodes,
 }
 
 API_MAP_GET = {

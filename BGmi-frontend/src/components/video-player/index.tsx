@@ -1,5 +1,23 @@
-﻿import { Box, Button, Flex, HStack, Progress, Spinner, Text, useToast } from '@chakra-ui/react';
+﻿import {
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
+  Box,
+  Button,
+  Flex,
+  HStack,
+  IconButton,
+  Progress,
+  Spinner,
+  Text,
+  useToast,
+} from '@chakra-ui/react';
+import { getCookie } from 'cookies-next';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FiAlertTriangle } from 'react-icons/fi';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
@@ -12,6 +30,7 @@ import ExternalPlayer from './external-player';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useVideoCurrentTime } from '~/hooks/use-watch-history';
+import { fetcherWithMutation } from '~/lib/fetcher';
 import { createAbsoluteUrl } from '~/lib/utils';
 import type { BangumiData, PlayerAsset, QualityAsset, SubtitleAsset } from '~/types/bangumi';
 
@@ -249,6 +268,12 @@ export default function VideoPlayer({
     error: '',
   });
 
+  const authToken = getCookie('authToken') as string | undefined;
+  const missingEpisodesCancelRef = useRef<HTMLButtonElement | null>(null);
+  const [missingEpisodesDialogOpen, setMissingEpisodesDialogOpen] = useState(false);
+  const [missingEpisodesLoading, setMissingEpisodesLoading] = useState(false);
+  const [hasMissingEpisodes, setHasMissingEpisodes] = useState(Boolean(bangumiData.hasMissingEpisodes));
+
   const { updateCurrentTime, getCurrentTime } = useVideoCurrentTime(bangumiData.bangumi_name);
 
   const rawPath = bangumiData.player[episode]?.path ?? '';
@@ -312,9 +337,21 @@ export default function VideoPlayer({
   const externalUrl = basePlaybackUrl ? createAbsoluteUrl(basePlaybackUrl) : '';
   const downloadUrl = sourcePath ? createAbsoluteUrl(`.${toBangumiAssetPath(sourcePath)}`) : '';
 
+  const toolButtonBg = colorMode === 'light' ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.06)';
+  const toolButtonBorder = colorMode === 'light' ? 'rgba(255,255,255,0.72)' : 'whiteAlpha.300';
+  const toolButtonShadow =
+    colorMode === 'light'
+      ? '0 8px 18px rgba(39,87,116,0.08), inset 0 1px 0 rgba(255,255,255,0.42)'
+      : '0 8px 18px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.05)';
+
   useEffect(() => {
     setSelectedSubtitleIndex(defaultSubtitleIndex);
   }, [defaultSubtitleIndex, subtitleTracks]);
+
+
+  useEffect(() => {
+    setHasMissingEpisodes(Boolean(bangumiData.hasMissingEpisodes));
+  }, [bangumiData.hasMissingEpisodes]);
 
   const stopPolling = () => {
     if (pollTimerRef.current !== null) {
@@ -479,6 +516,52 @@ export default function VideoPlayer({
         stage: 'failed',
         error: '无法启动 HLS 任务',
       });
+    }
+  };
+
+  const handleToggleMissingEpisodes = async () => {
+    if (!authToken) {
+      toast({
+        title: 'Admin auth required',
+        description: 'Please sign in before updating diagnostics flags.',
+        status: 'error',
+        duration: 3200,
+        position: 'top-right',
+      });
+      return;
+    }
+
+    const endpoint = hasMissingEpisodes ? '/api/player/clear-missing-episodes' : '/api/player/mark-missing-episodes';
+    const arg = hasMissingEpisodes
+      ? { bangumiName: bangumiData.bangumi_name }
+      : {
+          bangumiName: bangumiData.bangumi_name,
+          episode,
+          filePath: sourcePath || playerAsset?.browser_path || rawPath,
+          note: 'Marked from player',
+        };
+
+    try {
+      setMissingEpisodesLoading(true);
+      await fetcherWithMutation([endpoint, authToken], { arg });
+      setHasMissingEpisodes(value => !value);
+      setMissingEpisodesDialogOpen(false);
+      toast({
+        title: hasMissingEpisodes ? 'Missing-episodes mark cleared' : 'Missing-episodes mark saved',
+        status: 'success',
+        duration: 2600,
+        position: 'top-right',
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: hasMissingEpisodes ? 'Failed to clear missing-episodes mark' : 'Failed to save missing-episodes mark',
+        status: 'error',
+        duration: 3600,
+        position: 'top-right',
+      });
+    } finally {
+      setMissingEpisodesLoading(false);
     }
   };
 
@@ -1225,13 +1308,59 @@ export default function VideoPlayer({
           ) : null}
         </Box>
 
-        {externalUrl ? (
-          <Flex justify="flex-end" mt="2" px="0.5">
-            <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} />
-          </Flex>
-        ) : null}
+        <Flex justify="flex-end" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
+          <IconButton
+            aria-label={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
+            title={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
+            icon={<FiAlertTriangle />}
+            onClick={() => setMissingEpisodesDialogOpen(true)}
+            size="sm"
+            minW={{ base: '1.82rem', sm: '2.55rem' }}
+            h={{ base: '1.82rem', sm: '2.55rem' }}
+            fontSize={{ base: '0.76rem', sm: '1rem' }}
+            rounded="full"
+            variant="outline"
+            bg={hasMissingEpisodes ? 'rgba(245,158,11,0.18)' : toolButtonBg}
+            borderColor={hasMissingEpisodes ? 'rgba(245,158,11,0.42)' : toolButtonBorder}
+            boxShadow={
+              hasMissingEpisodes
+                ? '0 0 18px rgba(245,158,11,0.18), inset 0 1px 0 rgba(255,255,255,0.08)'
+                : toolButtonShadow
+            }
+            backdropFilter="blur(18px) saturate(170%)"
+            color={hasMissingEpisodes ? '#FBBF24' : colorMode === 'light' ? '#516274' : 'rgba(255,255,255,0.92)'}
+            _hover={{
+              transform: 'translateY(-1px)',
+              bg: hasMissingEpisodes ? 'rgba(245,158,11,0.24)' : colorMode === 'light' ? 'rgba(255,255,255,0.36)' : 'rgba(255,255,255,0.10)',
+            }}
+            _active={{ transform: 'translateY(0)' }}
+            isLoading={missingEpisodesLoading}
+          />
+          {externalUrl ? <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} /> : null}
+        </Flex>
       </Flex>
       <EpisodeCard flexShrink={0} setPlayState={() => undefined} bangumiData={episodeCardProps} />
+
+      <AlertDialog isOpen={missingEpisodesDialogOpen} leastDestructiveRef={missingEpisodesCancelRef} onClose={() => setMissingEpisodesDialogOpen(false)} isCentered>
+        <AlertDialogOverlay backdropFilter="blur(10px)">
+          <AlertDialogContent rounded="3xl">
+            <AlertDialogHeader>{hasMissingEpisodes ? 'Clear missing-episodes mark?' : 'Mark missing episodes?'}</AlertDialogHeader>
+            <AlertDialogBody>
+              {hasMissingEpisodes
+                ? 'This bangumi will be removed from the Dashboard diagnostics list.'
+                : 'This bangumi will appear in Dashboard diagnostics so you can revisit it later.'}
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={missingEpisodesCancelRef} onClick={() => setMissingEpisodesDialogOpen(false)} rounded="full" variant="ghost">
+                Cancel
+              </Button>
+              <Button ml="3" rounded="full" colorScheme="orange" onClick={() => void handleToggleMissingEpisodes()} isLoading={missingEpisodesLoading}>
+                {hasMissingEpisodes ? 'Clear mark' : 'Confirm mark'}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </>
   );
 }
