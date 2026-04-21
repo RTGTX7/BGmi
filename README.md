@@ -297,7 +297,52 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
   | TZ | America/Toronto | 时区 |
 
 ---
+## 重建本地仓库番剧
 
+  当本地 `/bangumi` 文件夹很多、Dashboard 预览容易卡住时，建议直接使用命令行。
+
+  ### 预览重建结果
+```
+  bgmi rebuild-repository
+```
+  ### 显示详细匹配项
+```
+  bgmi rebuild-repository --show-items
+```
+  ### 直接执行重建
+```
+  bgmi rebuild-repository --execute
+```
+  ### 手动分批
+
+  例如每次处理 100 个：
+```
+  bgmi rebuild-repository --offset 0 --limit 100
+  bgmi rebuild-repository --offset 100 --limit 100
+  bgmi rebuild-repository --offset 200 --limit 100
+```
+  执行分批重建：
+```
+  bgmi rebuild-repository --execute --offset 0 --limit 100
+```
+  ### 自动按批次跑完全部
+
+  例如每批 100 个，自动循环直到全部完成：
+```
+  bgmi rebuild-repository --batch-size 100
+```
+  执行全部批次重建：
+```
+  bgmi rebuild-repository --execute --batch-size 100
+```
+  ### 说明
+
+  - --offset：从第几个文件夹开始
+  - --limit：当前批次最多处理多少个
+  - --batch-size：自动按固定批次循环处理全部文件夹
+  - --show-items：输出每个文件夹的匹配结果
+
+---
 ## 从源码构建自己的镜像
 
 ```bash
