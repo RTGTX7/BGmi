@@ -267,6 +267,19 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
   bgmi database delete "妻子变成小学生。" --yes --keep-downloads
 ```
+
+### 按 id 查
+```
+  bgmi database list --id 123
+```
+ 按 id 删
+```
+  bgmi database delete --id 123 --yes
+```
+保留下载记录
+```
+  bgmi database delete --id 123 --yes --keep-downloads
+```
 ---
 ## 常用维护命令
 
