@@ -1,10 +1,10 @@
-import { Box, Heading, Link, SimpleGrid, Stack, Tag, Text, Wrap, WrapItem } from '@chakra-ui/react';
+﻿import { Box, Heading, Link, SimpleGrid, Stack, Tag, Text, Wrap, WrapItem } from '@chakra-ui/react';
 import type { ReactNode } from 'react';
 
 import { useBangumi } from '~/hooks/use-bangumi';
 import { useColorMode } from '~/hooks/use-color-mode';
 
-const CUSTOM_VERSION = 'RTGTX7 定制版 1.1.6';
+const CUSTOM_VERSION = '定制版 1.1.6';
 
 function FeatureTag({
   children,
@@ -61,9 +61,9 @@ export default function About() {
             </Text>
           </Box>
 
-          <Text fontSize="lg">一个面向自建服务器、远程播放、本地媒体库与浏览器播放场景持续维护的 BGmi 分支。</Text>
+          <Text fontSize="lg">一个面向自用服务器、远程播放和本地播放器联动场景维护的 BGmi 分支。</Text>
           <Text color={isDark ? 'gray.300' : 'gray.600'}>
-            HTTP Service 仍基于官方 BGmi 构建，额外补充了播放器、本地资源扫描、字幕处理、HLS 转码与 Dashboard 运维能力。
+            HTTP Service 与后端核心仍基于官方 BGmi 构建。
           </Text>
         </Stack>
       </Box>
@@ -74,7 +74,7 @@ export default function About() {
             后端版本
           </Text>
           <Text mt="2" fontSize="lg" fontWeight="bold" color={isDark ? 'gray.50' : 'gray.800'}>
-            {data?.version ? `BGmi ${data.version}` : 'BGmi'}
+            {data?.version ? `BGmi ${data.version}` : 'BGmi 4.5.1'}
           </Text>
         </Box>
         <Box {...sectionProps} p="4">
@@ -103,21 +103,21 @@ export default function About() {
 
           <Box>
             <Text as="span" mr="2">
-              • 数据源与索引
+              多个数据源可选
             </Text>
             <Wrap display="inline-flex" spacing="2">
               <WrapItem>
-                <FeatureTag colorScheme="cyan">Mikan</FeatureTag>
+                <FeatureTag colorScheme="cyan">Bangumi_Moe</FeatureTag>
               </WrapItem>
               <WrapItem>
-                <FeatureTag colorScheme="green">Bangumi Moe</FeatureTag>
+                <FeatureTag colorScheme="green">Mikan_Project</FeatureTag>
               </WrapItem>
             </Wrap>
           </Box>
 
           <Box>
             <Text as="span" mr="2">
-              • 下载委托
+              使用下载器管理订阅任务
             </Text>
             <Wrap display="inline-flex" spacing="2">
               <WrapItem>
@@ -137,7 +137,7 @@ export default function About() {
 
           <Box>
             <Text as="span" mr="2">
-              • 播放能力
+              播放器支持
             </Text>
             <Wrap display="inline-flex" spacing="2">
               <WrapItem>
@@ -153,54 +153,35 @@ export default function About() {
                 <FeatureTag colorScheme="orange">720p 3M</FeatureTag>
               </WrapItem>
               <WrapItem>
-                <FeatureTag colorScheme="pink">DPlayer</FeatureTag>
+                <FeatureTag colorScheme="pink">ArtPlayer</FeatureTag>
               </WrapItem>
             </Wrap>
           </Box>
 
-          <Text>• Dashboard 支持提交下载任务、刷新元数据、检查异常数据与重建本地仓库番剧。</Text>
-          <Text>• 新增本地仓库扫描、空目录保护、海报缓存、缺集标记与播放源缺失检测。</Text>
-          <Text>• 支持通过命令行和 Dashboard 查询数据库、按 id 管理记录、执行批量重建。</Text>
-          <Text>• Archive / Subscribe / Player 增加了更完整的搜索、异常提示与运维状态展示。</Text>
+          <Text>支持内嵌字幕提取、默认字幕自动挂载，以及多字幕切换显示。</Text>
+          <Text>支持按需 HLS、NVIDIA GPU 优先转码、转码进度显示与 48 小时缓存回收。</Text>
+          <Text>支持拖拽当前播放链接到本地播放器窗口，不限于某一个播放器。</Text>
+          <Text>支持 Archive 往期番剧浏览、季度归档、历史番剧搜索与海报展示。</Text>
+          <Text>支持 Dashboard 提交下载任务、刷新海报元数据、检查异常数据与重建本地仓库番剧。</Text>
         </Stack>
       </Box>
 
       <Box {...sectionProps} p={{ base: '5', md: '6' }}>
         <Stack spacing="3" position="relative" zIndex="1">
           <Heading size="lg" color={isDark ? 'orange.50' : 'gray.800'}>
-            网站
-          </Heading>
-          <Text>
-            蜜柑计划
-            <Link href="https://mikan.tangbai.cc/" color={isDark ? 'orange.300' : 'orange.500'} ml="2">
-              https://mikan.tangbai.cc/
-            </Link>
-          </Text>
-          <Text>
-            萌番组
-            <Link href="https://bangumi.moe/" color={isDark ? 'orange.300' : 'orange.500'} ml="2">
-              https://bangumi.moe/
-            </Link>
-          </Text>
-        </Stack>
-      </Box>
-
-      <Box {...sectionProps} p={{ base: '5', md: '6' }}>
-        <Stack spacing="3" position="relative" zIndex="1">
-          <Heading size="lg" color={isDark ? 'orange.50' : 'gray.800'}>
-            项目
+            项目来源
           </Heading>
           <Text color={isDark ? 'gray.300' : 'gray.600'}>
-            当前分支基于官方 BGmi 持续维护，主要补充自建媒体库和 Web 播放场景所需的能力。
+            当前版本基于官方 BGmi 持续维护，保留原项目骨架与历史贡献信息，同时对播放器、字幕和远程播放链路做了定制增强。
           </Text>
           <Text>
-            官方项目
+            上游项目：
             <Link href="https://github.com/BGmi/BGmi" color={isDark ? 'orange.300' : 'orange.500'} ml="2">
               BGmi
             </Link>
           </Text>
           <Text>
-            定制仓库
+            当前仓库：
             <Link href="https://github.com/RTGTX7/BGmi" color={isDark ? 'orange.300' : 'orange.500'} ml="2">
               RTGTX7/BGmi
             </Link>
@@ -211,29 +192,19 @@ export default function About() {
       <Box {...sectionProps} p={{ base: '5', md: '6' }}>
         <Stack spacing="3" position="relative" zIndex="1">
           <Heading size="lg" color={isDark ? 'orange.50' : 'gray.800'}>
-            技术
+            致谢
           </Heading>
-          <Text>• React</Text>
-          <Text>• Chakra UI</Text>
-          <Text>
-            •{' '}
-            <Link href="https://aria2.github.io/" color={isDark ? 'orange.300' : 'orange.500'}>
-              Aria2
-            </Link>
-          </Text>
-          <Text>
-            •{' '}
-            <Link href="https://dplayer.diygod.dev/" color={isDark ? 'orange.300' : 'orange.500'}>
-              DPlayer
-            </Link>
-          </Text>
+          <Text>• <Link href="https://mikan.tangbai.cc/" color={isDark ? 'orange.300' : 'orange.500'}>蜜柑计划</Link></Text>
+          <Text>• <Link href="https://bangumi.moe/" color={isDark ? 'orange.300' : 'orange.500'}>萌番组</Link></Text>
+          <Text>• <Link href="https://aria2.github.io/" color={isDark ? 'orange.300' : 'orange.500'}>Aria2</Link></Text>
+          <Text>• <Link href="https://artplayer.org/" color={isDark ? 'orange.300' : 'orange.500'}>ArtPlayer</Link></Text>
         </Stack>
       </Box>
 
       <Box {...sectionProps} p={{ base: '5', md: '6' }}>
         <Stack spacing="3" position="relative" zIndex="1">
           <Heading size="lg" color={isDark ? 'orange.50' : 'gray.800'}>
-            致谢
+            贡献保留
           </Heading>
           <Text>
             BGmi Creator -
@@ -252,3 +223,10 @@ export default function About() {
     </Stack>
   );
 }
+
+
+
+
+
+
+
