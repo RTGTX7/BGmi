@@ -1348,7 +1348,7 @@ export default function VideoPlayer({
             <AlertDialogBody>
               {hasMissingEpisodes
                 ? 'This bangumi will be removed from the Dashboard diagnostics list.'
-                : 'This bangumi will appear in Dashboard diagnostics so you can revisit it later.'}
+                : 'This issue will be reported to the administrator and shown in Dashboard diagnostics for follow-up.'}
             </AlertDialogBody>
             <AlertDialogFooter>
               <Button ref={missingEpisodesCancelRef} onClick={() => setMissingEpisodesDialogOpen(false)} rounded="full" variant="ghost">
@@ -1364,3 +1364,4 @@ export default function VideoPlayer({
     </>
   );
 }
+
