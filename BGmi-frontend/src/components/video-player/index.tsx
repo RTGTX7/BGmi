@@ -21,17 +21,23 @@ import { FiAlertTriangle } from 'react-icons/fi';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
-import ASS from 'assjs';
 import Hls from 'hls.js';
 import md5 from 'md5';
 
+import { artplayerAssPlugin } from './artplayer-ass-plugin';
 import EpisodeCard from './episode-card';
 import ExternalPlayer from './external-player';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useVideoCurrentTime } from '~/hooks/use-watch-history';
 import { fetcherWithMutation } from '~/lib/fetcher';
-import { createAbsoluteUrl } from '~/lib/utils';
+import {
+  getLiquidGlassButtonStyles,
+  getLiquidGlassGroupStyles,
+  getLiquidGlassStyles,
+  useLongPressDragSelect,
+} from '~/lib/liquid-glass';
+import { buildMediaUrl, createAbsoluteUrl, isBrowser } from '~/lib/utils';
 import type { BangumiData, PlayerAsset, QualityAsset, SubtitleAsset } from '~/types/bangumi';
 
 interface Props {
@@ -75,6 +81,12 @@ interface HlsStatusResponse {
 function usesAssRenderer(subtitle: SubtitleAsset | undefined) {
   const subtitleFormat = (subtitle?.format || subtitle?.source_format || '').toLowerCase();
   return ['ass', 'ssa'].includes(subtitleFormat);
+}
+
+function isIOSLike() {
+  if (!isBrowser) return false;
+  const userAgent = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/i.test(userAgent) || (userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1);
 }
 
 function getNativeSubtitleType(subtitle: SubtitleAsset | undefined) {
@@ -174,10 +186,16 @@ function toEncodedBangumiAssetPath(path: string) {
     .join('/');
 }
 
-function toPlayerQualityUrl(path: string) {
+function toPlayerQualityUrl(path: string, mediaOrigin?: string) {
   if (!path) return '';
   if (path.startsWith('/api/')) return `.${path}`;
-  return `.${toBangumiAssetPath(path)}`;
+  return buildMediaUrl(toBangumiAssetPath(path), mediaOrigin);
+}
+
+function toMediaPath(path: string) {
+  if (!path) return '';
+  const normalized = path.startsWith('.') ? path.slice(1) : path;
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
 function extractQualityProfile(item: QualityAsset) {
@@ -240,11 +258,11 @@ export default function VideoPlayer({
   const pollTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<Artplayer | null>(null);
-  const assRendererRef = useRef<ASS | null>(null);
   const subtitleRequestRef = useRef(0);
   const restoredTimeRef = useRef(false);
   const subtitleWidthRef = useRef(960);
   const subtitleHeightRef = useRef(540);
+  const autoHlsKeyRef = useRef('');
   const longPressTimerRef = useRef<number | null>(null);
   const longPressPointerIdRef = useRef<number | null>(null);
   const longPressActivatedRef = useRef(false);
@@ -279,11 +297,14 @@ export default function VideoPlayer({
   const rawPath = bangumiData.player[episode]?.path ?? '';
   const sourcePath = playerAsset?.source_path ?? rawPath;
   const playbackPath = playerAsset?.browser_path ?? sourcePath;
-  const directUrl = playbackPath ? `.${toBangumiAssetPath(playbackPath)}` : '';
+  const mediaOrigin = playerAsset?.mediaOrigin;
+  const directUrl = playbackPath ? buildMediaUrl(toBangumiAssetPath(playbackPath), mediaOrigin) : '';
   const subtitleTracks = useMemo(
     () => playerAsset?.subtitles ?? (playerAsset?.subtitle ? [playerAsset.subtitle] : []),
     [playerAsset]
   );
+  const iosLike = isIOSLike();
+  const shouldPreferHlsOnIOS = iosLike && subtitleTracks.length > 0;
   const qualityOptions = useMemo<QualityOption[]>(
     () =>
       (playerAsset?.qualities ?? [])
@@ -292,13 +313,13 @@ export default function VideoPlayer({
           return {
             ...item,
             profile,
-            playUrl: toPlayerQualityUrl(item.url),
+            playUrl: toPlayerQualityUrl(item.url, mediaOrigin),
             isHls: item.type === 'customHls',
             displayName: formatQualityLabel(profile, item.name),
           };
         })
         .sort((a, b) => qualityOrder(a.profile) - qualityOrder(b.profile)),
-    [playerAsset]
+    [mediaOrigin, playerAsset]
   );
   const fallbackQualityOptions = useMemo<QualityOption[]>(() => {
     if (!directUrl) return [];
@@ -316,6 +337,18 @@ export default function VideoPlayer({
     ];
   }, [directUrl]);
   const displayedQualityOptions = qualityOptions.length > 0 ? qualityOptions : fallbackQualityOptions;
+  const qualityByProfile = useMemo(
+    () => new Map(displayedQualityOptions.map(option => [option.profile, option])),
+    [displayedQualityOptions]
+  );
+  const qualityDragSelect = useLongPressDragSelect(profile => {
+    const option = qualityByProfile.get(profile);
+    if (option) void handleQualitySelect(option);
+  });
+  const iosPreferredHlsOption = useMemo(
+    () => (shouldPreferHlsOnIOS ? displayedQualityOptions.find(item => item.isHls) : undefined),
+    [displayedQualityOptions, shouldPreferHlsOnIOS]
+  );
   const defaultSubtitleIndex = useMemo(() => {
     const index = subtitleTracks.findIndex(track => track.default);
     return index >= 0 ? index : 0;
@@ -325,17 +358,26 @@ export default function VideoPlayer({
       ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
       : undefined;
   const isAssSubtitle = usesAssRenderer(activeSubtitle);
+  const shouldUseAssWebFullscreen = iosLike && isAssSubtitle;
   const activeNativeSubtitleType = getNativeSubtitleType(activeSubtitle);
   const activeNativeSubtitlePath =
-    activeSubtitle && !isAssSubtitle ? createAbsoluteUrl(`.${toEncodedBangumiAssetPath(activeSubtitle.path)}`) : '';
+    activeSubtitle && !isAssSubtitle
+      ? buildMediaUrl(toEncodedBangumiAssetPath(activeSubtitle.path), mediaOrigin)
+      : '';
   const activeNativeSubtitleStyle = buildNativeSubtitleStyle(
     activeSubtitle?.render_style,
     subtitleWidthRef.current,
     subtitleHeightRef.current
   );
   const basePlaybackUrl = currentSourceUrl || directUrl;
-  const externalUrl = basePlaybackUrl ? createAbsoluteUrl(basePlaybackUrl) : '';
-  const downloadUrl = sourcePath ? createAbsoluteUrl(`.${toBangumiAssetPath(sourcePath)}`) : '';
+  const externalUrl = basePlaybackUrl
+    ? /^https?:\/\//i.test(basePlaybackUrl)
+      ? basePlaybackUrl
+      : basePlaybackUrl.startsWith('./api/')
+      ? createAbsoluteUrl(basePlaybackUrl)
+      : buildMediaUrl(toMediaPath(basePlaybackUrl), mediaOrigin)
+    : '';
+  const downloadUrl = sourcePath ? buildMediaUrl(toBangumiAssetPath(sourcePath), mediaOrigin) : '';
 
   const toolButtonBg = colorMode === 'light' ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.06)';
   const toolButtonBorder = colorMode === 'light' ? 'rgba(255,255,255,0.72)' : 'whiteAlpha.300';
@@ -416,7 +458,7 @@ export default function VideoPlayer({
 
         if (status.state === 'ready' && status.url) {
           stopPolling();
-          setCurrentSourceUrl(`.${status.url}`);
+          setCurrentSourceUrl(buildMediaUrl(status.url, mediaOrigin));
           setCurrentSourceType('customHls');
           setLoading(true);
           setHlsProgress({
@@ -492,7 +534,7 @@ export default function VideoPlayer({
       const status = payload.data;
 
       if (status.state === 'ready' && status.url) {
-        setCurrentSourceUrl(`.${status.url}`);
+        setCurrentSourceUrl(buildMediaUrl(status.url, mediaOrigin));
         setCurrentSourceType('customHls');
         setLoading(true);
         setHlsProgress({
@@ -518,6 +560,20 @@ export default function VideoPlayer({
       });
     }
   };
+
+  useEffect(() => {
+    if (!shouldPreferHlsOnIOS) {
+      autoHlsKeyRef.current = '';
+      return;
+    }
+
+    if (!iosPreferredHlsOption) return;
+
+    const autoKey = `${bangumiData.bangumi_name}:${episode}:${iosPreferredHlsOption.profile}`;
+    if (autoHlsKeyRef.current === autoKey) return;
+    autoHlsKeyRef.current = autoKey;
+    void handleQualitySelect(iosPreferredHlsOption);
+  }, [bangumiData.bangumi_name, episode, iosPreferredHlsOption, shouldPreferHlsOnIOS]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleMissingEpisodes = async () => {
     if (!authToken) {
@@ -576,6 +632,13 @@ export default function VideoPlayer({
     const toastId = `HlsError-${episode}`;
 
     const plugins: Artplayer['option']['plugins'] = [];
+    plugins.push(
+      artplayerAssPlugin({
+        onError: error => {
+          console.error('Failed to load ASS subtitle:', error);
+        },
+      })
+    );
     if (danmakuApi) {
       const danmakuId = md5(`${bangumiData.bangumi_name}-${episode}-${selectedProfile}`);
       plugins.push(
@@ -619,6 +682,15 @@ export default function VideoPlayer({
                     console.error('HLS fatal error:', data.type, data.details);
                   }
                 });
+              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener(
+                  'loadedmetadata',
+                  () => {
+                    video.play().catch(() => undefined);
+                  },
+                  { once: true }
+                );
               } else if (!toastRef.current.isActive(toastId)) {
                 toastRef.current({
                   title: '浏览器暂不支持 HLS，建议使用最新版 Chrome 浏览器',
@@ -633,7 +705,8 @@ export default function VideoPlayer({
         : {},
       screenshot: true,
       autoplay: false,
-      fullscreen: true,
+      fullscreen: !shouldUseAssWebFullscreen,
+      fullscreenWeb: true,
       setting: true,
       playbackRate: true,
       aspectRatio: true,
@@ -650,6 +723,7 @@ export default function VideoPlayer({
           }
         : {}),
       pip: true,
+      playsInline: true,
       lang: 'zh-cn',
       hotkey: true,
       plugins,
@@ -665,6 +739,8 @@ export default function VideoPlayer({
     art.video.style.userSelect = 'none';
     art.video.style.setProperty('-webkit-user-drag', 'none');
     art.video.setAttribute('draggable', 'false');
+    art.video.setAttribute('playsinline', 'true');
+    art.video.setAttribute('webkit-playsinline', 'true');
 
     playerRef.current = art;
     setArtMountSeq(n => n + 1);
@@ -797,8 +873,6 @@ export default function VideoPlayer({
 
     return () => {
       cancelLongPress();
-      assRendererRef.current?.destroy();
-      assRendererRef.current = null;
       playerRef.current = null;
       setArtMountSeq(n => n + 1);
       setControlsVisible(true);
@@ -827,6 +901,7 @@ export default function VideoPlayer({
     episode,
     getCurrentTime,
     selectedProfile,
+    shouldUseAssWebFullscreen,
     updateCurrentTime,
   ]);
 
@@ -886,13 +961,7 @@ export default function VideoPlayer({
 
     if (!art) return;
 
-    const destroyAssRenderer = () => {
-      assRendererRef.current?.destroy();
-      assRendererRef.current = null;
-    };
-
     if (!subtitle) {
-      destroyAssRenderer();
       art.subtitle.show = false;
       void art.subtitle.switch('', { type: 'vtt' }).catch(err => {
         console.error('Failed to clear subtitle:', err);
@@ -902,49 +971,10 @@ export default function VideoPlayer({
       };
     }
 
-    if (isAssSubtitle) {
-      const controller = new AbortController();
-      const assPath = subtitle.original_path || subtitle.path;
-      const subtitleUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(assPath)}`);
-
-      destroyAssRenderer();
-      art.subtitle.show = false;
-      void art.subtitle.switch('', { type: 'vtt' }).catch(err => {
-        console.error('Failed to clear native subtitle before ASS load:', err);
-      });
-
-      void fetch(subtitleUrl, { signal: controller.signal })
-        .then(res => res.text())
-        .then(content => {
-          if (subtitleRequestRef.current !== requestId || !playerRef.current) return;
-
-          let container = art.template.$player.querySelector('.JASSUB') as HTMLDivElement | null;
-          if (!container) {
-            container = document.createElement('div');
-            container.className = 'JASSUB';
-            container.style.position = 'absolute';
-            container.style.inset = '0';
-            container.style.pointerEvents = 'none';
-            container.style.zIndex = '20';
-            art.template.$player.appendChild(container);
-          }
-
-          destroyAssRenderer();
-          assRendererRef.current = new ASS(content, art.video, { container });
-        })
-        .catch(err => {
-          if (err?.name !== 'AbortError') console.error('Failed to load ASS subtitle:', err);
-        });
-
-      return () => {
-        controller.abort();
-        subtitleRequestRef.current += 1;
-        destroyAssRenderer();
-      };
-    }
-
-    destroyAssRenderer();
-    const subtitleUrl = createAbsoluteUrl(`.${toEncodedBangumiAssetPath(subtitle.path)}`);
+    const subtitleUrl = buildMediaUrl(
+      toEncodedBangumiAssetPath(isAssSubtitle ? subtitle.original_path || subtitle.path : subtitle.path),
+      mediaOrigin
+    );
     const subtitleType = getNativeSubtitleType(subtitle);
     const subtitleStyle = buildNativeSubtitleStyle(
       subtitle.render_style,
@@ -984,6 +1014,7 @@ export default function VideoPlayer({
         });
     };
     const retryNativeSubtitle = () => {
+      if (isAssSubtitle) return;
       if (!subtitleLoaded) applyNativeSubtitle();
     };
 
@@ -994,11 +1025,10 @@ export default function VideoPlayer({
     return () => {
       disposed = true;
       subtitleRequestRef.current += 1;
-      destroyAssRenderer();
       art.video.removeEventListener('loadedmetadata', retryNativeSubtitle);
       art.video.removeEventListener('canplay', retryNativeSubtitle);
     };
-  }, [activeSubtitle, artMountSeq, isAssSubtitle]);
+  }, [activeSubtitle, artMountSeq, isAssSubtitle, mediaOrigin]);
 
   // Sync subtitle selector into ArtPlayer settings panel
   useEffect(() => {
@@ -1228,6 +1258,7 @@ export default function VideoPlayer({
               opacity={controlsVisible ? 1 : 0}
               transform={controlsVisible ? 'translateY(0)' : 'translateY(-6px)'}
               pointerEvents={controlsVisible ? 'auto' : 'none'}
+              sx={getLiquidGlassGroupStyles(colorMode, qualityDragSelect.dragging)}
             >
               {displayedQualityOptions.map(option => {
                 const isActive = selectedProfile === option.profile;
@@ -1242,6 +1273,7 @@ export default function VideoPlayer({
                     color="white"
                     borderWidth="1px"
                     borderColor={isActive ? 'rgba(147,197,253,0.65)' : 'rgba(255,255,255,0.28)'}
+                    sx={getLiquidGlassButtonStyles(colorMode, isActive, { compact: true })}
                     _hover={{ bg: isActive ? 'rgba(59,130,246,1)' : 'rgba(0,0,0,0.74)' }}
                     px={{ base: '1.5', md: '2' }}
                     minH={{ base: '1.3rem', md: '1.5rem' }}
@@ -1249,6 +1281,7 @@ export default function VideoPlayer({
                     fontWeight={600}
                     backdropFilter="blur(10px)"
                     leftIcon={isProcessing ? <Spinner size="xs" /> : undefined}
+                    {...qualityDragSelect.getOptionProps(option.profile)}
                   >
                     {isProcessing ? `${hlsProgress.progress.toFixed(0)}%` : option.displayName}
                   </Button>

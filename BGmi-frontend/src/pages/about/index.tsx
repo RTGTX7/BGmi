@@ -54,7 +54,7 @@ export default function About() {
         <Stack spacing="4" position="relative" zIndex="1">
           <Box>
             <Heading size="2xl" color={isDark ? 'orange.50' : 'gray.800'}>
-              BGmi {data?.version ?? '4.5.1'}
+              BGmi {data?.version ?? '4.5.2'}
             </Heading>
             <Text mt="3" fontSize="xl" fontWeight="semibold" color={isDark ? 'orange.100' : 'orange.500'}>
               {CUSTOM_VERSION}
@@ -74,7 +74,7 @@ export default function About() {
             后端版本
           </Text>
           <Text mt="2" fontSize="lg" fontWeight="bold" color={isDark ? 'gray.50' : 'gray.800'}>
-            {data?.version ? `BGmi ${data.version}` : 'BGmi 4.5.1'}
+            {data?.version ? `BGmi ${data.version}` : 'BGmi 4.5.2'}
           </Text>
         </Box>
         <Box {...sectionProps} p="4">

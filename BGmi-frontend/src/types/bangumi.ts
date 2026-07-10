@@ -71,6 +71,7 @@ export interface QualityAsset {
 export interface PlayerAsset {
   source_path: string;
   browser_path: string;
+  mediaOrigin?: string;
   subtitle?: SubtitleAsset;
   subtitles?: SubtitleAsset[];
   qualities?: QualityAsset[];

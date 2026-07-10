@@ -101,6 +101,39 @@ class HTTP(BaseSetting):
     )
 
 
+class PlayerLocalMediaRoutingConfig(BaseSetting):
+    enabled: bool = Field(False, description="enable local-entry media origin routing for player assets")
+    local_entry_hosts: list[str] = Field(default_factory=list, description="hosts that trigger local media routing")
+    local_media_origin: str = Field("", description="full local media origin, e.g. http://192.168.1.10:8899")
+
+    @pydantic.field_validator("local_entry_hosts", mode="before")
+    @classmethod
+    def _normalize_local_entry_hosts(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            items = value.split(",")
+        elif isinstance(value, list):
+            items = value
+        else:
+            return []
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            host = str(item or "").strip().lower()
+            if not host or host in seen:
+                continue
+            seen.add(host)
+            normalized.append(host)
+        return normalized
+
+    @pydantic.field_validator("local_media_origin", mode="before")
+    @classmethod
+    def _normalize_local_media_origin(cls, value: object) -> str:
+        return str(value or "").strip().rstrip("/")
+
+
 class Config(BaseSetting):
     data_source: Source = Field(
         os.getenv("BGMI_DATA_SOURCE") or Source.BangumiMoe, description="data source"
@@ -172,6 +205,20 @@ class Config(BaseSetting):
             for key, path_value in value.items()
             if path_value is not None and os.fspath(path_value).strip()
         }
+
+    @pydantic.field_validator("player", mode="before")
+    @classmethod
+    def _normalize_player(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return {}
+
+        normalized = dict(value)
+        local_media_routing = normalized.get("local_media_routing")
+        if isinstance(local_media_routing, dict):
+            normalized["local_media_routing"] = PlayerLocalMediaRoutingConfig.model_validate(local_media_routing).model_dump(
+                mode="json"
+            )
+        return normalized
 
     def _config_dump(self) -> dict[str, typing.Any]:
         data = json.loads(self.model_dump_json())

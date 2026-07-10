@@ -29,6 +29,8 @@ export default function SubscribePanel({ bangumis, standalone = false }: Props) 
     justifyContent: 'stretch',
     gap: { base: 3, md: 5, lg: 6 },
     pb: { base: 'calc(env(safe-area-inset-bottom, 0px) + 7.5rem)', lg: '0' },
+    minW: '0',
+    overflowX: 'hidden',
   } as const;
 
   const emptyState = (
@@ -67,6 +69,7 @@ export default function SubscribePanel({ bangumis, standalone = false }: Props) 
         <MotionBox
           key={bangumi.id}
           layout
+          minW="0"
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.992 }}

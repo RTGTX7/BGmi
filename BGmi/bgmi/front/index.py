@@ -10,6 +10,7 @@ from bgmi.front.player_assets import (
     build_browser_assets,
     ensure_hls_profile,
     get_hls_profile_status,
+    resolve_media_origin_for_host,
     start_hls_profile_generation,
 )
 from bgmi.lib.models import (
@@ -180,6 +181,56 @@ class BangumiListHandler(BaseHandler):
         self.finish()
 
 
+class PlayerBangumiHandler(BaseHandler):
+    def get(self) -> None:
+        bangumi_name = self.get_argument("bangumi", "").strip()
+        if not bangumi_name:
+            self.set_status(400)
+            self.finish(self.jsonify(status="error", message="missing bangumi"))
+            return
+
+        bangumi = Bangumi.select().where(Bangumi.name == bangumi_name).first()
+        if bangumi is None:
+            try:
+                bangumi = Bangumi.fuzzy_get(name=bangumi_name)
+            except Bangumi.DoesNotExist:
+                self.set_status(404)
+                self.finish(self.jsonify(status="error", message="bangumi not found"))
+                return
+
+        followed = Followed.select().where(Followed.bangumi_name == bangumi.name).first()
+        missing_episodes = BangumiIssue.select().where(
+            (BangumiIssue.bangumi_name == bangumi.name) & (BangumiIssue.issue_type == ISSUE_MISSING_EPISODES)
+        ).exists()
+
+        data = {
+            "id": bangumi.id,
+            "name": bangumi.name,
+            "bangumi_name": bangumi.name,
+            "update_time": bangumi.update_time,
+            "cover": web_cover_url(bangumi.cover),
+            "keyword": bangumi.keyword,
+            "episode": followed.episode if followed else 0,
+            "status": followed.status if followed else 0,
+            "updated_time": followed.updated_time if followed else 0,
+            "year": None,
+            "quarter": None,
+            "season": None,
+            "isSubscribed": bool(followed and followed.status != STATUS_DELETED),
+            "hasMissingEpisodes": missing_episodes,
+            "source": bangumi.source or "remote",
+            "inLibrary": bool(bangumi.in_library),
+            "libraryPath": bangumi.library_path or "",
+            "player": get_player(bangumi.name),
+        }
+        year, quarter, season = resolve_cover_season(data["cover"])
+        data["year"] = year
+        data["quarter"] = quarter
+        data["season"] = season
+
+        self.finish(self.jsonify(data=data))
+
+
 class PlayerAssetHandler(BaseHandler):
     def get(self) -> None:
         bangumi_name = self.get_argument("bangumi", "").strip()
@@ -204,6 +255,8 @@ class PlayerAssetHandler(BaseHandler):
             self.set_status(500)
             self.finish(self.jsonify(status="error", message=str(exc)))
             return
+
+        data["mediaOrigin"] = resolve_media_origin_for_host(self.request.host)
 
         self.finish(self.jsonify(data=data))
 
@@ -233,8 +286,9 @@ class PlayerHlsHandler(BaseHandler):
             self.set_status(500)
             self.finish(self.jsonify(status="error", message=str(exc)))
             return
-
-        self.redirect(f"/bangumi{hls_path}", permanent=False)
+        media_origin = resolve_media_origin_for_host(self.request.host)
+        redirect_path = f"/bangumi{hls_path}"
+        self.redirect(f"{media_origin}{redirect_path}" if media_origin else redirect_path, permanent=False)
 
 
 class PlayerHlsStartHandler(BaseHandler):

@@ -14,6 +14,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       minH="100vh"
       ml={{ lg: '60' }}
       position="relative"
+      overflowX="hidden"
       bg={
         colorMode === 'dark'
           ? 'radial-gradient(circle at 12% 18%, rgba(108,76,255,0.18), transparent 24%), radial-gradient(circle at 82% 22%, rgba(53,95,196,0.16), transparent 26%), radial-gradient(circle at 58% 78%, rgba(124,58,237,0.12), transparent 28%), linear-gradient(180deg, #0b0e17 0%, #0a1020 46%, #0b0f1a 100%)'
@@ -26,6 +27,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         as="main"
         w="100%"
         maxW="none"
+        overflowX="hidden"
         p={{ base: '3', sm: '4', md: '5', lg: '6', xl: '8' }}
         pt={{ base: '3', lg: '6' }}
         pb={{ base: '7.4rem', lg: '6' }}

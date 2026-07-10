@@ -5,7 +5,7 @@
 <p>
 <img alt="release" src="https://img.shields.io/badge/release-1.1.6-7c3aed?style=flat-square" />
   <img alt="docker" src="https://img.shields.io/badge/docker-rtgtx7%2Fbgmi--custom-2496ED?style=flat-square&logo=docker&logoColor=white" />
-  <img alt="base" src="https://img.shields.io/badge/base-BGmi%204.5.1-0ea5e9?style=flat-square" />
+  <img alt="base" src="https://img.shields.io/badge/base-BGmi%204.5.2-0ea5e9?style=flat-square" />
   <img alt="frontend" src="https://img.shields.io/badge/frontend-Artplayer%20%2B%20Vite-22c55e?style=flat-square" />
 </p>
 

@@ -19,12 +19,13 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { fetcher, fetcherWithMutation } from '~/lib/fetcher';
+import { getLiquidGlassButtonStyles } from '~/lib/liquid-glass';
 import { normalizePath } from '~/lib/utils';
 
 import type {
@@ -216,6 +217,9 @@ export default function SubscribeDashboard() {
   const [showDiagnosticsDetail, setShowDiagnosticsDetail] = useState(false);
   const [databaseSearchInput, setDatabaseSearchInput] = useState('');
   const [databaseSearchResults, setDatabaseSearchResults] = useState<DashboardDatabaseSearchItem[]>([]);
+  const [localMediaRoutingEnabled, setLocalMediaRoutingEnabled] = useState(false);
+  const [localEntryHostsInput, setLocalEntryHostsInput] = useState('');
+  const [localMediaOriginInput, setLocalMediaOriginInput] = useState('');
 
   const { data, error, isLoading, mutate } = useSWR<DashboardOverviewResponse>(['/api/dashboard', authToken], fetcher, {
     revalidateOnFocus: false,
@@ -280,6 +284,13 @@ export default function SubscribeDashboard() {
     { query?: string; bangumiId?: number; limit: number }
   >(['/api/dashboard-database-search', authToken], fetcherWithMutation);
 
+  const { trigger: saveLocalMediaRouting, isMutating: saveLocalMediaRoutingMutating } = useSWRMutation<
+    DashboardActionResponse,
+    Error,
+    [string, string | undefined],
+    { enabled: boolean; localEntryHosts: string[]; localMediaOrigin: string }
+  >(['/api/dashboard-player-local-media-routing', authToken], fetcherWithMutation);
+
   const showError = (title: string, err: unknown) => {
     console.error(err);
     toast({ title, status: 'error', duration: 3200, position: 'top-right' });
@@ -288,6 +299,15 @@ export default function SubscribeDashboard() {
   const showSuccess = (title: string) => {
     toast({ title, status: 'success', duration: 2600, position: 'top-right' });
   };
+
+  const localMediaRouting = data?.data?.playerSettings?.localMediaRouting;
+
+  useEffect(() => {
+    if (!localMediaRouting) return;
+    setLocalMediaRoutingEnabled(Boolean(localMediaRouting.enabled));
+    setLocalEntryHostsInput((localMediaRouting.localEntryHosts ?? []).join(', '));
+    setLocalMediaOriginInput(localMediaRouting.localMediaOrigin ?? '');
+  }, [localMediaRouting?.enabled, localMediaRouting?.localEntryHosts, localMediaRouting?.localMediaOrigin]);
 
   const openConfirm = (state: ActionPreview) => {
     setConfirmInput('');
@@ -428,6 +448,41 @@ export default function SubscribeDashboard() {
     }
   };
 
+  const handleSaveLocalMediaRouting = async () => {
+    const hosts = localEntryHostsInput
+      .split(',')
+      .map(item => item.trim().toLowerCase())
+      .filter(Boolean);
+    const origin = localMediaOriginInput.trim().replace(/\/+$/, '');
+
+    if (localMediaRoutingEnabled && hosts.length === 0) {
+      showError('请先填写本地入口主机', new Error('missing local entry hosts'));
+      return;
+    }
+
+    if (localMediaRoutingEnabled && !origin) {
+      showError('请先填写本地媒体 origin', new Error('missing local media origin'));
+      return;
+    }
+
+    if (origin && !/^https?:\/\/[^/:\s]+:\d+$/i.test(origin)) {
+      showError('本地媒体 origin 必须包含协议、主机和端口，例如 http://192.168.1.10:8899', new Error('invalid local media origin'));
+      return;
+    }
+
+    try {
+      await saveLocalMediaRouting({
+        enabled: localMediaRoutingEnabled,
+        localEntryHosts: hosts,
+        localMediaOrigin: origin,
+      });
+      showSuccess('本地播放加速设置已保存');
+      await mutate();
+    } catch (err) {
+      showError('保存本地播放加速设置失败', err);
+    }
+  };
+
 
   const handleClearMissingEpisodes = async (bangumiName: string) => {
     try {
@@ -521,7 +576,13 @@ export default function SubscribeDashboard() {
   }
 
   return (
-    <Stack spacing={{ base: 3, md: 3.5 }} px={{ base: 0.5, md: 0 }} pb={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)', md: 6 }}>
+    <Stack
+      spacing={{ base: 3, md: 3.5 }}
+      px={{ base: 0.5, md: 0 }}
+      pb={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)', md: 6 }}
+      minW='0'
+      overflowX='hidden'
+    >
       <Box
         rounded='22px'
         borderWidth='1px'
@@ -534,6 +595,7 @@ export default function SubscribeDashboard() {
         backdropFilter='blur(18px)'
         position='relative'
         overflow='hidden'
+        minW='0'
         _before={{
           content: '""',
           position: 'absolute',
@@ -544,7 +606,7 @@ export default function SubscribeDashboard() {
             : 'radial-gradient(circle at 90% 0%, rgba(80,140,255,0.10), transparent 30%), linear-gradient(180deg, rgba(255,255,255,0.28), transparent 50%)',
         }}
       >
-        <Grid templateColumns='1fr auto' alignItems='center' gap='3' position='relative' zIndex='1'>
+        <Grid templateColumns={{ base: '1fr', sm: '1fr auto' }} alignItems='center' gap='3' position='relative' zIndex='1' minW='0'>
           <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
               Dashboard
@@ -563,7 +625,16 @@ export default function SubscribeDashboard() {
         </Grid>
       </Box>
 
-      <SimpleGrid columns={{ base: 2, md: 3, xl: 6 }} spacing={{ base: 2, md: 2.5 }}>
+      <Box
+        display='grid'
+        gridTemplateColumns={{
+          base: 'repeat(2, minmax(0, 1fr))',
+          md: 'repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr))',
+          xl: 'repeat(auto-fit, minmax(10.5rem, 1fr))',
+        }}
+        gap={{ base: 2, md: 2.5 }}
+        minW='0'
+      >
         {statCards.map(item => {
           const toneStyle = getToneStyles(item.tone);
           return (
@@ -580,6 +651,7 @@ export default function SubscribeDashboard() {
               backdropFilter='blur(18px)'
               position='relative'
               overflow='hidden'
+              minW='0'
             >
               <Box
                 position='absolute'
@@ -607,7 +679,7 @@ export default function SubscribeDashboard() {
             </Box>
           );
         })}
-      </SimpleGrid>
+      </Box>
 
       <Box
         rounded='22px'
@@ -620,9 +692,10 @@ export default function SubscribeDashboard() {
         backdropFilter='blur(18px)'
         position='relative'
         overflow='hidden'
+        minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3'>
-          <Box>
+        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+          <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
               Command Center
             </Heading>
@@ -633,7 +706,16 @@ export default function SubscribeDashboard() {
           <StatusChip label='READY' tone='cyan' isDark={isDark} />
         </Flex>
 
-        <SimpleGrid columns={{ base: 2, md: 3, xl: 6 }} spacing={{ base: 2, md: 2.5 }}>
+        <Box
+          display='grid'
+          gridTemplateColumns={{
+            base: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(auto-fit, minmax(min(100%, 13rem), 1fr))',
+            xl: 'repeat(auto-fit, minmax(13rem, 1fr))',
+          }}
+          gap={{ base: 2, md: 2.5 }}
+          minW='0'
+        >
           {commandCards.map(card => {
             const toneStyle = getToneStyles(card.tone);
             return (
@@ -653,6 +735,8 @@ export default function SubscribeDashboard() {
                 justifyContent='flex-start'
                 textAlign='left'
                 whiteSpace='normal'
+                minW='0'
+                w='full'
                 boxShadow={isDark ? `inset 0 1px 0 rgba(255,255,255,0.04), ${toneStyle.glow}` : toneStyle.glow}
                 transition='transform .18s ease, box-shadow .18s ease'
                 _hover={{ bg: isDark ? 'rgba(16, 26, 58, 0.9)' : `linear-gradient(180deg, ${toneStyle.bg}, rgba(255,255,255,0.92))`, transform: 'translateY(-1px)', boxShadow: isDark ? `0 0 22px ${toneStyle.border}, inset 0 1px 0 rgba(255,255,255,0.05)` : toneStyle.glow }}
@@ -669,7 +753,7 @@ export default function SubscribeDashboard() {
               </Button>
             );
           })}
-        </SimpleGrid>
+        </Box>
 
         {rebuildPreview ? (
           <SimpleGrid columns={{ base: 2, md: 3 }} spacing='2' mt='3'>
@@ -711,9 +795,84 @@ export default function SubscribeDashboard() {
         py={{ base: 3.5, md: 4.5 }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
+        minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3'>
-          <Box>
+        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+          <Box minW='0'>
+            <Heading size='sm' color={theme.textPrimary}>
+              本地播放加速
+            </Heading>
+            <Text mt='1' fontSize='11px' color={theme.textSecondary}>
+              仅当你通过本地入口访问页面时，把视频、字幕、HLS 和外置播放器直链切到局域网媒体地址。
+            </Text>
+          </Box>
+          <StatusChip label={localMediaRoutingEnabled ? 'ENABLED' : 'DISABLED'} tone={localMediaRoutingEnabled ? 'green' : 'blue'} isDark={isDark} />
+        </Flex>
+
+        <Stack spacing='3' minW='0'>
+          <Button
+            alignSelf='flex-start'
+            size='sm'
+            rounded='full'
+            variant='outline'
+            onClick={() => setLocalMediaRoutingEnabled(value => !value)}
+            sx={getLiquidGlassButtonStyles(colorMode, localMediaRoutingEnabled)}
+          >
+            {localMediaRoutingEnabled ? '已启用，点击关闭' : '已关闭，点击启用'}
+          </Button>
+
+          <Input
+            value={localEntryHostsInput}
+            onChange={e => setLocalEntryHostsInput(e.target.value)}
+            placeholder='本地入口主机，逗号分隔，例如 192.168.1.10, nas.local'
+            rounded='16px'
+            borderColor={getPanelBorder(isDark)}
+            bg={isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)'}
+            minW='0'
+          />
+
+          <Input
+            value={localMediaOriginInput}
+            onChange={e => setLocalMediaOriginInput(e.target.value)}
+            placeholder='本地媒体 origin，例如 http://192.168.1.10:8899'
+            rounded='16px'
+            borderColor={getPanelBorder(isDark)}
+            bg={isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)'}
+            minW='0'
+          />
+
+          <Text fontSize='xs' color={theme.textSecondary}>
+            仅本地入口访问时生效，公网入口不会切换。若页面是 HTTPS、本地媒体 origin 是 HTTP，浏览器可能拦截网页内直播放，但外置播放器仍可能可用。
+          </Text>
+
+          <Button
+            onClick={() => void handleSaveLocalMediaRouting()}
+            isLoading={saveLocalMediaRoutingMutating}
+            rounded='16px'
+            alignSelf='flex-start'
+            bg={isDark ? 'rgba(20, 58, 122, 0.72)' : 'rgba(59,130,246,0.14)'}
+            borderWidth='1px'
+            borderColor='rgba(59,130,246,0.24)'
+            _hover={{ bg: isDark ? 'rgba(28, 82, 180, 0.76)' : 'rgba(59,130,246,0.22)' }}
+          >
+            保存设置
+          </Button>
+        </Stack>
+      </Box>
+
+      <Box
+        rounded='22px'
+        borderWidth='1px'
+        borderColor={getPanelBorder(isDark)}
+        bg={getPanelBg(isDark)}
+        px={{ base: 3.5, md: 5 }}
+        py={{ base: 3.5, md: 4.5 }}
+        boxShadow={getPanelShadow(isDark)}
+        backdropFilter='blur(18px)'
+        minW='0'
+      >
+        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+          <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
               Database Search
             </Heading>
@@ -724,7 +883,7 @@ export default function SubscribeDashboard() {
           <StatusChip label='LOOKUP' tone='blue' isDark={isDark} />
         </Flex>
 
-        <Flex gap='2' direction={{ base: 'column', md: 'row' }}>
+        <Flex gap='2' direction={{ base: 'column', md: 'row' }} minW='0'>
           <Input
             value={databaseSearchInput}
             onChange={e => setDatabaseSearchInput(e.target.value)}
@@ -732,6 +891,7 @@ export default function SubscribeDashboard() {
             rounded='16px'
             borderColor={getPanelBorder(isDark)}
             bg={isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)'}
+            minW='0'
             _focusVisible={{ borderColor: 'rgba(59,130,246,0.42)', boxShadow: '0 0 0 1px rgba(59,130,246,0.24)' }}
             onKeyDown={event => {
               if (event.key === 'Enter' && !databaseSearchMutating) {
@@ -765,12 +925,12 @@ export default function SubscribeDashboard() {
                 borderWidth='1px'
                 borderColor={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(132,169,235,0.16)'}
               >
-                <Flex justify='space-between' gap='3' align={{ base: 'flex-start', md: 'center' }} direction={{ base: 'column', md: 'row' }}>
+                <Flex justify='space-between' gap='3' align={{ base: 'flex-start', md: 'center' }} direction={{ base: 'column', md: 'row' }} minW='0'>
                   <Box minW='0'>
                     <Text fontWeight='700' color={theme.textPrimary}>
                       #{item.id} · {item.name}
                     </Text>
-                    <Text mt='1' fontSize='xs' color={theme.textSecondary}>
+                    <Text mt='1' fontSize='xs' color={theme.textSecondary} wordBreak='break-word'>
                       keyword={item.keyword || '--'} · source={item.source} · subscribed={item.isSubscribed ? 'yes' : 'no'} · inLibrary={item.inLibrary ? 'yes' : 'no'}
                     </Text>
                     <Text mt='1' fontSize='xs' color={theme.textMuted} wordBreak='break-all'>
@@ -800,9 +960,10 @@ export default function SubscribeDashboard() {
         py={{ base: 3.5, md: 4.5 }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
+        minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3'>
-          <Box>
+        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+          <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
               Diagnostics
             </Heading>
@@ -813,7 +974,7 @@ export default function SubscribeDashboard() {
           {allNormal ? <StatusChip label='ALL SYSTEMS NORMAL' tone='green' isDark={isDark} /> : <StatusChip label='CHECK REQUIRED' tone='amber' isDark={isDark} />}
         </Flex>
 
-        <SimpleGrid columns={{ base: 2, md: 5 }} spacing='2'>
+        <SimpleGrid columns={{ base: 2, md: 3, xl: 5 }} spacing='2' minChildWidth={{ md: '8.5rem' }}>
           {diagnostics.map(item => {
             const isWarning = item.value > 0;
             return (

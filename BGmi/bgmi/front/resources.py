@@ -12,6 +12,16 @@ from bgmi.lib.models import Download, Followed
 
 
 class BangumiHandler(BaseHandler):
+    def set_default_headers(self) -> None:
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Range, Content-Type, Accept, Origin")
+        self.set_header("Access-Control-Expose-Headers", "Accept-Ranges, Content-Encoding, Content-Length, Content-Range")
+        self.set_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+
+    def options(self, _: str = "") -> None:
+        self.set_status(204)
+        self.finish()
+
     def get(self, _: str = "") -> None:
         if not _:
             entries = []

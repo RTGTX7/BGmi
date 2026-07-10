@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import string
+from types import SimpleNamespace
 from unittest import mock
 
 from tornado.testing import AsyncHTTPTestCase
@@ -22,6 +23,31 @@ def random_word(length):
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
+
+
+class _FakeQuery:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def join(self, *args, **kwargs):
+        return self
+
+    def where(self, *args, **kwargs):
+        return self
+
+    def dicts(self):
+        return list(self.rows)
+
+    def first(self):
+        return self.rows[0] if self.rows else None
+
+    def exists(self):
+        return bool(self.rows)
+
+
+class _FakeIssueQuery:
+    def where(self, *args, **kwargs):
+        return []
 
 
 class ApiTestCase(AsyncHTTPTestCase):
@@ -52,6 +78,28 @@ class ApiTestCase(AsyncHTTPTestCase):
             res = self.parse_response(r)
             assert res["data"] == {"hello": "world"}
             m.assert_called_once_with()
+
+    def test_a_save_local_media_routing(self):
+        m = mock.Mock(return_value={"status": "success", "data": {"enabled": True}})
+        with mock.patch("bgmi.front.admin.API_MAP_POST", {"dashboard-player-local-media-routing": m}):
+            r = self.fetch(
+                "/api/dashboard-player-local-media-routing",
+                method="POST",
+                headers=self.headers,
+                body=json.dumps(
+                    {
+                        "enabled": True,
+                        "localEntryHosts": ["192.168.1.10", "nas.local"],
+                        "localMediaOrigin": "http://192.168.1.10:8899",
+                    }
+                ),
+            )
+            assert r.code == 200
+            m.assert_called_once_with(
+                enabled=True,
+                localEntryHosts=["192.168.1.10", "nas.local"],
+                localMediaOrigin="http://192.168.1.10:8899",
+            )
 
     def test_b_add(self):
         m = mock.Mock(return_value={"status": "warning"})
@@ -131,20 +179,22 @@ class ApiTestCase(AsyncHTTPTestCase):
 
     def test_e_index(self):
         m = mock.Mock(return_value={"status": "success", "data": {"h": "w"}})
-        m2 = mock.Mock(
-            return_value=[
-                {"bangumi_name": "233", "updated_time": 3, "cover": "233"},
-                {"bangumi_name": "2333", "updated_time": 20000000000, "cover": "2333"},
-            ]
-        )
-        with mock.patch("bgmi.front.index.get_player", m), mock.patch("bgmi.lib.models.Followed.get_all_followed", m2):
+        rows = [
+            {"bangumi_name": "233", "updated_time": 3, "cover": "233", "follow_status": 1},
+            {"bangumi_name": "2333", "updated_time": 20000000000, "cover": "2333", "follow_status": 1},
+        ]
+        m2 = mock.Mock(return_value=_FakeQuery(rows))
+        with mock.patch("bgmi.front.index.get_player", m), mock.patch(
+            "bgmi.front.index.Bangumi.select", m2
+        ), mock.patch("bgmi.front.index.BangumiIssue.select", mock.Mock(return_value=_FakeIssueQuery())):
             response = self.fetch("/api/index", method="GET")
         assert response.code == 200
         r = self.parse_response(response)
-        assert COVER_URL + "/2333" == r["data"][0]["cover"], json.dumps(r["data"])
-        assert r["data"][0]["year"] is None
-        assert r["data"][0]["quarter"] is None
-        assert r["data"][0]["season"] is None
+        indexed = next(item for item in r["data"] if item["bangumi_name"] == "2333")
+        assert COVER_URL + "/2333" == indexed["cover"], json.dumps(r["data"])
+        assert indexed["year"] is None
+        assert indexed["quarter"] is None
+        assert indexed["season"] is None
         m.assert_has_calls(
             [
                 mock.call("233"),
@@ -157,21 +207,24 @@ class ApiTestCase(AsyncHTTPTestCase):
 
     def test_e_index_resolves_season_from_cover_url(self):
         m = mock.Mock(return_value={})
-        m2 = mock.Mock(
-            return_value=[
-                {
-                    "bangumi_name": "2026-spring",
-                    "updated_time": 3,
-                    "cover": "https://mikanani.me/images/Bangumi/202604/cover.jpg",
-                },
-                {
-                    "bangumi_name": "2026-late-winter",
-                    "updated_time": 2,
-                    "cover": "https://mikanani.me/images/Bangumi/202603/cover.jpg",
-                },
-            ]
-        )
-        with mock.patch("bgmi.front.index.get_player", m), mock.patch("bgmi.lib.models.Followed.get_all_followed", m2):
+        rows = [
+            {
+                "bangumi_name": "2026-spring",
+                "updated_time": 3,
+                "cover": "https://mikanani.me/images/Bangumi/202604/cover.jpg",
+                "follow_status": 1,
+            },
+            {
+                "bangumi_name": "2026-late-winter",
+                "updated_time": 2,
+                "cover": "https://mikanani.me/images/Bangumi/202603/cover.jpg",
+                "follow_status": 1,
+            },
+        ]
+        m2 = mock.Mock(return_value=_FakeQuery(rows))
+        with mock.patch("bgmi.front.index.get_player", m), mock.patch(
+            "bgmi.front.index.Bangumi.select", m2
+        ), mock.patch("bgmi.front.index.BangumiIssue.select", mock.Mock(return_value=_FakeIssueQuery())):
             response = self.fetch("/api/index", method="GET")
         assert response.code == 200
         r = self.parse_response(response)
@@ -182,6 +235,32 @@ class ApiTestCase(AsyncHTTPTestCase):
         assert spring["quarter"] == 4
         assert late_winter["season"] == "202601"
         assert late_winter["quarter"] == 1
+
+    def test_player_bangumi_returns_single_bangumi_payload(self):
+        bangumi = SimpleNamespace(
+            id=123,
+            name="Single Player",
+            update_time="Mon",
+            cover="cover.jpg",
+            keyword="keyword-1",
+            source="remote",
+            in_library=False,
+            library_path="",
+        )
+        followed = SimpleNamespace(episode=7, status=1, updated_time=123456)
+
+        with mock.patch("bgmi.front.index.Bangumi.select", mock.Mock(return_value=_FakeQuery([bangumi]))), mock.patch(
+            "bgmi.front.index.Followed.select", mock.Mock(return_value=_FakeQuery([followed]))
+        ), mock.patch("bgmi.front.index.BangumiIssue.select", mock.Mock(return_value=_FakeQuery([]))), mock.patch(
+            "bgmi.front.index.get_player", mock.Mock(return_value={7: {"path": "/Single Player/7/video.mkv"}})
+        ):
+            response = self.fetch("/api/player/bangumi?bangumi=Single%20Player", method="GET")
+
+        assert response.code == 200
+        payload = self.parse_response(response)["data"]
+        assert payload["bangumi_name"] == "Single Player"
+        assert payload["episode"] == 7
+        assert payload["player"] == {"7": {"path": "/Single Player/7/video.mkv"}}
 
     def test_resource_ics(self):
         r = self.fetch("/resource/feed.xml")

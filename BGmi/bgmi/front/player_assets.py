@@ -1,4 +1,5 @@
 import hashlib
+import copy
 import json
 import re
 import shutil
@@ -6,6 +7,7 @@ import subprocess
 import time
 from collections import defaultdict, deque
 from functools import lru_cache
+from urllib.parse import urlparse
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Callable, Dict, Optional
@@ -44,6 +46,60 @@ SUBTITLE_TEXT_ENCODINGS = (
 _asset_locks: defaultdict[str, Lock] = defaultdict(Lock)
 _hls_jobs_lock = Lock()
 _hls_jobs: dict[str, dict[str, Any]] = {}
+_browser_assets_cache_lock = Lock()
+_browser_assets_cache: dict[str, tuple[tuple[tuple[str, int, int], ...], Dict[str, Any]]] = {}
+
+
+def local_media_routing_config() -> dict[str, Any]:
+    player_config = cfg.player if isinstance(cfg.player, dict) else {}
+    routing_config = player_config.get("local_media_routing", {})
+    return routing_config if isinstance(routing_config, dict) else {}
+
+
+def local_media_routing_state() -> dict[str, Any]:
+    routing_config = local_media_routing_config()
+    hosts = routing_config.get("local_entry_hosts", [])
+    if not isinstance(hosts, list):
+        hosts = []
+
+    normalized_hosts: list[str] = []
+    seen: set[str] = set()
+    for item in hosts:
+        host = str(item or "").strip().lower()
+        if not host or host in seen:
+            continue
+        seen.add(host)
+        normalized_hosts.append(host)
+
+    media_origin = str(routing_config.get("local_media_origin") or "").strip().rstrip("/")
+    parsed = urlparse(media_origin) if media_origin else None
+    try:
+        parsed_port = parsed.port if parsed else None
+    except ValueError:
+        parsed_port = None
+    is_valid_origin = bool(parsed and parsed.scheme in {"http", "https"} and parsed.hostname and parsed_port)
+
+    return {
+        "enabled": bool(routing_config.get("enabled")),
+        "localEntryHosts": normalized_hosts,
+        "localMediaOrigin": media_origin,
+        "isValidOrigin": is_valid_origin,
+    }
+
+
+def resolve_media_origin_for_host(request_host: str) -> str:
+    state = local_media_routing_state()
+    if not state["enabled"] or not state["isValidOrigin"]:
+        return ""
+
+    host = str(request_host or "").strip().lower()
+    if not host:
+        return ""
+
+    if ":" in host and not host.startswith("["):
+        host = host.rsplit(":", 1)[0]
+
+    return state["localMediaOrigin"] if host in set(state["localEntryHosts"]) else ""
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -88,6 +144,18 @@ def _relative_url(path: Path) -> str:
 
 def _cache_key(source_path: Path) -> str:
     return hashlib.sha1(str(source_path).encode("utf-8")).hexdigest()[:16]
+
+
+def _source_signature(source_path: Path) -> tuple[tuple[str, int, int], ...]:
+    paths = [source_path, *_find_sidecar_subtitles(source_path)]
+    signature: list[tuple[str, int, int]] = []
+    for path in paths:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        signature.append((str(path), stat.st_mtime_ns, stat.st_size))
+    return tuple(signature)
 
 
 def _hls_job_key(source_path: Path, profile_name: str) -> str:
@@ -1383,14 +1451,26 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
 
 
 def build_browser_assets(source_path: Path, bangumi_name: str, episode: str) -> Dict[str, Any]:
+    cache_key = _cache_key(source_path)
+    signature = _source_signature(source_path)
+    with _browser_assets_cache_lock:
+        cached = _browser_assets_cache.get(cache_key)
+        if cached and cached[0] == signature:
+            return copy.deepcopy(cached[1])
+
     probe = _probe(source_path)
     _cleanup_browser_video_cache(source_path)
     cleanup_hls_cache(source_path)
     subtitles = ensure_subtitle_assets(source_path, probe)
-    return {
+    data = {
         "source_path": _relative_url(source_path),
         "browser_path": _relative_url(source_path),
         "subtitle": subtitles[0] if subtitles else None,
         "subtitles": subtitles,
         "qualities": build_quality_assets(source_path, bangumi_name, episode),
     }
+
+    with _browser_assets_cache_lock:
+        _browser_assets_cache[cache_key] = (signature, copy.deepcopy(data))
+
+    return data

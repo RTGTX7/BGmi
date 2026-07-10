@@ -4,6 +4,7 @@ import { FiMenu } from 'react-icons/fi';
 import { BsMoonFill, BsSunFill } from 'react-icons/bs';
 
 import { useColorMode } from '~/hooks/use-color-mode';
+import { getLiquidGlassButtonStyles } from '~/lib/liquid-glass';
 import { handleSecondaryTitle } from '~/lib/utils';
 const LOGO = '/logo.png';
 
@@ -57,8 +58,17 @@ export default function Header({ sidebarToggle }: { sidebarToggle: () => void })
           rounded="full"
           variant="outline"
           bg={colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.58)'}
+          sx={getLiquidGlassButtonStyles(colorMode, true)}
         />
-        <IconButton aria-label="Menu" onClick={sidebarToggle} icon={<FiMenu />} size="md" rounded="full" variant="outline" />
+        <IconButton
+          aria-label="Menu"
+          onClick={sidebarToggle}
+          icon={<FiMenu />}
+          size="md"
+          rounded="full"
+          variant="outline"
+          sx={getLiquidGlassButtonStyles(colorMode)}
+        />
       </Flex>
     </Box>
   );

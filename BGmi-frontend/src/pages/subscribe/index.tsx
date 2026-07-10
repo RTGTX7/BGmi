@@ -5,6 +5,7 @@ import {
   Button,
   Divider,
   Flex,
+  Icon,
   Input,
   Menu,
   MenuButton,
@@ -18,7 +19,7 @@ import { useAtom } from 'jotai';
 
 import Auth from '~/components/auth';
 import CalendarTab from '~/components/calendar-tab';
-import SubscribeDashboard from '~/components/subscribe-dashboard';
+import MobileLiquidGlass from '~/components/layout/mobile-liquid-glass';
 import SubscribePanel from '~/components/subscribe-panel';
 import { bangumiFilterAtom, type DataKind } from '~/hooks/use-bangumi';
 import { useCalendar } from '~/hooks/use-calendar';
@@ -78,22 +79,89 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
   };
 
   return (
-    <Box display="flex" alignItems="center" justifyContent="flex-start" h="full" w="auto" pl={{ base: 0, lg: 1 }}>
-      <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end">
+    <Box display="flex" alignItems="center" justifyContent="flex-end" h="full" w="auto" pl={{ base: 0, lg: 1 }}>
+      <Box display={{ base: 'none', lg: 'flex' }} alignItems="center">
+        <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end">
+          <MenuButton
+            as={Button}
+            leftIcon={<CiFilter size="17" />}
+            size="sm"
+            h="2.5rem"
+            w="auto"
+            minW="unset"
+            px="3.5"
+            lineHeight="1"
+            display="inline-flex"
+            alignItems="center"
+            justifyContent="center"
+            gap="1.5"
+            rounded="full"
+            color={isDark ? 'whiteAlpha.920' : '#516274'}
+            bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.32)'}
+            borderWidth="1px"
+            borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.82)'}
+            boxShadow={
+              isDark
+                ? '0 14px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
+                : '0 14px 30px rgba(39,87,116,0.10), inset 0 1px 0 rgba(255,255,255,0.52)'
+            }
+            backdropFilter="blur(22px) saturate(170%)"
+            fontSize="sm"
+            fontWeight="semibold"
+            _hover={{
+              bg: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.42)',
+              borderColor: isDark ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.92)',
+            }}
+          >
+            筛选
+          </MenuButton>
+          <Portal>
+            <MenuList
+              minW="36"
+              zIndex={1600}
+              bg={isDark ? 'rgba(25,30,42,0.88)' : 'rgba(244,252,255,0.88)'}
+              borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.80)'}
+              boxShadow={
+                isDark
+                  ? '0 18px 44px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)'
+                  : '0 18px 44px rgba(39,87,116,0.12), 0 6px 18px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.56)'
+              }
+              backdropFilter="blur(22px) saturate(170%)"
+            >
+              <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} onClick={() => dispatch({ type: 'subscribed', mutate })}>
+                仅看已订阅
+              </MenuItem>
+              <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
+                仅看未订阅
+              </MenuItem>
+              <Divider />
+              <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} onClick={() => handleShow('new')}>
+                仅显示新番
+              </MenuItem>
+              <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} onClick={() => handleShow('old')}>
+                仅显示旧番
+              </MenuItem>
+            </MenuList>
+          </Portal>
+        </Menu>
+      </Box>
+
+      <Box display={{ base: 'flex', lg: 'none' }} alignItems="center">
+        <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end">
         <MenuButton
           as={Button}
           leftIcon={<CiFilter size="17" />}
           size="sm"
-          h="10"
+          h={{ base: '2.55rem', lg: '2.5rem' }}
           w="auto"
           minW="unset"
-          px="3.5"
+          px={{ base: '4', lg: '3.5' }}
           lineHeight="1"
-          display="inline-flex"
+          display={{ base: 'none', lg: 'inline-flex' }}
           alignItems="center"
           justifyContent="center"
           gap="1.5"
-          rounded="2xl"
+          rounded="full"
           color={isDark ? 'whiteAlpha.920' : '#516274'}
           bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.32)'}
           borderWidth="1px"
@@ -104,7 +172,7 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
               : '0 14px 30px rgba(39,87,116,0.10), inset 0 1px 0 rgba(255,255,255,0.52)'
           }
           backdropFilter="blur(22px) saturate(170%)"
-          fontSize="sm"
+          fontSize={{ base: 'sm', lg: 'sm' }}
           fontWeight="semibold"
           _hover={{
             bg: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.42)',
@@ -112,6 +180,52 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           }}
         >
           筛选
+        </MenuButton>
+        <MenuButton
+          as={Box}
+          type="button"
+          aria-label="筛选"
+          display={{ base: 'block', lg: 'none' }}
+          position="relative"
+          w="2.55rem"
+          h="2.55rem"
+          rounded="full"
+          overflow="hidden"
+          bg="transparent"
+          borderWidth="0"
+          p="0"
+          cursor="pointer"
+          sx={{
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <Flex
+            position="absolute"
+            inset="0"
+            zIndex="0"
+            align="center"
+            justify="center"
+            color={isDark ? '#7dd3fc' : '#0369a1'}
+            pointerEvents="none"
+            filter={isDark ? 'drop-shadow(0 0 10px rgba(125,211,252,0.62)) drop-shadow(0 0 18px rgba(56,189,248,0.28))' : 'drop-shadow(0 1px 4px rgba(255,255,255,0.72))'}
+          >
+            <Icon as={CiFilter} boxSize="17px" strokeWidth="1.35" />
+          </Flex>
+          <MobileLiquidGlass
+            width={40.8}
+            height={40.8}
+            borderRadius={20.4}
+            strength={22}
+            blur={0.42}
+            style={{
+              zIndex: 1,
+              background: isDark ? 'rgba(12,20,38,0.44)' : 'rgba(255,255,255,0.22)',
+              borderColor: isDark ? 'rgba(125,211,252,0.54)' : 'rgba(255,255,255,0.76)',
+              boxShadow: isDark
+                ? 'inset 0 1px 2px rgba(255,255,255,0.46), inset 0 -12px 22px rgba(125,211,252,0.10), 0 0 0 1px rgba(56,189,248,0.10), 0 10px 24px rgba(0,0,0,0.22)'
+                : 'inset 0 1px 2px rgba(255,255,255,0.76), inset 0 -12px 22px rgba(255,255,255,0.18), 0 10px 24px rgba(34,68,92,0.10)',
+            }}
+          />
         </MenuButton>
         <Portal>
           <MenuList
@@ -141,7 +255,8 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             </MenuItem>
           </MenuList>
         </Portal>
-      </Menu>
+        </Menu>
+      </Box>
     </Box>
   );
 }
@@ -274,16 +389,16 @@ export default function Subscribe() {
     if (keys.has('unknown')) ordered.push('unknown');
     return ordered as CalendarDataKey[];
   }, [calendarData]);
-  const tabListItems = useMemo(() => ['dashboard', ...weekdayTabItems], [weekdayTabItems]);
+  const tabListItems = useMemo<string[]>(() => [...weekdayTabItems], [weekdayTabItems]);
   const tabPanelsItems = useMemo(() => Object.entries(calendarData ?? []) as CalendarDataEntries, [calendarData]);
-  const todayWeekday = useMemo(
-    () => ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()] ?? 'sun',
+  const todayWeekday = useMemo<CalendarDataKey>(
+    () => (['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()] ?? 'sun') as CalendarDataKey,
     []
   );
   const resolvedActiveTab = useMemo(() => {
     if (activeTab && tabListItems.includes(activeTab)) return activeTab;
     if (weekdayTabItems.includes(todayWeekday as CalendarDataKey)) return todayWeekday;
-    return weekdayTabItems[0] ?? 'dashboard';
+    return weekdayTabItems[0] ?? '';
   }, [activeTab, tabListItems, todayWeekday, weekdayTabItems]);
   const globalSearchResults = useMemo(() => {
     const deduped = new Map<number, WeekCalendar>();
@@ -301,7 +416,7 @@ export default function Subscribe() {
     if (tabListItems.length === 0 || didInitializeTab) return;
     const fallbackTab = weekdayTabItems.includes(todayWeekday as CalendarDataKey)
       ? todayWeekday
-      : weekdayTabItems[0] ?? 'dashboard';
+      : weekdayTabItems[0] ?? '';
 
     setActiveTab(fallbackTab);
     setDidInitializeTab(true);
@@ -311,37 +426,28 @@ export default function Subscribe() {
     if (!didInitializeTab || !activeTab || tabListItems.includes(activeTab)) return;
     const fallbackTab = weekdayTabItems.includes(todayWeekday as CalendarDataKey)
       ? todayWeekday
-      : weekdayTabItems[0] ?? 'dashboard';
+      : weekdayTabItems[0] ?? '';
     setActiveTab(fallbackTab);
   }, [activeTab, didInitializeTab, tabListItems, todayWeekday, weekdayTabItems]);
 
   const handleActiveTabChange = (nextTab: string) => {
     const fallbackTab = weekdayTabItems.includes(todayWeekday as CalendarDataKey)
       ? todayWeekday
-      : weekdayTabItems[0] ?? 'dashboard';
-
-    if (!didInitializeTab && nextTab === 'dashboard' && fallbackTab !== 'dashboard') {
-      setDidInitializeTab(true);
-      setActiveTab(fallbackTab);
-      return;
-    }
+      : weekdayTabItems[0] ?? '';
 
     setDidInitializeTab(true);
-    setActiveTab(nextTab);
+    setSearchOpen(false);
+    setActiveTab(nextTab || fallbackTab);
   };
 
   const activeContent = useMemo(() => {
-    if (keyword.trim()) {
+    if (searchOpen) {
       return <SubscribePanel bangumis={globalSearchResults} standalone />;
-    }
-
-    if (resolvedActiveTab === 'dashboard') {
-      return <SubscribeDashboard />;
     }
 
     const bangumis = calendarData?.[resolvedActiveTab as CalendarDataKey];
     return <SubscribePanel bangumis={bangumis} standalone />;
-  }, [calendarData, globalSearchResults, keyword, resolvedActiveTab]);
+  }, [calendarData, globalSearchResults, resolvedActiveTab, searchOpen]);
 
   if (!calendarData || weekdayTabItems.length === 0 || tabPanelsItems.length === 0) {
     return (
@@ -360,8 +466,17 @@ export default function Subscribe() {
         searchOpen={searchOpen}
         searchPanel={<SearchPanel keyword={keyword} onKeywordChange={setKeyword} />}
         standaloneContent={activeContent}
-        contentKey={keyword.trim() ? 'search' : resolvedActiveTab || 'subscribe'}
-        onSearchToggle={() => setSearchOpen(value => !value)}
+        contentKey={searchOpen ? 'search' : resolvedActiveTab || 'subscribe'}
+        railActions={[
+          {
+            key: 'search',
+            label: 'Search',
+            icon: CiSearch,
+            active: searchOpen,
+            onSelect: () => setSearchOpen(true),
+            ariaLabel: 'Search subscribe',
+          },
+        ]}
         tabListItems={tabListItems}
         tabListProps={{ mr: 0 }}
         boxProps={{ mt: 3 }}

@@ -9,6 +9,7 @@ export type Path =
   | `/bangumi-files`
   | `/bangumi-group/:season`
   | `/calendar`
+  | `/dashboard`
   | `/player/:bangumi`
   | `/resource`
   | `/subscribe`

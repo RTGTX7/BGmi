@@ -17,6 +17,7 @@ from bgmi.front.index import (
     BangumiListHandler,
     IndexHandler,
     PlayerAssetHandler,
+    PlayerBangumiHandler,
     PlayerHlsHandler,
     PlayerHlsStartHandler,
     PlayerHlsStatusHandler,
@@ -26,6 +27,18 @@ from bgmi.setup import create_dir, init_db
 
 define("port", default=8888, help="listen on the port", type=int)
 define("address", default="0.0.0.0", help="binding at given address", type=str)
+
+
+class CorsStaticFileHandler(tornado.web.StaticFileHandler):
+    def set_default_headers(self) -> None:
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Range, Content-Type, Accept, Origin")
+        self.set_header("Access-Control-Expose-Headers", "Accept-Ranges, Content-Encoding, Content-Length, Content-Range")
+        self.set_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+
+    def options(self, path: str = "") -> None:
+        self.set_status(204)
+        self.finish()
 
 
 class SpaIndexHandler(tornado.web.RequestHandler):
@@ -49,6 +62,7 @@ def make_app() -> tornado.web.Application:
 
     handlers: List[Any] = [
         (r"^/api/(old|index)", BangumiListHandler),
+        (r"^/api/player/bangumi$", PlayerBangumiHandler),
         (r"^/api/player$", PlayerAssetHandler),
         (r"^/api/player/hls$", PlayerHlsHandler),
         (r"^/api/player/hls/start$", PlayerHlsStartHandler),
@@ -63,10 +77,10 @@ def make_app() -> tornado.web.Application:
         handlers.extend(
             [
                 (r"^/bangumi/?$", BangumiHandler),
-                (r"/bangumi/(.*)", tornado.web.StaticFileHandler, {"path": cfg.save_path}),
-                (r"^/assets/(.*)$", tornado.web.StaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("assets")}),
-                (r"^/package/(.*)$", tornado.web.StaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("package")}),
-                (r"^/(logo2?\.(?:png|jpg))$", tornado.web.StaticFileHandler, {"path": cfg.front_static_path}),
+                (r"/bangumi/(.*)", CorsStaticFileHandler, {"path": cfg.save_path}),
+                (r"^/assets/(.*)$", CorsStaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("assets")}),
+                (r"^/package/(.*)$", CorsStaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("package")}),
+                (r"^/(logo2?\.(?:png|jpg))$", CorsStaticFileHandler, {"path": cfg.front_static_path}),
                 (
                     r"^/(.*)$",
                     SpaIndexHandler,

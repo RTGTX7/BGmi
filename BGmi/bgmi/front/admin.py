@@ -15,6 +15,7 @@ from bgmi.lib.maintenance import (
     clear_missing_episodes,
     execute_rebuild_repository,
     execute_reset_episodes,
+    save_local_media_routing_config,
     refresh_episodes_and_posters,
     get_dashboard_overview,
     mark_missing_episodes,
@@ -54,6 +55,7 @@ API_MAP_POST: Dict[str, Callable] = {
     "dashboard-refresh-metadata": refresh_episodes_and_posters,
     "dashboard-anomalies": check_anomalies,
     "dashboard-database-search": database_search,
+    "dashboard-player-local-media-routing": save_local_media_routing_config,
     "player/mark-missing-episodes": mark_missing_episodes,
     "player/clear-missing-episodes": clear_missing_episodes,
 }

@@ -24,6 +24,14 @@ export interface DashboardAnomalyItem {
 
 export interface DashboardOverview {
   stats: DashboardStats;
+  playerSettings?: {
+    localMediaRouting?: {
+      enabled: boolean;
+      localEntryHosts: string[];
+      localMediaOrigin: string;
+      isValidOrigin: boolean;
+    };
+  };
   anomalies: {
     summary: {
       total: number;

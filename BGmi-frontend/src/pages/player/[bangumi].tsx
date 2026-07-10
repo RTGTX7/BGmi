@@ -5,18 +5,37 @@ import useSWR from 'swr';
 import { useParams } from 'react-router-dom';
 
 import VideoPlayer from '~/components/video-player';
-import { useBangumi } from '~/hooks/use-bangumi';
 import { useWatchHistory } from '~/hooks/use-watch-history';
 import { FetchError, fetcherWithTimeout } from '~/lib/fetcher';
 
-import type { PlayerAssetResponse } from '~/types/bangumi';
+import type { BangumiData, PlayerAssetResponse } from '~/types/bangumi';
+
+interface PlayerBangumiResponse {
+  data: BangumiData;
+  status: string;
+  danmaku_api: string;
+}
 
 export default function Player() {
   const params = useParams();
   const [currentWatchHistory] = useWatchHistory();
-  const { data } = useBangumi();
+  const bangumiName = params.bangumi ? decodeURIComponent(params.bangumi) : '';
 
-  const bangumiData = data?.data.find(bangumi => bangumi.bangumi_name === params.bangumi);
+  const {
+    data: bangumiResponse,
+    error: bangumiError,
+    isLoading: bangumiLoading,
+  } = useSWR<PlayerBangumiResponse, FetchError>(
+    bangumiName ? `/api/player/bangumi?bangumi=${encodeURIComponent(bangumiName)}` : null,
+    (key: string) => fetcherWithTimeout<PlayerBangumiResponse>([key], {}, 30000),
+    {
+      revalidateOnFocus: false,
+      revalidateIfStale: false,
+      revalidateOnReconnect: false,
+    }
+  );
+
+  const bangumiData = bangumiResponse?.data;
   const currentBangumiHistory = bangumiData ? currentWatchHistory[bangumiData.bangumi_name] : undefined;
   const episode = currentBangumiHistory?.['current-watch']?.episode ?? '1';
   const playerAssetKey = bangumiData
@@ -37,7 +56,8 @@ export default function Player() {
     }
   );
 
-  if (!data) return null;
+  if (bangumiLoading) return null;
+  if (bangumiError) return <div>加载播放器出错：{bangumiError.message}</div>;
   if (!bangumiData) return <div>加载播放器出错，数据不存在</div>;
 
   const playerAssetData = playerAsset?.data;
@@ -78,7 +98,7 @@ export default function Player() {
         <VideoPlayer
           episode={episode}
           bangumiData={bangumiData}
-          danmakuApi={data.danmaku_api}
+          danmakuApi={bangumiResponse?.danmaku_api ?? ''}
           playerAsset={playerAssetData}
           playerAssetLoading={playerAssetLoading}
           playerAssetErrorMessage={playerAssetErrorMessage}

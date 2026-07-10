@@ -3,6 +3,102 @@ from pathlib import Path
 from bgmi.front import player_assets
 
 
+def test_resolve_media_origin_for_host_matches_local_entry_hosts(monkeypatch):
+    monkeypatch.setattr(
+        player_assets.cfg,
+        "player",
+        {
+            "local_media_routing": {
+                "enabled": True,
+                "local_entry_hosts": ["192.168.1.10", "nas.local"],
+                "local_media_origin": "http://192.168.1.10:8899",
+            }
+        },
+    )
+
+    assert player_assets.resolve_media_origin_for_host("192.168.1.10:8899") == "http://192.168.1.10:8899"
+    assert player_assets.resolve_media_origin_for_host("nas.local") == "http://192.168.1.10:8899"
+    assert player_assets.resolve_media_origin_for_host("example.com") == ""
+
+
+def test_resolve_media_origin_requires_port(monkeypatch):
+    monkeypatch.setattr(
+        player_assets.cfg,
+        "player",
+        {
+            "local_media_routing": {
+                "enabled": True,
+                "local_entry_hosts": ["192.168.1.10"],
+                "local_media_origin": "http://192.168.1.10",
+            }
+        },
+    )
+
+    assert player_assets.resolve_media_origin_for_host("192.168.1.10:8899") == ""
+
+
+def test_build_browser_assets_uses_cache_for_unchanged_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(player_assets.cfg, "save_path", tmp_path)
+
+    source_path = tmp_path / "Example Bangumi" / "1" / "episode.mkv"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"video")
+
+    probe = {"streams": [], "format": {"duration": "1"}}
+    calls = {"probe": 0, "subtitle": 0}
+
+    def fake_probe(path):
+        calls["probe"] += 1
+        return probe
+
+    def fake_ensure_subtitle_assets(path, data):
+        calls["subtitle"] += 1
+        return []
+
+    monkeypatch.setattr(player_assets, "_probe", fake_probe)
+    monkeypatch.setattr(player_assets, "ensure_subtitle_assets", fake_ensure_subtitle_assets)
+
+    first = player_assets.build_browser_assets(source_path, "Example Bangumi", "1")
+    second = player_assets.build_browser_assets(source_path, "Example Bangumi", "1")
+
+    assert first == second
+    assert first is not second
+    assert calls == {"probe": 1, "subtitle": 1}
+
+
+def test_build_browser_assets_cache_expires_when_sidecar_changes(tmp_path, monkeypatch):
+    monkeypatch.setattr(player_assets.cfg, "save_path", tmp_path)
+
+    source_path = tmp_path / "Example Bangumi" / "1" / "episode.mkv"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"video")
+
+    sidecar_path = source_path.with_suffix(".srt")
+    sidecar_path.write_text("first", encoding="utf-8")
+
+    calls = {"probe": 0, "subtitle": 0}
+
+    def fake_probe(path):
+        calls["probe"] += 1
+        return {"streams": [], "format": {"duration": "1"}}
+
+    def fake_ensure_subtitle_assets(path, data):
+        calls["subtitle"] += 1
+        return [{"path": f"/Example Bangumi/1/episode.srt?v={calls['subtitle']}", "label": "episode"}]
+
+    monkeypatch.setattr(player_assets, "_probe", fake_probe)
+    monkeypatch.setattr(player_assets, "ensure_subtitle_assets", fake_ensure_subtitle_assets)
+
+    first = player_assets.build_browser_assets(source_path, "Example Bangumi", "1")
+    second = player_assets.build_browser_assets(source_path, "Example Bangumi", "1")
+    sidecar_path.write_text("second and longer", encoding="utf-8")
+    third = player_assets.build_browser_assets(source_path, "Example Bangumi", "1")
+
+    assert first == second
+    assert third["subtitle"]["path"].endswith("v=2")
+    assert calls == {"probe": 2, "subtitle": 2}
+
+
 def test_ensure_subtitle_assets_loads_all_sidecar_subtitles(tmp_path, monkeypatch):
     monkeypatch.setattr(player_assets.cfg, "save_path", tmp_path)
 

@@ -146,6 +146,8 @@ export default function Bangumi() {
       spacing={{ base: '4', md: '6' }}
       w="100%"
       maxW="none"
+      minW="0"
+      overflowX="hidden"
       transform={{ base: `translateX(${dragOffset}px)`, md: 'none' }}
       transition={dragOffset === 0 ? 'transform .22s ease' : 'none'}
       onTouchStart={handleTouchStart}
@@ -277,20 +279,21 @@ export default function Bangumi() {
         display="grid"
         gridTemplateColumns={{
           base: 'repeat(2, minmax(0, 1fr))',
-          md: 'repeat(auto-fill, minmax(min(100%, 13.75rem), 1fr))',
+          md: 'repeat(auto-fit, minmax(min(100%, 13.75rem), 1fr))',
         }}
         gap={{ base: 3, md: 5 }}
         alignItems="start"
         justifyContent={{ base: 'stretch', md: 'stretch' }}
         width="100%"
+        minW="0"
       >
         {displayItems.map(bangumi => (
           <Box
             key={bangumi.id}
             minW="0"
             w="full"
-            maxW={{ base: 'none', md: '17rem' }}
-            justifySelf={{ base: 'stretch', md: 'start' }}
+            maxW={{ base: 'none', md: '16.5rem' }}
+            justifySelf="stretch"
           >
             <BangumiCard bangumiData={bangumi} />
           </Box>
