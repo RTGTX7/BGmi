@@ -2,7 +2,7 @@ import sqlite3
 from types import SimpleNamespace
 
 from bgmi.front import custom_routes
-from bgmi.front.index import _video_versions
+from bgmi.front.index import _video_versions, get_player_versions
 from bgmi.lib import mikan_release
 from bgmi.config import Source, cfg
 from bgmi.lib.update import _ensure_custom_columns
@@ -111,6 +111,18 @@ def test_unknown_release_keeps_full_filename_and_each_file(tmp_path, monkeypatch
     versions = _video_versions([first, second])
     assert {version["group"] for version in versions} == {first.name, second.name}
     assert all(version["groupSource"] == "filename" for version in versions)
+
+
+def test_player_versions_ignore_hls_segments_and_subtitles(tmp_path, monkeypatch):
+    monkeypatch.setattr(cfg, "save_path", tmp_path)
+    monkeypatch.setattr(cfg, "enable_path_formatter", False)
+    folder = tmp_path / "Example" / "1"
+    folder.mkdir(parents=True)
+    for name in ("episode.mkv", "episode.srt", "segment-00001.ts", "segment-00002.ts"):
+        (folder / name).touch()
+
+    versions = get_player_versions("Example", episodes=[1])
+    assert [version["fileName"] for version in versions[1]] == ["episode.mkv"]
 
 
 def test_episode_hash_page_provides_historical_subtitle_group(monkeypatch):

@@ -9,7 +9,8 @@ from bgmi.config import cfg
 from bgmi.lib.season import strip_season_suffix
 from bgmi.utils import bangumi_save_path, normalize_path
 
-VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".flv", ".rmvb", ".mov", ".ts"}
+# HLS .ts segments are delivery artifacts, not selectable episode files.
+VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".flv", ".rmvb", ".mov", ".m4v", ".m2ts"}
 
 
 def get_player(
@@ -72,7 +73,7 @@ def _video_versions(paths: Iterable[Path]) -> list[Dict[str, str]]:
             "groupSource": "filename",
         }
         for path in sorted(paths)
-        if path.is_file()
+        if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
     ]
 
 

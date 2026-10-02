@@ -19,7 +19,7 @@ from fastapi.responses import RedirectResponse
 
 from bgmi import __version__
 from bgmi.config import BGMI_PATH, CONFIG_FILE_PATH, cfg
-from bgmi.front.index import get_player, get_player_versions
+from bgmi.front.index import VIDEO_EXTENSIONS, get_player, get_player_versions
 from bgmi.front.player_assets import (
     build_browser_assets,
     ensure_hls_profile,
@@ -111,7 +111,7 @@ def debug_seed() -> dict[str, Any]:
         for folder in sorted(cfg.save_path.iterdir()) if cfg.save_path.exists() else ():
             if not folder.is_dir() or folder.name.startswith(".") or folder.name.startswith("_"):
                 continue
-            video_files = [path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in {".mp4", ".mkv", ".avi", ".webm", ".mov", ".ts"}]
+            video_files = [path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS]
             if not video_files:
                 continue
             episode_numbers = set()
