@@ -122,10 +122,13 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
       setIsAuthorized(true);
       navigate(to);
     } catch (error) {
-      const authError = error as { status: string; message: string };
+      const authError = error as { status?: string; message?: string; detail?: string | Array<{ msg?: string }> };
       console.error(authError);
+      const detail = Array.isArray(authError.detail)
+        ? authError.detail.map(item => item.msg).filter(Boolean).join('; ')
+        : authError.detail;
       toast({
-        title: `验证失败: ${authError.message}`,
+        title: `验证失败: ${authError.message || detail || '请求失败，请检查服务状态'}`,
         status: 'error',
         duration: 2000,
         position: 'top-right',

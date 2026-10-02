@@ -11,6 +11,7 @@ export const useAuth = () => {
     const options: RequestInit = {
       signal: controller.signal,
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token: authToken }),
     };
 
