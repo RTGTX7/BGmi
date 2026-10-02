@@ -2,7 +2,7 @@ import { Box, Flex, Icon } from '@chakra-ui/react';
 import { BsCalendar2CheckFill, BsFillCollectionPlayFill, BsMoonFill, BsPlayBtnFill, BsSunFill } from 'react-icons/bs';
 import type { IconType } from 'react-icons';
 import { FiMenu } from 'react-icons/fi';
-import { motion, useAnimationControls, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -47,12 +47,19 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
     startY: 0,
     startValue: '',
     lastValue: '',
+    lastX: 0,
+    lastMoveAt: 0,
   });
   const suppressClickRef = useRef(false);
-  const dropletControls = useAnimationControls();
   const reduceMotion = useReducedMotion();
   const dropletPosition = useMotionValue(0);
-  const springPosition = useSpring(dropletPosition, { stiffness: 540, damping: 34, mass: 0.65 });
+  const dropletTilt = useMotionValue(0);
+  const dropletStretchX = useMotionValue(1);
+  const dropletStretchY = useMotionValue(1);
+  const springPosition = useSpring(dropletPosition, { stiffness: 400, damping: 22, mass: 0.65 });
+  const springTilt = useSpring(dropletTilt, { stiffness: 260, damping: 12, mass: 0.55 });
+  const springStretchX = useSpring(dropletStretchX, { stiffness: 300, damping: 14, mass: 0.5 });
+  const springStretchY = useSpring(dropletStretchY, { stiffness: 300, damping: 14, mass: 0.5 });
   const activeIndex = Math.max(0, navItems.findIndex(item => item.href && pathname === item.href));
   const [railSize, setRailSize] = useState<RailSize>({ width: 0, height: 0 });
   const [dragState, setDragState] = useState({
@@ -71,18 +78,13 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
   const itemWidth = railSize.width / navItems.length;
   const dropletWidth = itemWidth * 1.08;
   const dropletHeight = railSize.height * 1.02;
-  const dropletX = (dragState.active ? dragState.x : activeIndex * itemWidth) + (itemWidth - dropletWidth) / 2;
+  const dropletX = dragState.x + (itemWidth - dropletWidth) / 2;
   const dropletY = (railSize.height - dropletHeight) / 2;
   const dropletCenterX = dragState.x + itemWidth / 2;
 
   useEffect(() => {
     dropletPosition.set(dropletX);
   }, [dropletPosition, dropletX]);
-
-  useEffect(() => {
-    if (!railSize.width) return;
-    void dropletControls.start({ scaleX: 1, scaleY: 1, opacity: 1, transition: { duration: reduceMotion ? 0 : 0.22 } });
-  }, [dropletControls, railSize.width, reduceMotion]);
 
   const getItemInfluence = (index: number) => {
     const itemCenterX = itemWidth * index + itemWidth / 2;
@@ -150,8 +152,20 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
     const value = getValueFromPoint(event.clientX, event.clientY);
     if (!value) return;
 
+    suppressClickRef.current = false;
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    const railRect = navRailRef.current?.getBoundingClientRect();
+    if (railRect) {
+      const slotWidth = railRect.width / navItems.length;
+      const center = clamp(event.clientX - railRect.left, slotWidth / 2, railRect.width - slotWidth / 2);
+      const startX = center - dropletWidth / 2;
+      dropletPosition.set(startX);
+      springPosition.set(startX);
+    }
+    dropletTilt.set(0);
+    dropletStretchX.set(1);
+    dropletStretchY.set(1);
     dragRef.current = {
       active: true,
       moved: false,
@@ -160,13 +174,9 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
       startY: event.clientY,
       startValue: value,
       lastValue: value,
+      lastX: event.clientX,
+      lastMoveAt: event.timeStamp,
     };
-    void dropletControls.start({
-      scaleX: reduceMotion ? 1 : [0.62, 1.12, 1],
-      scaleY: reduceMotion ? 1 : [0.62, 1.04, 1],
-      opacity: reduceMotion ? 1 : [0.72, 1, 1],
-      transition: { duration: reduceMotion ? 0 : 0.42, times: [0, 0.56, 1], ease: 'easeOut' },
-    });
     activateValue(value);
     updateDragBubble(event.clientX, value, false);
   };
@@ -184,13 +194,14 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
       activateValue(value);
     }
     if (drag.moved && !reduceMotion) {
-      void dropletControls.start({
-        scaleX: 1.15,
-        scaleY: 0.94,
-        opacity: 1,
-        transition: { type: 'spring', stiffness: 480, damping: 28 },
-      });
+      const elapsed = Math.max(8, event.timeStamp - drag.lastMoveAt);
+      const velocity = (event.clientX - drag.lastX) / elapsed;
+      dropletTilt.set(clamp(velocity * 14, -18, 18));
+      dropletStretchX.set(1 + Math.min(Math.abs(velocity) * 0.18, 0.28));
+      dropletStretchY.set(1 - Math.min(Math.abs(velocity) * 0.1, 0.15));
     }
+    drag.lastX = event.clientX;
+    drag.lastMoveAt = event.timeStamp;
     updateDragBubble(event.clientX, value, movedEnough);
   };
 
@@ -203,14 +214,9 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
       sidebarToggle();
     }
     suppressClickRef.current = drag.moved && drag.lastValue !== drag.startValue;
-    if (drag.moved) {
-      void dropletControls.start({
-        scaleX: 1,
-        scaleY: 1,
-        opacity: 1,
-        transition: { type: 'spring', stiffness: 420, damping: 22, mass: 0.6 },
-      });
-    }
+    dropletTilt.set(0);
+    dropletStretchX.set(1);
+    dropletStretchY.set(1);
     dragRef.current = {
       active: false,
       moved: false,
@@ -219,6 +225,8 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
       startY: 0,
       startValue: '',
       lastValue: '',
+      lastX: 0,
+      lastMoveAt: 0,
     };
     setDragState(current => ({ ...current, active: false, moving: false }));
   };
@@ -275,41 +283,61 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
               }}
             />
           ) : null}
-          {railSize.width > 0 && railSize.height > 0 ? (
-            <motion.div
-              initial={{ scaleX: 0.78, scaleY: 0.78, opacity: 0 }}
-              animate={dropletControls}
-              style={{
-                position: 'absolute',
-                top: dropletY,
-                width: dropletWidth,
-                height: dropletHeight,
-                x: springPosition,
-                zIndex: 3,
-                pointerEvents: 'none',
-                transformOrigin: 'center',
-              }}
-            >
-              <MobileLiquidGlass
-                width={dropletWidth}
-                height={dropletHeight}
-                borderRadius={dropletHeight / 2}
-                strength={26}
-                blur={0.35}
-                opacity={0.94}
+          <AnimatePresence>
+            {dragState.active && railSize.width > 0 && railSize.height > 0 ? (
+              <motion.div
+                key="nav-droplet"
+                data-nav-droplet="true"
+                initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.18 }}
+                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.12 }}
+                transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 410, damping: 21, mass: 0.52 }}
                 style={{
-                  background: theme.soft,
-                  borderColor: theme.border,
-                  boxShadow:
-                    colorMode === 'dark'
-                      ? 'inset 0 1px 2px rgba(255,255,255,0.52), inset 0 -12px 22px rgba(255,255,255,0.10), 0 10px 28px rgba(0,0,0,0.14)'
-                      : 'inset 0 1px 2px rgba(255,255,255,0.78), inset 0 -12px 22px rgba(255,255,255,0.20), 0 10px 28px rgba(34,68,92,0.10)',
+                  position: 'absolute',
+                  top: dropletY,
+                  width: dropletWidth,
+                  height: dropletHeight,
+                  x: springPosition,
+                  rotate: springTilt,
+                  scaleX: springStretchX,
+                  scaleY: springStretchY,
+                  zIndex: 2,
+                  pointerEvents: 'none',
+                  transformOrigin: 'center',
                 }}
-              />
-            </motion.div>
-          ) : null}
+              >
+                <MobileLiquidGlass
+                  width={dropletWidth}
+                  height={dropletHeight}
+                  borderRadius={dropletHeight / 2}
+                  strength={34}
+                  blur={0}
+                  style={{
+                    background: colorMode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255,255,255,0.28), rgba(112,190,255,0.18) 42%, rgba(57,125,205,0.13) 78%, rgba(255,255,255,0.08))'
+                      : 'linear-gradient(135deg, rgba(255,255,255,0.80), rgba(191,232,255,0.38) 42%, rgba(114,193,233,0.22) 78%, rgba(255,255,255,0.34))',
+                    borderColor: colorMode === 'dark' ? 'rgba(231,247,255,0.58)' : 'rgba(255,255,255,0.92)',
+                    boxShadow: colorMode === 'dark'
+                      ? 'inset -7px -9px 14px rgba(26,85,160,0.28), inset 5px 6px 10px rgba(255,255,255,0.30), 0 5px 15px rgba(0,0,0,0.22)'
+                      : 'inset -7px -9px 14px rgba(55,145,205,0.22), inset 5px 6px 10px rgba(255,255,255,0.82), 0 5px 15px rgba(34,68,92,0.16)',
+                  }}
+                />
+                <Box
+                  position="absolute"
+                  top="10%"
+                  left="16%"
+                  w="38%"
+                  h="8%"
+                  rounded="full"
+                  bg="rgba(255,255,255,0.82)"
+                  filter="blur(1.5px)"
+                  transform="rotate(-27deg)"
+                />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
-          <Flex align="stretch" justify="space-between" position="relative" zIndex="2" pointerEvents="none">
+          <Flex align="stretch" justify="space-between" position="relative" zIndex="3" pointerEvents="none">
             {navItems.map(item => {
               const value = item.href || item.action || '';
               const active = item.href ? pathname === item.href : dragState.active && dragRef.current.lastValue === item.action;
