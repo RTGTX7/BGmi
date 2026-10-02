@@ -347,6 +347,18 @@ def convert_cover_url_to_path(cover_url: str) -> Tuple[str, str]:
     return dir_path, file_path
 
 
+def resolve_cover_season(cover_url: str) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+    """Resolve year, quarter month and season key from a standard cover path."""
+    match = re.search(r"(?:^|/)Bangumi/(\d{4})(\d{2})(?:/|$)", cover_url or "")
+    if not match:
+        return None, None, None
+    year, month = int(match[1]), int(match[2])
+    if month not in range(1, 13):
+        return None, None, None
+    quarter = ((month - 1) // 3) * 3 + 1
+    return year, quarter, f"{year}{quarter:02d}"
+
+
 def download_file(url: str) -> Optional[Response]:
     logger.debug("downloading {}", url)
     if url.startswith(("https://", "http://")):

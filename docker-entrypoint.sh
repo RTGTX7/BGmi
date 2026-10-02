@@ -61,6 +61,7 @@ config_path.write_text(dumps(doc), encoding="utf-8")
 PY
 
 python - <<'PY'
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,7 +87,10 @@ if db_path.exists():
             print(f"[bgmi] Saved v4 database backup: {backup_path}")
 
 init_db()
-update_database()
+if os.environ.get("BGMI_SIMULATOR") != "1":
+    update_database()
+else:
+    print("[bgmi] Simulator mode enabled; skipping remote data update.")
 PY
 
 rm -rf "${BGMI_PATH}/front_static"

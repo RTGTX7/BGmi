@@ -35,6 +35,15 @@ ISSUE_MISSING_EPISODES = "missing_episodes"
 ISSUE_MISSING_PLAYABLE_SOURCE = "missing_playable_source"
 
 
+def simulator_enabled() -> bool:
+    return os.getenv("BGMI_SIMULATOR", "0").lower() in {"1", "true", "yes"}
+
+
+def require_simulator() -> None:
+    if not simulator_enabled():
+        raise fastapi.HTTPException(404, "Simulator endpoints are disabled")
+
+
 def envelope(data: Any = None, *, status: str = "success", message: str = "") -> dict[str, Any]:
     return {
         "version": __version__,
@@ -51,6 +60,54 @@ def envelope(data: Any = None, *, status: str = "success", message: str = "") ->
 def require_token(token: Optional[str] = fastapi.Header(None, alias="bgmi-token")) -> None:
     if token != cfg.http.admin_token:
         raise fastapi.HTTPException(401, "Unauthorized Request")
+
+
+@router.get("/debug/status")
+def debug_status() -> dict[str, Any]:
+    require_simulator()
+    with Session.begin() as session:
+        bangumi_count = session.scalar(sa.select(sa.func.count()).select_from(Bangumi)) or 0
+        followed_count = session.scalar(sa.select(sa.func.count()).select_from(Followed)) or 0
+    return envelope({
+        "simulator": True,
+        "version": __version__,
+        "database": str(cfg.db_path),
+        "savePath": str(cfg.save_path),
+        "bangumiCount": int(bangumi_count),
+        "followedCount": int(followed_count),
+        "debug": os.getenv("DEBUG", "").lower() in {"1", "true", "yes"},
+        "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+    })
+
+
+@router.post("/debug/seed", dependencies=[fastapi.Depends(require_token)])
+def debug_seed() -> dict[str, Any]:
+    require_simulator()
+    now = int(time.time())
+    fixtures = [
+        ("simulator:new", "Simulator New Anime", "Mon 20:00", Bangumi.STATUS_UPDATING,
+         "https://dummyimage.com/480x720/2563eb/ffffff.png&text=NEW", {1, 2, 3}, Followed.STATUS_UPDATED),
+        ("simulator:archive", "Simulator Archived Anime", "Unknown", Bangumi.STATUS_END,
+         "https://dummyimage.com/480x720/475569/ffffff.png&text=ARCHIVE", {1, 2, 3, 4, 5}, Followed.STATUS_END),
+    ]
+    with Session.begin() as session:
+        for item_id, name, update_day, status, cover, episodes, follow_status in fixtures:
+            if session.get(Bangumi, item_id) is None:
+                session.add(Bangumi(id=item_id, name=name, update_day=update_day, cover=cover,
+                                    status=status, source="remote", in_library=False))
+            if session.get(Followed, name) is None:
+                session.add(Followed(bangumi_name=name, episodes=episodes, status=follow_status,
+                                     updated_time=now, season=1))
+    return debug_status()
+
+
+@router.post("/debug/reset", dependencies=[fastapi.Depends(require_token)])
+def debug_reset() -> dict[str, Any]:
+    require_simulator()
+    with Session.begin() as session:
+        session.execute(sa.delete(Followed).where(Followed.bangumi_name.like("Simulator %")))
+        session.execute(sa.delete(Bangumi).where(Bangumi.id.like("simulator:%")))
+    return debug_status()
 
 
 def cover_url(cover: str) -> str:

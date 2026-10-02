@@ -1,0 +1,28 @@
+services:
+  bgmi-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bgmi:simulator
+    container_name: bgmi-simulator
+    init: true
+    ports:
+      - "${BGMI_SIMULATOR_PORT:-8898}:8899"
+    environment:
+      TZ: ${TZ:-America/Toronto}
+      BGMI_SIMULATOR: "1"
+      DEBUG: "1"
+      BGMI_ADMIN_TOKEN: ${BGMI_SIMULATOR_TOKEN:-simulator-token}
+      BGMI_SAVE_PATH: /data/bangumi
+      BGMI_TMP_PATH: /data/tmp
+      BGMI_HTTP_PORT: 8899
+      BGMI_HTTP_ADDRESS: 0.0.0.0
+    volumes:
+      - ./docker-simulator-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8899/api/debug/status >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped

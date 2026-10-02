@@ -79,6 +79,7 @@ dependencies = [
     { name = "loguru" },
     { name = "mcp" },
     { name = "packaging" },
+    { name = "peewee" },
     { name = "pycomplete" },
     { name = "pydantic" },
     { name = "qbittorrent-api" },
@@ -116,6 +117,7 @@ requires-dist = [
     { name = "loguru", specifier = "==0.7.3" },
     { name = "mcp", specifier = ">=1.0.0,<2" },
     { name = "packaging", specifier = "==25.0" },
+    { name = "peewee", specifier = ">=3.17,<4" },
     { name = "pycomplete", specifier = "==0.4.0" },
     { name = "pydantic", specifier = "==2.12.4" },
     { name = "qbittorrent-api", specifier = "==2025.7.0" },
@@ -798,6 +800,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/01/d2/510cc0d218e753ba62a1bc1434651db3cd797a9716a0a66cc714cb4f0935/pbr-6.1.1.tar.gz", hash = "sha256:93ea72ce6989eb2eed99d0f75721474f69ad88128afdef5ac377eb797c4bf76b", size = 125702, upload-time = "2025-02-04T14:28:06.514Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/47/ac/684d71315abc7b1214d59304e23a982472967f6bf4bde5a98f1503f648dc/pbr-6.1.1-py2.py3-none-any.whl", hash = "sha256:38d4daea5d9fa63b3f626131b9d34947fd0c8be9b05a29276870580050a25a76", size = 108997, upload-time = "2025-02-04T14:28:03.168Z" },
+]
+
+[[package]]
+name = "peewee"
+version = "3.19.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/b0/79462b42e89764998756e0557f2b58a15610a5b4512fbbcccae58fba7237/peewee-3.19.0.tar.gz", hash = "sha256:f88292a6f0d7b906cb26bca9c8599b8f4d8920ebd36124400d0cbaaaf915511f", size = 974035, upload-time = "2026-01-07T17:24:59.597Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/41/19c65578ef9a54b3083253c68a607f099642747168fe00f3a2bceb7c3a34/peewee-3.19.0-py3-none-any.whl", hash = "sha256:de220b94766e6008c466e00ce4ba5299b9a832117d9eb36d45d0062f3cfd7417", size = 411885, upload-time = "2026-01-07T17:24:58.33Z" },
 ]
 
 [[package]]
