@@ -12,6 +12,7 @@
   ModalOverlay,
   Stack,
   Text,
+  Portal,
   useDisclosure,
 } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
@@ -127,25 +128,27 @@ export default function BangumiFiles() {
         />
       ) : null}
 
-      <IconButton
-        aria-label="Search archive"
-        icon={<FiSearch />}
-        onClick={searchModal.onOpen}
-        position="fixed"
-        right={{ base: '1rem', md: '1.5rem' }}
-        bottom={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)', lg: '1.5rem' }}
-        zIndex={20}
-        rounded="full"
-        size="lg"
-        bg={`${colors.surface}D9`}
-        borderWidth="1px"
-        borderColor={theme.border}
-        color={colors.accent}
-        boxShadow={isDark ? '0 16px 36px rgba(0,0,0,0.24)' : `0 16px 36px ${colors.accent}29`}
-        backdropFilter="blur(18px) saturate(170%)"
-        _hover={{ transform: 'scale(1.04)', bg: theme.soft, borderColor: colors.accent }}
-        _active={{ transform: 'scale(0.98)' }}
-      />
+      <Portal>
+        <IconButton
+          aria-label="Search archive"
+          icon={<FiSearch />}
+          onClick={searchModal.onOpen}
+          position="fixed"
+          right={{ base: '1rem', md: '1.5rem' }}
+          bottom={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)', lg: '1.5rem' }}
+          zIndex={1400}
+          rounded="full"
+          size="lg"
+          bg={`${colors.surface}D9`}
+          borderWidth="1px"
+          borderColor={theme.border}
+          color={colors.accent}
+          boxShadow={isDark ? '0 16px 36px rgba(0,0,0,0.24)' : `0 16px 36px ${colors.accent}29`}
+          backdropFilter="blur(18px) saturate(170%)"
+          _hover={{ transform: 'scale(1.04)', bg: theme.soft, borderColor: colors.accent }}
+          _active={{ transform: 'scale(0.98)' }}
+        />
+      </Portal>
 
       <Modal isOpen={searchModal.isOpen} onClose={searchModal.onClose} initialFocusRef={searchInputRef} size="3xl" isCentered>
         <ModalOverlay bg={isDark ? `${colors.background}B8` : `${colors.text}57`} backdropFilter="blur(10px)" />
