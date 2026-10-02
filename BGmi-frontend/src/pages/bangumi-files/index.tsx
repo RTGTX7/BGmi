@@ -135,7 +135,8 @@ export default function BangumiFiles() {
           onClick={searchModal.onOpen}
           position="fixed"
           right={{ base: '1rem', md: '1.5rem' }}
-          bottom={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)', lg: '1.5rem' }}
+          top={{ base: '1rem', md: 'auto' }}
+          bottom={{ base: 'auto', md: '1.5rem' }}
           zIndex={1400}
           rounded="full"
           size="lg"
