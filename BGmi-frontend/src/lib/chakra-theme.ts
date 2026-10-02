@@ -5,7 +5,7 @@ import { getPalette } from './design-system';
 
 const config: ThemeConfig = {
   initialColorMode: 'system',
-  useSystemColorMode: false,
+  useSystemColorMode: true,
 };
 
 const pickMode = <T,>(props: StyleFunctionProps, light: T, dark: T) => (props.colorMode === 'dark' ? dark : light);

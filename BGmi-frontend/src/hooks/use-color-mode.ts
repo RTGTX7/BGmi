@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useColorMode as useChakraColorMode } from '@chakra-ui/react';
 
 import { isBrowser } from '~/lib/utils';
@@ -14,11 +14,17 @@ export const useColorMode = () => {
   const { colorMode: color, toggleColorMode } = useChakraColorMode();
 
   useEffect(() => {
-    if (isBrowser) {
-      const mode = (localStorage.getItem('chakra-ui-color-mode') ?? 'light') as typeof colorMode;
-      setColorMode(mode);
-    }
+    if (!isBrowser) return;
+    const stored = localStorage.getItem('chakra-ui-color-mode');
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const systemMode = () => (media.matches ? 'dark' : 'light') as Exclude<Theme, ''>;
+    setColorMode((stored || systemMode()) as Theme);
+    if (stored) return;
+    const handleChange = () => setColorMode(systemMode());
+    media.addEventListener?.('change', handleChange);
+    return () => media.removeEventListener?.('change', handleChange);
   }, [color, setColorMode]);
 
-  return { colorMode, toggleColorMode };
+  const toggle = useCallback(() => toggleColorMode(), [toggleColorMode]);
+  return { colorMode: (colorMode || color) as Theme, toggleColorMode: toggle };
 };

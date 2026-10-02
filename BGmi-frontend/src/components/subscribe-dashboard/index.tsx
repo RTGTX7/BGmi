@@ -465,9 +465,14 @@ export default function SubscribeDashboard() {
       return;
     }
 
-    if (origin && !/^https?:\/\/[^/:\s]+:\d+$/i.test(origin)) {
-      showError('本地媒体 origin 必须包含协议、主机和端口，例如 http://192.168.1.10:8899', new Error('invalid local media origin'));
-      return;
+    if (origin) {
+      try {
+        const parsed = new URL(origin);
+        if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.pathname !== '/') throw new Error('invalid origin');
+      } catch {
+        showError('本地媒体 origin 必须是有效的 http(s) 地址，例如 http://192.168.1.10:8899', new Error('invalid local media origin'));
+        return;
+      }
     }
 
     try {
@@ -539,8 +544,6 @@ export default function SubscribeDashboard() {
     { title: '提交下载任务', subtitle: 'bgmi update', tone: 'blue' as Tone, onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
     { title: '更新剧集和海报', subtitle: 'Refresh episodes & posters', tone: 'green' as Tone, onClick: handleOpenRefreshMetadataConfirm, loading: refreshMetadataMutating },
     { title: '检查异常数据', subtitle: 'Scan issues', tone: 'blue' as Tone, onClick: handleCheckAnomalies, loading: anomalyMutating },
-    { title: '重建仓库番剧', subtitle: 'Match folders', tone: 'amber' as Tone, onClick: handlePreviewRebuild, loading: previewRebuildMutating || executeRebuildMutating },
-    { title: '剧集全部清零', subtitle: 'Reset progress', tone: 'red' as Tone, onClick: handlePreviewReset, loading: previewResetMutating || executeResetMutating },
   ];
 
   if (isLoading) {

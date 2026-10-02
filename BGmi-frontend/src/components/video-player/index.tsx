@@ -17,7 +17,7 @@
 } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { FiAlertTriangle, FiFastForward, FiRewind } from 'react-icons/fi';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
@@ -627,8 +627,8 @@ export default function VideoPlayer({
     restoredTimeRef.current = false;
     setLoading(true);
 
-    const isHls = currentSourceType === 'customHls' || currentSourceUrl.endsWith('.m3u8');
-    const hls = new Hls();
+    const isHls = currentSourceType === 'customHls' || /\.m3u8(?:$|[?#])/i.test(currentSourceUrl);
+    const hls = Hls.isSupported() ? new Hls({ enableWorker: true }) : null;
     const toastId = `HlsError-${episode}`;
 
     const plugins: Artplayer['option']['plugins'] = [];
@@ -671,7 +671,7 @@ export default function VideoPlayer({
       customType: isHls
         ? {
             m3u8: (video: HTMLVideoElement, url: string) => {
-              if (Hls.isSupported()) {
+              if (hls) {
                 hls.loadSource(url);
                 hls.attachMedia(video);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -891,7 +891,7 @@ export default function VideoPlayer({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       classObserver.disconnect();
       art.destroy();
-      hls.destroy();
+      hls?.destroy();
     };
   }, [
     bangumiData.bangumi_name,
@@ -1341,7 +1341,41 @@ export default function VideoPlayer({
           ) : null}
         </Box>
 
-        <Flex justify="flex-end" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
+        <Flex justify="space-between" align="center" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
+          <HStack spacing="1.5">
+            <IconButton
+              aria-label="后退 5 秒"
+              title="后退 5 秒"
+              icon={<FiRewind />}
+              size="sm"
+              rounded="full"
+              variant="outline"
+              isDisabled={!currentSourceUrl}
+              onClick={() => {
+                const art = playerRef.current;
+                if (art) art.seek = Math.max(0, art.video.currentTime - 5);
+              }}
+              bg={toolButtonBg}
+              borderColor={toolButtonBorder}
+              color={colorMode === 'light' ? '#516274' : 'whiteAlpha.900'}
+            />
+            <IconButton
+              aria-label="前进 5 秒"
+              title="前进 5 秒"
+              icon={<FiFastForward />}
+              size="sm"
+              rounded="full"
+              variant="outline"
+              isDisabled={!currentSourceUrl}
+              onClick={() => {
+                const art = playerRef.current;
+                if (art) art.seek = Math.min(art.duration || Infinity, art.video.currentTime + 5);
+              }}
+              bg={toolButtonBg}
+              borderColor={toolButtonBorder}
+              color={colorMode === 'light' ? '#516274' : 'whiteAlpha.900'}
+            />
+          </HStack>
           <IconButton
             aria-label={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
             title={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
