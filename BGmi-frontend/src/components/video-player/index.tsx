@@ -1549,15 +1549,19 @@ export default function VideoPlayer({
                 <Menu placement="bottom-start" isLazy>
                   <MenuButton
                     as={Button}
-                    size="xs"
+                    size="sm"
+                    h="8"
+                    px="3"
                     rounded="full"
                     rightIcon={<FiChevronDown />}
-                    bg={toolButtonBg}
+                    bg={colorMode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.72)'}
+                    color={colorMode === 'dark' ? 'whiteAlpha.900' : '#334155'}
                     borderWidth="1px"
-                    borderColor={toolButtonBorder}
-                    fontWeight="500"
-                    opacity={0.7}
-                    _hover={{ opacity: 1 }}
+                    borderColor={colorMode === 'dark' ? 'whiteAlpha.300' : 'blackAlpha.200'}
+                    fontWeight="600"
+                    fontSize="xs"
+                    _hover={{ bg: colorMode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.92)' }}
+                    _active={{ bg: colorMode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.94)' }}
                     aria-label={`选择文件版本，共 ${fileVersions.length} 个`}
                   >
                     文件版本{fileVersions.some(version => version.group === activeGroup) ? ' · 当前' : ''}
@@ -1568,6 +1572,7 @@ export default function VideoPlayer({
                     overflowY="auto"
                     bg={colorMode === 'dark' ? '#202033' : 'white'}
                     borderColor={toolButtonBorder}
+                    color={colorMode === 'dark' ? 'whiteAlpha.900' : '#334155'}
                     zIndex={30}
                   >
                     {fileVersions.map(version => (
@@ -1579,6 +1584,7 @@ export default function VideoPlayer({
                         fontSize="xs"
                         whiteSpace="normal"
                         wordBreak="break-all"
+                        _hover={{ bg: colorMode === 'dark' ? 'whiteAlpha.150' : 'blackAlpha.100' }}
                       >
                         {version.fileName || version.group}
                       </MenuItem>

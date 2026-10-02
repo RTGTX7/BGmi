@@ -190,6 +190,7 @@ export default function CalendarTab({
     startY: 0,
     lastIndex: 0,
   });
+  const mobileSuppressClickRef = useRef(false);
   const mobileDropletRef = useRef<HTMLDivElement | null>(null);
   const mobileVisualRef = useRef({ index: 0, moving: false });
   const mobileDragFrameRef = useRef<number | null>(null);
@@ -437,8 +438,9 @@ export default function CalendarTab({
   };
 
   const handleMobilePointerDown = (event: React.PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || railItems.length === 0) return;
+    if ((event.pointerType !== 'touch' && event.button !== 0) || railItems.length === 0) return;
 
+    mobileSuppressClickRef.current = false;
     event.preventDefault();
     const rect = mobileRailRef.current?.getBoundingClientRect();
     mobileRailBoundsRef.current = rect ? { left: rect.left, width: rect.width } : null;
@@ -494,6 +496,7 @@ export default function CalendarTab({
       const finalIndex = getMobileIndexFromPoint(event.clientX);
       if (finalIndex !== drag.lastIndex) selectRailItem(railItems[finalIndex]);
     }
+    mobileSuppressClickRef.current = drag.moved;
     mobileVisualRef.current.moving = false;
     mobileDragRef.current = {
       active: false,
@@ -622,6 +625,12 @@ export default function CalendarTab({
             onPointerMove={handleMobilePointerMove}
             onPointerUp={stopMobileDrag}
             onPointerCancel={event => stopMobileDrag(event, true)}
+            onClickCapture={event => {
+              if (!mobileSuppressClickRef.current) return;
+              event.preventDefault();
+              event.stopPropagation();
+              mobileSuppressClickRef.current = false;
+            }}
             sx={{
               touchAction: 'none',
               userSelect: 'none',
@@ -731,9 +740,7 @@ export default function CalendarTab({
                   aria-label={item.kind === 'action' ? item.ariaLabel : item.label}
                   bg="transparent"
                   borderWidth="0"
-                  onClick={event => {
-                    if (event.detail === 0) selectRailItem(item);
-                  }}
+                  onClick={() => selectRailItem(item)}
                 />
               ))}
             </Flex>
