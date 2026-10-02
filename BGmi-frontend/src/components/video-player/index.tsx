@@ -10,6 +10,10 @@
   Flex,
   HStack,
   IconButton,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Progress,
   Spinner,
   Text,
@@ -17,7 +21,7 @@
 } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
+import { FiAlertTriangle, FiChevronDown, FiExternalLink } from 'react-icons/fi';
 import useSWR from 'swr';
 
 import Artplayer from 'artplayer';
@@ -320,6 +324,9 @@ export default function VideoPlayer({
 
   const rawPath = bangumiData.player_versions?.[episode]?.find(version => version.group === playerGroup)?.path
     ?? bangumiData.player[episode]?.path ?? '';
+  const episodeVersions = bangumiData.player_versions?.[episode] ?? [];
+  const identifiedVersions = episodeVersions.filter(version => version.groupSource === 'mikan');
+  const fileVersions = episodeVersions.filter(version => version.groupSource !== 'mikan');
   const sourcePath = playerAsset?.source_path ?? rawPath;
   const playbackPath = playerAsset?.browser_path ?? sourcePath;
   const mediaOrigin = playerAsset?.mediaOrigin;
@@ -1499,36 +1506,26 @@ export default function VideoPlayer({
         </Box>
 
         <Flex justify="flex-end" align="center" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
-          {(bangumiData.player_versions?.[episode]?.length ?? 0) > 0 ? (
-            <HStack spacing="1.5" flex="1" flexWrap="wrap" aria-label="字幕组视频">
-              {bangumiData.player_versions?.[episode]?.map(version => {
+          {episodeVersions.length > 0 ? (
+            <HStack spacing="1.5" flex="1" flexWrap="wrap" minW="0" aria-label="字幕组视频">
+              {identifiedVersions.map(version => {
                 const mikanUrl = version.mikanUrl;
-                const isFilenameFallback = version.groupSource !== 'mikan';
+                const isSelected = version.group === activeGroup;
                 return (
-                  <HStack
-                    key={version.path}
-                    spacing="0.5"
-                    maxW={isFilenameFallback ? 'full' : undefined}
-                    flex={isFilenameFallback ? '1 1 100%' : undefined}
-                  >
+                  <HStack key={version.path} spacing="0.5">
                     <Button
                       size="xs"
                       rounded="full"
-                      aria-pressed={version.group === activeGroup}
+                      aria-pressed={isSelected}
                       onClick={() => onGroupSelect?.(version.group)}
-                      bg={version.group === activeGroup ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBg}
-                      color={version.group === activeGroup ? 'white' : undefined}
+                      bg={isSelected ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBg}
+                      color={isSelected ? 'white' : undefined}
                       borderWidth="1px"
-                      borderColor={toolButtonBorder}
+                      borderColor={isSelected ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBorder}
+                      fontWeight={isSelected ? '800' : '500'}
                       _hover={{ opacity: 0.85 }}
-                      maxW={isFilenameFallback ? 'full' : undefined}
-                      flex={isFilenameFallback ? '1' : undefined}
-                      justifyContent={isFilenameFallback ? 'flex-start' : undefined}
-                      whiteSpace={isFilenameFallback ? 'normal' : undefined}
-                      textAlign={isFilenameFallback ? 'left' : undefined}
-                      title={isFilenameFallback ? version.fileName || version.group : undefined}
                     >
-                      {isFilenameFallback ? version.fileName || version.group : version.group}
+                      {version.group}
                     </Button>
                     {mikanUrl ? (
                       <IconButton
@@ -1548,6 +1545,47 @@ export default function VideoPlayer({
                   </HStack>
                 );
               })}
+              {fileVersions.length > 0 ? (
+                <Menu placement="bottom-start" isLazy>
+                  <MenuButton
+                    as={Button}
+                    size="xs"
+                    rounded="full"
+                    rightIcon={<FiChevronDown />}
+                    bg={toolButtonBg}
+                    borderWidth="1px"
+                    borderColor={toolButtonBorder}
+                    fontWeight="500"
+                    opacity={0.7}
+                    _hover={{ opacity: 1 }}
+                    aria-label={`选择文件版本，共 ${fileVersions.length} 个`}
+                  >
+                    文件版本{fileVersions.some(version => version.group === activeGroup) ? ' · 当前' : ''}
+                  </MenuButton>
+                  <MenuList
+                    maxW="min(90vw, 32rem)"
+                    maxH="18rem"
+                    overflowY="auto"
+                    bg={colorMode === 'dark' ? '#202033' : 'white'}
+                    borderColor={toolButtonBorder}
+                    zIndex={30}
+                  >
+                    {fileVersions.map(version => (
+                      <MenuItem
+                        key={version.path}
+                        onClick={() => onGroupSelect?.(version.group)}
+                        bg={version.group === activeGroup ? colorMode === 'dark' ? 'whiteAlpha.100' : 'blackAlpha.100' : undefined}
+                        fontWeight={version.group === activeGroup ? '600' : '400'}
+                        fontSize="xs"
+                        whiteSpace="normal"
+                        wordBreak="break-all"
+                      >
+                        {version.fileName || version.group}
+                      </MenuItem>
+                    ))}
+                  </MenuList>
+                </Menu>
+              ) : null}
             </HStack>
           ) : null}
           <HStack spacing="1.5">
