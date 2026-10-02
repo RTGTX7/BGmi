@@ -1,8 +1,7 @@
-import { Badge, Box, Flex, Heading, HStack, IconButton, Stack, Text } from '@chakra-ui/react';
+import { Badge, Box, Flex, Heading, HStack, Stack, Text, useMediaQuery } from '@chakra-ui/react';
 import type { MouseEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { FiChevronDown } from 'react-icons/fi';
 
 import { getSeasonThemeByKey, type BangumiWithSeason } from '~/lib/bangumi';
 import { useColorMode } from '~/hooks/use-color-mode';
@@ -15,7 +14,6 @@ interface BangumiGroupSectionProps {
   href: string;
   bangumis: BangumiWithSeason[];
   compactCount?: number;
-  mobilePreviewCount?: number;
   seasonKey?: string;
 }
 
@@ -25,11 +23,10 @@ export default function BangumiGroupSection({
   href,
   bangumis,
   compactCount = 6,
-  mobilePreviewCount = 8,
   seasonKey,
 }: BangumiGroupSectionProps) {
   const { colorMode } = useColorMode();
-  const [expanded, setExpanded] = useState(false);
+  const [hasTouchPointer] = useMediaQuery('(pointer: coarse)');
   const navigate = useNavigate();
   const isDark = colorMode === 'dark';
   const sectionRef = useRef<HTMLDivElement | null>(null);
@@ -83,12 +80,6 @@ export default function BangumiGroupSection({
     () => bangumis.slice(0, effectiveDesktopPreviewCount),
     [bangumis, effectiveDesktopPreviewCount]
   );
-  const desktopItems = useMemo(() => (expanded ? bangumis : desktopPreviewItems), [bangumis, desktopPreviewItems, expanded]);
-  const mobileItems = useMemo(
-    () => bangumis.slice(0, Math.max(compactCount, mobilePreviewCount)),
-    [bangumis, compactCount, mobilePreviewCount]
-  );
-  const canExpand = bangumis.length > effectiveDesktopPreviewCount;
 
   const handleNavigateToGroup = (event: MouseEvent<HTMLElement>) => {
     const target = event.target as HTMLElement | null;
@@ -168,54 +159,17 @@ export default function BangumiGroupSection({
           ) : null}
         </Stack>
 
-        <HStack
-          spacing="2"
-          alignSelf={{ base: 'stretch', md: 'center' }}
-          justify={{ base: 'space-between', md: 'flex-end' }}
-          w={{ base: 'full', md: 'auto' }}
-          flexShrink={0}
-        >
-          {canExpand ? (
-            <IconButton
-              display={{ base: 'none', md: 'inline-flex' }}
-              aria-label={expanded ? '收起季度预览' : '展开季度预览'}
-              icon={<FiChevronDown />}
-              size="sm"
-              rounded="full"
-              color={seasonTheme?.badgeTextColor ?? (isDark ? 'whiteAlpha.860' : '#445566')}
-              bg={seasonTheme?.backgroundColor ?? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.42)')}
-              borderWidth="1px"
-              borderColor={seasonTheme?.borderColor ?? (isDark ? 'whiteAlpha.120' : 'rgba(255,255,255,0.72)')}
-              boxShadow={seasonTheme?.glowColor ??
-                (isDark
-                  ? '0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.04)'
-                  : '0 10px 22px rgba(39,87,116,0.08), inset 0 1px 0 rgba(255,255,255,0.5)')}
-              _hover={{
-                bg: seasonTheme?.backgroundColor ?? (isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.56)'),
-              }}
-              sx={{
-                '& svg': {
-                  transition: 'transform .24s ease',
-                  transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                },
-              }}
-              onClick={() => setExpanded(value => !value)}
-            />
-          ) : null}
-        </HStack>
       </Flex>
 
       <Box
-        display={{ base: 'block', md: 'none' }}
+        display={{ base: 'block', lg: hasTouchPointer ? 'block' : 'none' }}
         mt="4"
         overflowX="auto"
         pb="1.5"
         sx={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity' }}
-        onClick={handleNavigateToGroup}
-        cursor="pointer"
       >
         <HStack spacing="3" align="stretch">
-          {mobileItems.map(bangumi => (
+          {bangumis.map(bangumi => (
             <Box key={bangumi.id} minW="9.35rem" maxW="9.35rem" flex="0 0 9.35rem" scrollSnapAlign="start">
               <BangumiCard bangumiData={bangumi} />
             </Box>
@@ -224,11 +178,11 @@ export default function BangumiGroupSection({
       </Box>
 
       <Box
-        display={{ base: 'none', md: 'flex' }}
+        display={{ base: 'none', lg: hasTouchPointer ? 'none' : 'flex' }}
         mt="5"
         flexWrap="nowrap"
         flexDirection="row"
-        overflowX={expanded ? 'auto' : 'hidden'}
+        overflowX="hidden"
         gap={{ md: 5 }}
         alignItems="start"
         justifyContent="start"
@@ -237,7 +191,7 @@ export default function BangumiGroupSection({
         onClick={handleNavigateToGroup}
         cursor="pointer"
       >
-        {desktopItems.map(bangumi => (
+        {desktopPreviewItems.map(bangumi => (
           <Box key={bangumi.id} w="17rem" minW="17rem" maxW="17rem" flexShrink={0}>
             <BangumiCard bangumiData={bangumi} />
           </Box>

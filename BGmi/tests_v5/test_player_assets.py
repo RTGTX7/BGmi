@@ -119,7 +119,10 @@ def test_ensure_subtitle_assets_loads_all_sidecar_subtitles(tmp_path, monkeypatc
         """[Script Info]\nTitle: test\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, Bold, Italic\nStyle: Default,Noto Sans CJK TC,54,0,0\n\n[Events]\nFormat: Layer, Start, End, Style, Text\nDialogue: 0,0:00:00.00,0:00:01.00,Default,sidecar tc\n""",
         encoding="utf-8",
     )
-    (extras_dir / "episode.jp.srt").write_text("sidecar jp", encoding="utf-8")
+    (extras_dir / "episode.jp.srt").write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nsidecar jp\n",
+        encoding="utf-8",
+    )
 
     subtitles = player_assets.ensure_subtitle_assets(source_path, {"streams": []})
 
@@ -128,10 +131,10 @@ def test_ensure_subtitle_assets_loads_all_sidecar_subtitles(tmp_path, monkeypatc
     assert subtitles[0]["original_path"].endswith("episode.sc.ass")
     assert subtitles[1]["original_path"].endswith("episode.tc.ass")
     assert not subtitles[2]["original_path"]
-    assert subtitles[2]["path"].endswith(".srt")
+    assert subtitles[2]["path"].endswith(".vtt")
     assert subtitles[0]["format"] == "ass"
     assert subtitles[1]["format"] == "ass"
-    assert subtitles[2]["format"] == "srt"
+    assert subtitles[2]["format"] == "vtt"
     assert subtitles[0]["render_style"]["font_family"] == "Microsoft JhengHei"
     assert subtitles[0]["render_style"]["font_weight"] == 700
     assert subtitles[1]["render_style"]["font_family"] == "Noto Sans CJK TC"
@@ -150,16 +153,16 @@ def test_ensure_subtitle_assets_skips_invalid_sidecar(tmp_path, monkeypatch):
     bad_sidecar = episode_dir / "episode.sc.srt"
     good_sidecar = episode_dir / "episode.tc.srt"
     bad_sidecar.write_text("broken", encoding="utf-8")
-    good_sidecar.write_text("good", encoding="utf-8")
+    good_sidecar.write_text("1\n00:00:00,000 --> 00:00:01,000\ngood\n", encoding="utf-8")
 
-    original_read_subtitle_text = player_assets._read_subtitle_text
+    original_convert_to_vtt = player_assets._convert_to_vtt
 
-    def fake_read_subtitle_text(path: Path) -> str:
+    def fake_convert_to_vtt(path: Path, target: Path, source: Path) -> None:
         if path == bad_sidecar:
             raise RuntimeError("invalid subtitle")
-        return original_read_subtitle_text(path) or ""
+        original_convert_to_vtt(path, target, source)
 
-    monkeypatch.setattr(player_assets, "_read_subtitle_text", fake_read_subtitle_text)
+    monkeypatch.setattr(player_assets, "_convert_to_vtt", fake_convert_to_vtt)
 
     subtitles = player_assets.ensure_subtitle_assets(source_path, {"streams": []})
 

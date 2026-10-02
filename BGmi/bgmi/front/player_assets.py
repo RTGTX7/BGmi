@@ -621,8 +621,8 @@ def _convert_to_vtt(input_path: Path, target_path: Path, source_path: Path) -> N
             return
 
         safe_input = _safe_workspace_copy(input_path, f"subtitle-{input_path.name}")
-        workspace = _workspace_dir(source_path)
-        tmp_path = workspace.joinpath(f"{target_path.stem}.tmp.vtt")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = target_path.with_name(f"{target_path.stem}.tmp.vtt")
         if tmp_path.exists():
             tmp_path.unlink()
 
@@ -630,11 +630,13 @@ def _convert_to_vtt(input_path: Path, target_path: Path, source_path: Path) -> N
             if input_path.suffix.lower() == ".vtt":
                 shutil.copy2(safe_input, tmp_path)
             else:
+                input_args = ["-f", "srt"] if input_path.suffix.lower() in {".srt", ".subrip"} else []
                 _run(
                     [
                         "ffmpeg",
                         "-nostdin",
                         "-y",
+                        *input_args,
                         "-i",
                         str(safe_input),
                         "-f",
@@ -1405,8 +1407,10 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
             subtitle_format = source_extension
             original_path = _relative_url(sidecar)
         elif source_extension in {"srt", "subrip"}:
-            target_path = sidecar
-            subtitle_format = "srt"
+            # iOS native HLS supports WebVTT reliably; keep SRT as the source
+            # but expose a generated VTT asset to the browser player.
+            target_path = _subtitle_target_path(source_path, f"sidecar-{sidecar.stem}", "vtt")
+            subtitle_format = "vtt"
             original_path = None
         elif source_extension in {"vtt"}:
             target_path = sidecar
@@ -1418,7 +1422,7 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
             original_path = None
 
         try:
-            if source_extension not in {"ass", "ssa", "srt", "subrip", "vtt"}:
+            if source_extension not in {"ass", "ssa", "vtt"}:
                 _convert_to_vtt(sidecar, target_path, source_path)
             else:
                 _read_subtitle_text(sidecar)

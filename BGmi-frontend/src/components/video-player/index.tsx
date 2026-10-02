@@ -173,6 +173,28 @@ function formatHlsStageLabel(stage: string) {
   }
 }
 
+function formatPlaybackTime(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainder = safeSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+    : `${minutes}:${String(remainder).padStart(2, '0')}`;
+}
+
+const SEEK_SENSITIVITY = 0.04;
+
+function getSwipeSeekOffset(deltaX: number) {
+  const distance = Math.abs(deltaX);
+  const ramp = Math.min(distance / 120, 1);
+  const easedRamp = ramp * ramp * (3 - 2 * ramp);
+  const fineOffset = distance * SEEK_SENSITIVITY * (0.55 + 0.45 * easedRamp);
+  const sustainedDistance = Math.max(0, distance - 160);
+  const acceleration = 0.00015 * sustainedDistance * sustainedDistance;
+  return Math.sign(deltaX) * (fineOffset + acceleration);
+}
+
 function toBangumiAssetPath(path: string) {
   if (!path) return '';
   if (path.startsWith('/bangumi/')) return path;
@@ -431,7 +453,7 @@ export default function VideoPlayer({
       ? subtitleTracks[selectedSubtitleIndex] || subtitleTracks[0]
       : undefined;
   const isAssSubtitle = usesAssRenderer(activeSubtitle);
-  const shouldUseAssWebFullscreen = iosLike && isAssSubtitle;
+  const shouldUseAssWebFullscreen = iosLike && Boolean(activeSubtitle);
   const activeNativeSubtitleType = getNativeSubtitleType(activeSubtitle);
   const activeNativeSubtitlePath =
     activeSubtitle && !isAssSubtitle
@@ -715,7 +737,7 @@ export default function VideoPlayer({
     setLoading(true);
 
     const isHls = currentSourceType === 'customHls' || /\.m3u8(?:$|[?#])/i.test(currentSourceUrl);
-    const hls = Hls.isSupported() ? new Hls({ enableWorker: true }) : null;
+    const hls = !iosLike && Hls.isSupported() ? new Hls({ enableWorker: true }) : null;
     const toastId = `HlsError-${episode}`;
     const fallbackToPublic = () => {
       if (!mediaOrigin || !currentSourceUrl.startsWith(`${mediaOrigin}/`)) return;
@@ -823,37 +845,11 @@ export default function VideoPlayer({
       plugins,
     });
 
-    const controls = art.controls as unknown as {
-      add: (options: {
-        name: string;
-        position?: 'left' | 'right';
-        html: string;
-        tooltip?: string;
-        click: () => void;
-      }) => unknown;
-    };
-    controls.add({
-      name: 'bgmi-rewind-5',
-      position: 'left',
-      html: '<span aria-hidden="true">↶5</span>',
-      tooltip: '后退 5 秒',
-      click: () => {
-        art.seek = Math.max(0, art.video.currentTime - 5);
-      },
-    });
-    controls.add({
-      name: 'bgmi-forward-5',
-      position: 'left',
-      html: '<span aria-hidden="true">↷5</span>',
-      tooltip: '前进 5 秒',
-      click: () => {
-        art.seek = Math.min(art.duration || Infinity, art.video.currentTime + 5);
-      },
-    });
-
     // Let the player shell receive touch gestures instead of the native <video> element,
     // otherwise Chrome on mobile may hijack long-press with the browser's save/download menu.
-    art.template.$player.style.touchAction = 'manipulation';
+    // Safari cancels PointerEvents when the browser takes over a horizontal pan.
+    // Keep the gesture on the video surface; controls retain their own handlers.
+    art.template.$player.style.touchAction = art.template.$player.classList.contains('art-mobile') ? 'pan-y' : 'manipulation';
     art.template.$player.style.setProperty('-webkit-tap-highlight-color', 'transparent');
     art.video.style.pointerEvents = 'none';
     art.video.style.setProperty('-webkit-touch-callout', 'none');
@@ -916,6 +912,45 @@ export default function VideoPlayer({
         )
       );
     };
+    let swipePointerId: number | null = null;
+    let swipeStartPoint: { x: number; y: number } | null = null;
+    let swipeStartTime = 0;
+    let swipeWasPlaying = false;
+    let swipeActive = false;
+    const swipeEligible = art.template.$player.classList.contains('art-mobile');
+    let swipeSeekTarget: number | null = null;
+    let suppressClickUntil = 0;
+    const swipeIndicator = document.createElement('div');
+    swipeIndicator.className = 'bgmi-swipe-seek-indicator';
+    swipeIndicator.setAttribute('aria-live', 'off');
+    swipeIndicator.style.cssText = 'display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;pointer-events:none;padding:.55rem .95rem;border-radius:.7rem;background:rgba(15,23,42,.78);color:white;font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)';
+    art.template.$player.appendChild(swipeIndicator);
+    const showSwipeTarget = (target: number) => {
+      swipeSeekTarget = target;
+      swipeIndicator.textContent = `${formatPlaybackTime(target)} / ${formatPlaybackTime(art.duration)}`;
+      swipeIndicator.style.display = 'block';
+    };
+    const finishSwipeSeek = (cancelled = false, restorePlayback = true) => {
+      if (swipePointerId === null) return;
+      const pointerId = swipePointerId;
+      const target = swipeSeekTarget;
+      const wasPlaying = swipeWasPlaying;
+      const wasActive = swipeActive;
+      swipePointerId = null;
+      swipeStartPoint = null;
+      swipeActive = false;
+      swipeSeekTarget = null;
+      swipeIndicator.style.display = 'none';
+      art.template.$player.classList.remove('bgmi-swipe-seeking');
+      if (art.template.$player.hasPointerCapture(pointerId)) {
+        art.template.$player.releasePointerCapture(pointerId);
+      }
+      if (!cancelled && target !== null && Number.isFinite(target)) {
+        art.seek = target;
+      }
+      if (wasActive) suppressClickUntil = Date.now() + 350;
+      if (wasActive && wasPlaying && restorePlayback) void art.play().catch(() => undefined);
+    };
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType !== 'touch') return;
       if (event.button !== 0) return;
@@ -923,6 +958,12 @@ export default function VideoPlayer({
 
       clearLongPressTimer();
       restoreLongPressRate();
+      swipePointerId = swipeEligible ? event.pointerId : null;
+      swipeStartPoint = { x: event.clientX, y: event.clientY };
+      swipeStartTime = art.video.currentTime || 0;
+      swipeWasPlaying = !art.video.paused;
+      swipeActive = false;
+      swipeSeekTarget = null;
       longPressPointerIdRef.current = event.pointerId;
       longPressStartPointRef.current = { x: event.clientX, y: event.clientY };
       longPressTimerRef.current = window.setTimeout(() => {
@@ -935,26 +976,49 @@ export default function VideoPlayer({
       }, 400);
     };
     const handlePointerMove = (event: PointerEvent) => {
-      if (longPressPointerIdRef.current !== event.pointerId) return;
-      const startPoint = longPressStartPointRef.current;
+      if (swipePointerId !== event.pointerId || !swipeStartPoint) return;
+      const startPoint = swipeStartPoint;
       if (!startPoint) return;
 
-      const movedX = Math.abs(event.clientX - startPoint.x);
-      const movedY = Math.abs(event.clientY - startPoint.y);
-      if (movedX > 12 || movedY > 12) {
+      const deltaX = event.clientX - startPoint.x;
+      const deltaY = event.clientY - startPoint.y;
+      const movedX = Math.abs(deltaX);
+      const movedY = Math.abs(deltaY);
+      if (longPressPointerIdRef.current === event.pointerId && (movedX > 12 || movedY > 12)) {
         cancelLongPress();
       }
+      if (!swipeActive) {
+        if (movedX <= 12 || movedX <= movedY || !Number.isFinite(art.duration) || art.duration <= 0) return;
+        swipeActive = true;
+        art.template.$player.setPointerCapture(event.pointerId);
+        art.template.$player.classList.add('bgmi-swipe-seeking');
+        if (swipeWasPlaying) art.pause();
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const duration = Number.isFinite(art.duration) ? art.duration : 0;
+      const target = Math.max(0, Math.min(duration, swipeStartTime + getSwipeSeekOffset(deltaX)));
+      showSwipeTarget(target);
     };
     const handlePointerUp = (event: PointerEvent) => {
       if (event.pointerType !== 'touch') return;
+      if (swipePointerId === event.pointerId && swipeActive) {
+        event.preventDefault();
+        event.stopPropagation();
+        finishSwipeSeek();
+        cancelLongPress();
+        return;
+      }
       if (isGestureBlockedTarget(event.target)) return;
       if (longPressPointerIdRef.current !== event.pointerId) return;
       const wasLongPressActive = longPressActivatedRef.current;
       cancelLongPress();
+      finishSwipeSeek(true);
       if (wasLongPressActive) return;
       art.controls.toggle();
     };
     const handlePointerCancel = (event: PointerEvent) => {
+      if (swipePointerId === event.pointerId) finishSwipeSeek(true);
       if (longPressPointerIdRef.current !== event.pointerId) return;
       cancelLongPress();
     };
@@ -967,6 +1031,11 @@ export default function VideoPlayer({
       if (event.target instanceof Element && event.target.closest('.art-player')) {
         event.preventDefault();
       }
+    };
+    const handlePlayerClickCapture = (event: MouseEvent) => {
+      if (Date.now() >= suppressClickUntil) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
     };
     const handleVisibilityChange = () => {
       if (document.hidden) cancelLongPress();
@@ -998,6 +1067,7 @@ export default function VideoPlayer({
     art.template.$player.addEventListener('pointermove', handlePointerMove);
     art.template.$player.addEventListener('pointerup', handlePointerUp);
     art.template.$player.addEventListener('pointercancel', handlePointerCancel);
+    art.template.$player.addEventListener('click', handlePlayerClickCapture, true);
     art.template.$player.addEventListener('contextmenu', handleContextMenu);
     art.template.$player.addEventListener('dragstart', handleDragStart);
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1013,16 +1083,19 @@ export default function VideoPlayer({
       art.video.removeEventListener('ended', handleEnded);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
       art.video.removeEventListener('seeking', handleSeeking);
+      finishSwipeSeek(true, false);
       art.video.removeEventListener('contextmenu', handleContextMenu);
       art.video.removeEventListener('dragstart', handleDragStart);
       art.template.$player.removeEventListener('pointerdown', handlePointerDown);
       art.template.$player.removeEventListener('pointermove', handlePointerMove);
       art.template.$player.removeEventListener('pointerup', handlePointerUp);
       art.template.$player.removeEventListener('pointercancel', handlePointerCancel);
+      art.template.$player.removeEventListener('click', handlePlayerClickCapture, true);
       art.template.$player.removeEventListener('contextmenu', handleContextMenu);
       art.template.$player.removeEventListener('dragstart', handleDragStart);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       classObserver.disconnect();
+      swipeIndicator.remove();
       art.destroy();
       hls?.destroy();
     };
@@ -1303,6 +1376,28 @@ export default function VideoPlayer({
             },
             '& .art-bottom': {
               paddingBottom: '4px',
+            },
+            '& .art-video-player.art-mobile': {
+              touchAction: 'pan-y',
+            },
+            // Artplayer applies negative side margins in its mobile skin;
+            // on iPad this clips the pause and fullscreen controls.
+            '& .art-video-player.art-mobile .art-controls-left': {
+              marginLeft: '0 !important',
+              minWidth: '0',
+            },
+            '& .art-video-player.art-mobile .art-controls-right': {
+              marginRight: '0 !important',
+              minWidth: '0',
+            },
+            '@media (pointer: coarse) and (min-width: 768px)': {
+              '& .art-video-player .art-controls': {
+                paddingLeft: '8px',
+                paddingRight: '8px',
+              },
+              '& .art-video-player .art-control': {
+                minWidth: '38px',
+              },
             },
             '& .bgmi-quality-selector': {
               transition: 'opacity 180ms ease, transform 180ms ease',
