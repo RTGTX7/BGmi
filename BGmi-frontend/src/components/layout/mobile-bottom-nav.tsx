@@ -364,28 +364,6 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   fontSize={{ base: `${10 + labelBoost}px`, sm: `${11 + labelBoost}px` }}
                   fontWeight={active || influence > 0.35 ? '900' : '700'}
                   lineHeight="1"
-                  textShadow={
-                    influence
-                      ? colorMode === 'dark'
-                        ? `0 0 ${8 + influence * 8}px rgba(125,211,252,${0.36 + influence * 0.35}), 0 0 ${16 + influence * 8}px rgba(56,189,248,${0.16 + influence * 0.24})`
-                        : `0 1px ${4 + influence * 5}px rgba(255,255,255,${0.70 + influence * 0.25}), 0 0 ${8 + influence * 6}px rgba(255,255,255,${0.48 + influence * 0.22})`
-                      : active && colorMode === 'dark'
-                        ? '0 0 8px rgba(224,247,255,0.86), 0 0 18px rgba(56,189,248,0.56), 0 1px 2px rgba(0,0,0,0.65)'
-                        : active
-                          ? '0 1px 2px rgba(255,255,255,1), 0 0 10px rgba(255,255,255,0.90), 0 0 16px rgba(14,165,233,0.38)'
-                          : colorMode === 'dark'
-                            ? '0 1px 2px rgba(0,0,0,0.45), 0 0 8px rgba(0,0,0,0.28)'
-                            : '0 1px 2px rgba(255,255,255,0.95), 0 0 7px rgba(255,255,255,0.72), 0 1px 8px rgba(15,23,42,0.18)'
-                  }
-                  filter={
-                    active
-                      ? colorMode === 'dark'
-                        ? 'drop-shadow(0 0 10px rgba(125,211,252,0.82)) drop-shadow(0 0 18px rgba(14,165,233,0.48))'
-                        : 'drop-shadow(0 1px 5px rgba(255,255,255,0.95)) drop-shadow(0 0 12px rgba(14,165,233,0.36))'
-                      : colorMode === 'dark'
-                        ? 'drop-shadow(0 1px 2px rgba(0,0,0,0.50))'
-                        : 'drop-shadow(0 1px 3px rgba(255,255,255,0.86)) drop-shadow(0 1px 4px rgba(15,23,42,0.16))'
-                  }
                 >
                   <Icon as={item.icon} boxSize={`calc(${navIconSize} + ${iconBoost}px)`} transition="box-size 0.18s ease" />
                   <Box as="span">{item.label}</Box>
