@@ -34,6 +34,7 @@ import EpisodeCard from './episode-card';
 import ExternalPlayer from './external-player';
 
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { useVideoCurrentTime } from '~/hooks/use-watch-history';
 import { fetcherWithMutation, fetcherWithTimeout } from '~/lib/fetcher';
 import {
@@ -267,6 +268,7 @@ export default function VideoPlayer({
   autoPlay = false,
 }: Props) {
   const { colorMode } = useColorMode();
+  const { colors } = useAccentTheme();
   const toast = useToast();
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
@@ -1422,7 +1424,10 @@ export default function VideoPlayer({
               opacity={controlsVisible ? 1 : 0}
               transform={controlsVisible ? 'translateY(0)' : 'translateY(-6px)'}
               pointerEvents={controlsVisible ? 'auto' : 'none'}
-              sx={getLiquidGlassGroupStyles(colorMode, qualityDragSelect.dragging)}
+              sx={{
+                ...getLiquidGlassGroupStyles(colorMode, qualityDragSelect.dragging),
+                bg: qualityDragSelect.dragging ? `${colors.accent}18` : undefined,
+              }}
             >
               {displayedQualityOptions.map(option => {
                 const isActive = selectedProfile === option.profile;
@@ -1433,12 +1438,19 @@ export default function VideoPlayer({
                     size="xs"
                     rounded="full"
                     onClick={() => void handleQualitySelect(option)}
-                    bg={isActive ? 'rgba(59,130,246,0.88)' : 'rgba(0,0,0,0.58)'}
-                    color="white"
                     borderWidth="1px"
-                    borderColor={isActive ? 'rgba(147,197,253,0.65)' : 'rgba(255,255,255,0.28)'}
-                    sx={getLiquidGlassButtonStyles(colorMode, isActive, { compact: true })}
-                    _hover={{ bg: isActive ? 'rgba(59,130,246,1)' : 'rgba(0,0,0,0.74)' }}
+                    sx={{
+                      ...getLiquidGlassButtonStyles(colorMode, isActive, { compact: true }),
+                      bg: isActive ? `${colors.accent}B8` : `${colors.background}66`,
+                      color: isActive ? (colorMode === 'dark' ? colors.background : '#FFFFFF') : colors.text,
+                      borderColor: isActive ? `${colors.accent}B8` : `${colors.text}40`,
+                      boxShadow: isActive ? `0 4px 12px ${colors.accent}26, inset 0 1px 0 rgba(255,255,255,0.18)` : 'none',
+                      _before: { background: `${colors.accent}12`, opacity: isActive ? 0.45 : 0.2 },
+                      _hover: {
+                        bg: isActive ? `${colors.accent}CC` : `${colors.background}8C`,
+                        borderColor: isActive ? colors.accent : `${colors.text}66`,
+                      },
+                    }}
                     px={{ base: '1.5', md: '2' }}
                     minH={{ base: '1.3rem', md: '1.5rem' }}
                     fontSize={{ base: '0.65rem', md: '0.7rem' }}
