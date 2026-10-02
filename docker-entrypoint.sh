@@ -67,7 +67,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from bgmi.config import cfg
-from bgmi.lib.update import update_database
+from bgmi.lib.update import _ensure_custom_columns, update_database
 from bgmi.setup import create_dir, init_db
 
 create_dir()
@@ -87,6 +87,7 @@ if db_path.exists():
             print(f"[bgmi] Saved v4 database backup: {backup_path}")
 
 init_db()
+_ensure_custom_columns(db_path)
 if os.environ.get("BGMI_SIMULATOR") != "1":
     update_database()
 else:

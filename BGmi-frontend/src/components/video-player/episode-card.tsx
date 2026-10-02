@@ -1,11 +1,9 @@
 import type { BoxProps } from '@chakra-ui/react';
 import { Box, Button, Flex, Text } from '@chakra-ui/react';
 import { FiServer } from 'react-icons/fi';
-import useSWR from 'swr';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useWatchHistory } from '~/hooks/use-watch-history';
-import { fetcherWithTimeout } from '~/lib/fetcher';
 
 interface Props {
   setPlayState: () => void;
@@ -15,7 +13,7 @@ interface Props {
     currentEpisode: string;
   };
   embedded?: boolean;
-  localVideoStatus?: 'none' | 'checking' | 'connected' | 'unavailable';
+  localVideoStatus?: 'none' | 'connected' | 'unavailable';
 }
 
 export default function EpisodeCard({ setPlayState, bangumiData, embedded = false, localVideoStatus = 'none', ...props }: Props & BoxProps) {
@@ -24,11 +22,6 @@ export default function EpisodeCard({ setPlayState, bangumiData, embedded = fals
   const isDark = colorMode === 'dark';
 
   const bangumiName = bangumiData.bangumiName;
-  const { data: overview } = useSWR<{ data: { synopsis: string; mikanId: string } }>(
-    bangumiName ? `/api/player/overview?bangumi=${encodeURIComponent(bangumiName)}` : null,
-    (key: string) => fetcherWithTimeout([key], {}, 60000),
-    { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false }
-  );
   const totalMark = watchHistory[bangumiName];
   const markBgColor = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(217,232,255,0.94)';
 
@@ -90,10 +83,18 @@ export default function EpisodeCard({ setPlayState, bangumiData, embedded = fals
         <Text fontSize={{ base: 'xs', sm: 'md' }} fontWeight="700" color={isDark ? 'whiteAlpha.940' : '#203447'}>
           选集
         </Text>
-        {localVideoStatus === 'connected' && (
-          <Box role="status" aria-label="已连接本地服务器" title="已连接本地服务器" position="relative" color="#22C55E" pr="1" flexShrink={0}>
+        {localVideoStatus !== 'none' && (
+          <Box
+            role="status"
+            aria-label={localVideoStatus === 'connected' ? '正在使用本地服务器播放' : '正在使用公网播放'}
+            title={localVideoStatus === 'connected' ? '正在使用本地服务器播放' : '正在使用公网播放'}
+            position="relative"
+            color={localVideoStatus === 'connected' ? '#22C55E' : isDark ? '#8B95A5' : '#788797'}
+            pr="1"
+            flexShrink={0}
+          >
             <FiServer size="18" aria-hidden="true" />
-            <Box position="absolute" right="0" bottom="0" w="7px" h="7px" rounded="full" bg="#22C55E" border="1px solid" borderColor={isDark ? '#17263B' : '#FFFFFF'} />
+            <Box position="absolute" right="0" bottom="0" w="7px" h="7px" rounded="full" bg={localVideoStatus === 'connected' ? '#22C55E' : '#8B95A5'} border="1px solid" borderColor={isDark ? '#17263B' : '#FFFFFF'} />
           </Box>
         )}
       </Flex>
@@ -170,14 +171,6 @@ export default function EpisodeCard({ setPlayState, bangumiData, embedded = fals
           );
         })}
       </Flex>
-      {overview?.data?.synopsis ? (
-        <Box mt="4" pt="3" borderTopWidth="1px" borderColor={isDark ? 'whiteAlpha.160' : 'rgba(173,197,224,0.55)'} position="relative" zIndex="1">
-          <Text fontSize="sm" fontWeight="700" color={isDark ? 'whiteAlpha.940' : '#203447'}>简介</Text>
-          <Text mt="2" fontSize="xs" lineHeight="1.7" whiteSpace="pre-line" color={isDark ? 'whiteAlpha.760' : 'rgba(32,52,71,0.78)'}>
-            {overview.data.synopsis}
-          </Text>
-        </Box>
-      ) : null}
     </Box>
   );
 }

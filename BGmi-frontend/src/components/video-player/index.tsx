@@ -17,7 +17,8 @@
 } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
+import useSWR from 'swr';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
@@ -30,7 +31,7 @@ import ExternalPlayer from './external-player';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useVideoCurrentTime } from '~/hooks/use-watch-history';
-import { fetcherWithMutation } from '~/lib/fetcher';
+import { fetcherWithMutation, fetcherWithTimeout } from '~/lib/fetcher';
 import {
   getLiquidGlassButtonStyles,
   getLiquidGlassGroupStyles,
@@ -292,6 +293,7 @@ export default function VideoPlayer({
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
   const [currentSourceType, setCurrentSourceType] = useState('auto');
   const [localVideoProbe, setLocalVideoProbe] = useState<{ url: string; status: 'none' | 'checking' | 'connected' | 'unavailable' }>({ url: '', status: 'none' });
+  const [readySourceUrl, setReadySourceUrl] = useState('');
   const [hlsProgress, setHlsProgress] = useState<HlsProgressState>({
     active: false,
     profile: '',
@@ -308,6 +310,13 @@ export default function VideoPlayer({
   const [hasMissingEpisodes, setHasMissingEpisodes] = useState(Boolean(bangumiData.hasMissingEpisodes));
 
   const { updateCurrentTime, getCurrentTime } = useVideoCurrentTime(bangumiData.bangumi_name);
+  const { data: overview } = useSWR<{ data: { synopsis: string; mikanId: string } }>(
+    bangumiData.bangumi_name
+      ? `/api/player/overview?bangumi=${encodeURIComponent(bangumiData.bangumi_name)}`
+      : null,
+    (key: string) => fetcherWithTimeout([key], {}, 60000),
+    { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false }
+  );
 
   const rawPath = bangumiData.player_versions?.[episode]?.find(version => version.group === playerGroup)?.path
     ?? bangumiData.player[episode]?.path ?? '';
@@ -315,9 +324,15 @@ export default function VideoPlayer({
   const playbackPath = playerAsset?.browser_path ?? sourcePath;
   const mediaOrigin = playerAsset?.mediaOrigin;
   const localDirectUrl = playbackPath && mediaOrigin ? buildMediaUrl(toBangumiAssetPath(playbackPath), mediaOrigin) : '';
-  const localVideoStatus = !localDirectUrl ? 'none' : localVideoProbe.url === localDirectUrl ? localVideoProbe.status : 'checking';
-  const effectiveMediaOrigin = localVideoStatus === 'connected' ? mediaOrigin : undefined;
+  const localProbeStatus = localVideoProbe.url === localDirectUrl ? localVideoProbe.status : 'checking';
+  const effectiveMediaOrigin = localDirectUrl && localProbeStatus === 'connected' ? mediaOrigin : undefined;
   const directUrl = playbackPath ? buildMediaUrl(toBangumiAssetPath(playbackPath), effectiveMediaOrigin) : '';
+  const isPlayingLocalSource = Boolean(
+    mediaOrigin && currentSourceUrl && readySourceUrl === currentSourceUrl && currentSourceUrl.startsWith(`${mediaOrigin}/`)
+  );
+  const localVideoStatus = !localDirectUrl || !currentSourceUrl || readySourceUrl !== currentSourceUrl
+    ? 'none'
+    : isPlayingLocalSource ? 'connected' : 'unavailable';
 
   useEffect(() => {
     if (!localDirectUrl || !mediaOrigin) {
@@ -693,6 +708,12 @@ export default function VideoPlayer({
     const isHls = currentSourceType === 'customHls' || /\.m3u8(?:$|[?#])/i.test(currentSourceUrl);
     const hls = Hls.isSupported() ? new Hls({ enableWorker: true }) : null;
     const toastId = `HlsError-${episode}`;
+    const fallbackToPublic = () => {
+      if (!mediaOrigin || !currentSourceUrl.startsWith(`${mediaOrigin}/`)) return;
+      setReadySourceUrl('');
+      setLocalVideoProbe({ url: localDirectUrl, status: 'unavailable' });
+      setCurrentSourceUrl(buildMediaUrl(toMediaPath(currentSourceUrl.slice(mediaOrigin.length))));
+    };
 
     const plugins: Artplayer['option']['plugins'] = [];
     plugins.push(
@@ -743,6 +764,7 @@ export default function VideoPlayer({
                 hls.on(Hls.Events.ERROR, (_event, data) => {
                   if (data.fatal) {
                     console.error('HLS fatal error:', data.type, data.details);
+                    fallbackToPublic();
                   }
                 });
               } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -839,6 +861,7 @@ export default function VideoPlayer({
 
     const handleCanPlay = () => {
       setLoading(false);
+      setReadySourceUrl(currentSourceUrl);
       if (autoPlayRef.current) void art.play().catch(() => undefined);
       if (!restoredTimeRef.current) {
         const currentTime = getCurrentTime();
@@ -847,6 +870,10 @@ export default function VideoPlayer({
         }
         restoredTimeRef.current = true;
       }
+    };
+    const handleMediaError = () => {
+      setReadySourceUrl('');
+      fallbackToPublic();
     };
 
     const handleTimeUpdate = () => {
@@ -951,6 +978,7 @@ export default function VideoPlayer({
     syncControlsVisible();
 
     art.video.addEventListener('canplay', handleCanPlay);
+    art.video.addEventListener('error', handleMediaError);
     const handleEnded = () => onEndedRef.current?.();
     art.video.addEventListener('ended', handleEnded);
     art.video.addEventListener('timeupdate', handleTimeUpdate);
@@ -972,6 +1000,7 @@ export default function VideoPlayer({
       setControlsVisible(true);
       setShowLongPressIndicator(false);
       art.video.removeEventListener('canplay', handleCanPlay);
+      art.video.removeEventListener('error', handleMediaError);
       art.video.removeEventListener('ended', handleEnded);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
       art.video.removeEventListener('seeking', handleSeeking);
@@ -995,6 +1024,8 @@ export default function VideoPlayer({
     danmakuApi,
     episode,
     getCurrentTime,
+    localDirectUrl,
+    mediaOrigin,
     selectedProfile,
     shouldUseAssWebFullscreen,
     updateCurrentTime,
@@ -1165,6 +1196,37 @@ export default function VideoPlayer({
     !currentSourceUrl && !playerAssetLoading && !playerAssetMissing && !playerAssetErrorMessage;
   const playerShellMinH = currentSourceUrl ? { base: 'auto', xl: '26rem' } : { base: '14rem', xl: '26rem' };
   const playerStateMinH = { base: '14rem', xl: '26rem' } as const;
+  const renderSynopsis = (mobile: boolean) => overview?.data?.synopsis ? (
+    <Box
+      as="section"
+      aria-label="番剧简介"
+      display={mobile ? { base: 'block', xl: 'none' } : { base: 'none', xl: 'block' }}
+      w="full"
+      minW="0"
+      mt={mobile ? '3' : '7'}
+      px={{ base: '4', sm: '5', xl: '6' }}
+      py={{ base: '4', xl: '5' }}
+      rounded="2xl"
+      borderWidth="1px"
+      borderColor={colorMode === 'dark' ? 'whiteAlpha.140' : 'rgba(173,197,224,0.55)'}
+      bg={colorMode === 'dark' ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.62)'}
+      boxShadow={colorMode === 'dark' ? '0 12px 28px rgba(0,0,0,0.12)' : '0 12px 28px rgba(39,87,116,0.07)'}
+    >
+      <Text fontSize={{ base: 'sm', xl: 'md' }} fontWeight="700" color={colorMode === 'dark' ? 'whiteAlpha.940' : '#203447'}>
+        简介
+      </Text>
+      <Text
+        mt="3"
+        maxW="90ch"
+        fontSize="sm"
+        lineHeight="1.85"
+        whiteSpace="pre-line"
+        color={colorMode === 'dark' ? 'whiteAlpha.800' : 'rgba(32,52,71,0.82)'}
+      >
+        {overview.data.synopsis}
+      </Text>
+    </Box>
+  ) : null;
 
   return (
     <>
@@ -1437,24 +1499,55 @@ export default function VideoPlayer({
         </Box>
 
         <Flex justify="flex-end" align="center" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
-          {(bangumiData.player_versions?.[episode]?.length ?? 0) > 1 ? (
+          {(bangumiData.player_versions?.[episode]?.length ?? 0) > 0 ? (
             <HStack spacing="1.5" flex="1" flexWrap="wrap" aria-label="字幕组视频">
-              {bangumiData.player_versions?.[episode]?.map(version => (
-                <Button
-                  key={version.group}
-                  size="xs"
-                  rounded="full"
-                  aria-pressed={version.group === activeGroup}
-                  onClick={() => onGroupSelect?.(version.group)}
-                  bg={version.group === activeGroup ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBg}
-                  color={version.group === activeGroup ? 'white' : undefined}
-                  borderWidth="1px"
-                  borderColor={toolButtonBorder}
-                  _hover={{ opacity: 0.85 }}
-                >
-                  {version.group}
-                </Button>
-              ))}
+              {bangumiData.player_versions?.[episode]?.map(version => {
+                const mikanUrl = version.mikanUrl;
+                const isFilenameFallback = version.groupSource !== 'mikan';
+                return (
+                  <HStack
+                    key={version.path}
+                    spacing="0.5"
+                    maxW={isFilenameFallback ? 'full' : undefined}
+                    flex={isFilenameFallback ? '1 1 100%' : undefined}
+                  >
+                    <Button
+                      size="xs"
+                      rounded="full"
+                      aria-pressed={version.group === activeGroup}
+                      onClick={() => onGroupSelect?.(version.group)}
+                      bg={version.group === activeGroup ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBg}
+                      color={version.group === activeGroup ? 'white' : undefined}
+                      borderWidth="1px"
+                      borderColor={toolButtonBorder}
+                      _hover={{ opacity: 0.85 }}
+                      maxW={isFilenameFallback ? 'full' : undefined}
+                      flex={isFilenameFallback ? '1' : undefined}
+                      justifyContent={isFilenameFallback ? 'flex-start' : undefined}
+                      whiteSpace={isFilenameFallback ? 'normal' : undefined}
+                      textAlign={isFilenameFallback ? 'left' : undefined}
+                      title={isFilenameFallback ? version.fileName || version.group : undefined}
+                    >
+                      {isFilenameFallback ? version.fileName || version.group : version.group}
+                    </Button>
+                    {mikanUrl ? (
+                      <IconButton
+                        as="a"
+                        href={mikanUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`在 Mikan 查看 ${version.group}`}
+                        title={`在 Mikan 查看 ${version.group}`}
+                        icon={<FiExternalLink />}
+                        size="xs"
+                        rounded="full"
+                        variant="ghost"
+                        color="var(--bgmi-accent, #3b82f6)"
+                      />
+                    ) : null}
+                  </HStack>
+                );
+              })}
             </HStack>
           ) : null}
           <HStack spacing="1.5">
@@ -1481,8 +1574,10 @@ export default function VideoPlayer({
             {externalUrl ? <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} /> : null}
           </HStack>
         </Flex>
+        {renderSynopsis(false)}
       </Flex>
       <EpisodeCard flexShrink={0} setPlayState={() => undefined} bangumiData={episodeCardProps} localVideoStatus={localVideoStatus} />
+      {renderSynopsis(true)}
 
       <AlertDialog isOpen={missingEpisodesDialogOpen} leastDestructiveRef={missingEpisodesCancelRef} onClose={() => setMissingEpisodesDialogOpen(false)} isCentered>
         <AlertDialogOverlay backdropFilter="blur(10px)">

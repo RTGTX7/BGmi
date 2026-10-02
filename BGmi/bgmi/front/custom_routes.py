@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
@@ -31,8 +32,9 @@ from bgmi.front.player_assets import (
 from bgmi.lib import controllers as ctl
 from bgmi.lib.fetch import website
 from bgmi.lib.maintenance import execute_rebuild_repository, preview_rebuild_repository
+from bgmi.lib.mikan_release import mikan_release_by_hash, release_title_key, torrent_info_hash
 from bgmi.lib.mikan_resolver import resolve_bangumi
-from bgmi.lib.table import Bangumi, BangumiIssue, Followed, Session, Subtitle
+from bgmi.lib.table import Bangumi, BangumiIssue, Download, Followed, Session, Subtitle
 from bgmi.utils import normalize_path
 from bgmi.website.mikan import get_text, server_root
 
@@ -183,11 +185,46 @@ def player_map(bangumi: Bangumi, followed: Optional[Followed]) -> dict[int, dict
 
 def player_versions_map(bangumi: Bangumi, followed: Optional[Followed]) -> dict[int, list[dict[str, str]]]:
     episodes = followed.episodes if followed and cfg.enable_path_formatter else ()
-    return get_player_versions(
+    versions_by_episode = get_player_versions(
         bangumi.name, episodes=episodes, season=followed.season if followed else 1,
         episode_offset=followed.episode_offset if followed else 0,
         display_name=followed.display_name if followed else "",
     )
+    if not versions_by_episode:
+        return versions_by_episode
+    with Session.begin() as session:
+        downloads = session.scalars(
+            sa.select(Download).where(
+                Download.bangumi_name == bangumi.name,
+                Download.episode.in_(versions_by_episode),
+            )
+        ).all()
+    for episode, versions in versions_by_episode.items():
+        for version in versions:
+            path = version["path"]
+            file_title = release_title_key(Path(version["fileName"]).stem)
+            matches = [
+                row for row in downloads
+                if row.episode == episode and (
+                    row.video_path == path or (not row.video_path and release_title_key(row.title) == file_title)
+                )
+            ]
+            if len(matches) != 1:
+                continue
+            download = matches[0]
+            info_hash = torrent_info_hash(download.download, download.task_id or "")
+            release = mikan_release_by_hash(info_hash) if info_hash else None
+            if not release or release_title_key(release["title"]) != release_title_key(download.title):
+                continue
+            if bangumi.mikan_id and bangumi.mikan_id != release["mikanId"]:
+                continue
+            version.update({
+                "group": release["group"],
+                "groupSource": "mikan",
+                "mikanUrl": release["url"],
+                "mikanGroupId": release["groupId"],
+            })
+    return versions_by_episode
 
 
 def list_item(bangumi: Bangumi, followed: Optional[Followed], missing: set[str], *, include_versions: bool = False) -> dict[str, Any]:
@@ -325,24 +362,46 @@ def mikan_subtitle_group_links(mikan_id: str) -> list[dict[str, str]]:
         rss_link = section.select_one('a[href^="/RSS/Bangumi?"]')
         if not group_link or not rss_link:
             continue
-        publish_id = str(group_link.get("href") or "").rsplit("/", 1)[-1]
         subgroup_id = parse_qs(urlparse(str(rss_link.get("href") or "")).query).get("subgroupid", [""])[0]
-        if not publish_id.isdigit() or not subgroup_id.isdigit() or subgroup_id in seen:
+        if not subgroup_id.isdigit() or subgroup_id in seen:
             continue
         seen.add(subgroup_id)
         groups.append({
             "id": subgroup_id,
             "name": group_link.get_text(" ", strip=True),
-            "url": f"{server_root}Home/PublishGroup/{publish_id}",
+            "url": f"{server_root}Home/Bangumi/{mikan_id}#{subgroup_id}",
         })
     return groups
 
 
 def linked_mikan_id(row: Bangumi) -> str:
-    if re.fullmatch(r"\d+", row.id):
-        return row.id
-    matched, _, _ = resolve_bangumi(row.name)
-    return str(matched.get("keyword") or "") if matched else ""
+    if re.fullmatch(r"\d+", row.mikan_id or ""):
+        return row.mikan_id
+    if cfg.data_source == "mikan_project" and row.source != "local" and re.fullmatch(r"\d+", row.id):
+        mikan_id = row.id
+    else:
+        _, candidates, _ = resolve_bangumi(row.name)
+        # Search may return a single result from a shortened query for another
+        # season. Only persist an ID when the Mikan title matches this row.
+        def title_key(value: str) -> str:
+            normalized = unicodedata.normalize("NFKC", value).casefold()
+            return re.sub(r"[\W_]+", "", normalized)
+
+        matching_ids = {
+            str(candidate.get("keyword") or "")
+            for candidate in candidates
+            if title_key(str(candidate.get("name") or "")) == title_key(row.name)
+        }
+        mikan_id = matching_ids.pop() if len(matching_ids) == 1 else ""
+    if re.fullmatch(r"\d+", mikan_id):
+        with Session.begin() as session:
+            session.execute(
+                sa.update(Bangumi)
+                .where(Bangumi.id == row.id, Bangumi.mikan_id == "")
+                .values(mikan_id=mikan_id)
+            )
+        return mikan_id
+    return ""
 
 
 @router.get("/player/overview")
@@ -359,8 +418,8 @@ def legacy_mikan_subtitle_groups(bangumi: str) -> dict[str, Any]:
     row = find_bangumi(bangumi.strip())
     mikan_id = linked_mikan_id(row)
     if not re.fullmatch(r"\d+", mikan_id):
-        return envelope({"groups": []})
-    return envelope({"groups": mikan_subtitle_group_links(mikan_id)})
+        return envelope({"mikanId": "", "groups": []})
+    return envelope({"mikanId": mikan_id, "groups": mikan_subtitle_group_links(mikan_id)})
 
 
 @router.get("/player")

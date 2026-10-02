@@ -76,6 +76,8 @@ class Bangumi(Base):
 
     id: Mapped[str] = Column(Text, primary_key=True, nullable=False)  # type: ignore
 
+    mikan_id: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
+
     name: Mapped[str] = Column(Text, nullable=False, unique=True)  # type: ignore
     subtitle_group: Mapped[List[str]] = Column(sa.JSON, nullable=False, default=[], server_default="[]")  # type: ignore
     update_day: Mapped[str] = Column(
@@ -308,6 +310,7 @@ class Download(Base):
     status: Mapped[int] = Column(Integer, nullable=False)  # type: ignore
     task_id: Mapped[Optional[str]] = Column(Text, nullable=True)  # type: ignore
     created_time: Mapped[int] = Column(Integer, nullable=False, default=0, server_default="0")  # type: ignore
+    video_path: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
 
     if TYPE_CHECKING:
 

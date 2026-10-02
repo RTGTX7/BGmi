@@ -64,18 +64,15 @@ def get_player_versions(
 
 
 def _video_versions(paths: Iterable[Path]) -> list[Dict[str, str]]:
-    groups: Dict[str, Path] = {}
-    for path in paths:
-        if not path.is_file():
-            continue
-        match = re.match(r"\s*[\[【]([^\]】]+)[\]】]", unquote(path.name))
-        group = match.group(1).strip() if match else "其他"
-        previous = groups.get(group)
-        if previous is None or path.stat().st_size > previous.stat().st_size:
-            groups[group] = path
     return [
-        {"group": group, "path": "/" + path.relative_to(cfg.save_path).as_posix()}
-        for group, path in sorted(groups.items())
+        {
+            "group": unquote(path.name),
+            "path": "/" + path.relative_to(cfg.save_path).as_posix(),
+            "fileName": unquote(path.name),
+            "groupSource": "filename",
+        }
+        for path in sorted(paths)
+        if path.is_file()
     ]
 
 

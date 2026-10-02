@@ -362,11 +362,15 @@ def _ensure_custom_columns(db: Path) -> None:
     """Keep the personal metadata available in existing official v5 databases."""
     additions = {
         "bangumi": {
+            "mikan_id": "TEXT NOT NULL DEFAULT ''",
             "source": "TEXT NOT NULL DEFAULT 'remote'",
             "in_library": "INTEGER NOT NULL DEFAULT 0",
             "library_path": "TEXT NOT NULL DEFAULT ''",
         },
-        "download": {"created_time": "INTEGER NOT NULL DEFAULT 0"},
+        "download": {
+            "created_time": "INTEGER NOT NULL DEFAULT 0",
+            "video_path": "TEXT NOT NULL DEFAULT ''",
+        },
     }
     with sqlite3.connect(db) as conn:
         for table, columns in additions.items():
@@ -376,3 +380,9 @@ def _ensure_custom_columns(db: Path) -> None:
             for name, definition in columns.items():
                 if name not in existing:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+        if cfg.data_source == "mikan_project" and _get_table_columns(db, "bangumi"):
+            conn.execute(
+                "UPDATE bangumi SET mikan_id = id "
+                "WHERE mikan_id = '' AND source != 'local' "
+                "AND id <> '' AND id NOT GLOB '*[^0-9]*'"
+            )

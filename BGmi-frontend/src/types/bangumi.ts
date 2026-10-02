@@ -44,7 +44,17 @@ export interface BangumiData {
   libraryPath?: string;
   source?: string;
   player: Record<string, Record<(string & {}) | 'path', string> | undefined>;
-  player_versions?: Record<string, { group: string; path: string }[]>;
+  player_versions?: Record<
+    string,
+    {
+      group: string;
+      path: string;
+      fileName?: string;
+      groupSource?: 'mikan' | 'prefix' | 'filename';
+      mikanUrl?: string;
+      mikanGroupId?: string;
+    }[]
+  >;
 }
 
 export interface SubtitleAsset {

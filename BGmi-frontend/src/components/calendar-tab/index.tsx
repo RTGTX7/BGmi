@@ -190,7 +190,6 @@ export default function CalendarTab({
     startY: 0,
     lastIndex: 0,
   });
-  const mobileSuppressClickRef = useRef(false);
   const mobileDropletRef = useRef<HTMLDivElement | null>(null);
   const mobileVisualRef = useRef({ index: 0, moving: false });
   const mobileDragFrameRef = useRef<number | null>(null);
@@ -454,6 +453,7 @@ export default function CalendarTab({
       lastIndex: index,
     };
     updateMobileDroplet(event.clientX, index, false);
+    selectRailItem(railItems[index]);
   };
 
   const handleMobilePointerMove = (event: React.PointerEvent<HTMLElement>) => {
@@ -465,7 +465,10 @@ export default function CalendarTab({
     drag.moved = drag.moved || movedEnough;
     if (!drag.moved) return;
     const index = getMobileIndexFromPoint(event.clientX);
-    if (movedEnough) drag.lastIndex = index;
+    if (index !== drag.lastIndex) {
+      drag.lastIndex = index;
+      selectRailItem(railItems[index]);
+    }
     pendingMobilePositionRef.current = { x: event.clientX, index };
     if (mobileDragFrameRef.current !== null) return;
     mobileDragFrameRef.current = window.requestAnimationFrame(() => {
@@ -487,8 +490,10 @@ export default function CalendarTab({
     }
     pendingMobilePositionRef.current = null;
     mobileRailBoundsRef.current = null;
-    if (!cancelled && drag.moved) selectRailItem(railItems[drag.lastIndex]);
-    mobileSuppressClickRef.current = drag.moved;
+    if (!cancelled) {
+      const finalIndex = getMobileIndexFromPoint(event.clientX);
+      if (finalIndex !== drag.lastIndex) selectRailItem(railItems[finalIndex]);
+    }
     mobileVisualRef.current.moving = false;
     mobileDragRef.current = {
       active: false,
@@ -617,12 +622,6 @@ export default function CalendarTab({
             onPointerMove={handleMobilePointerMove}
             onPointerUp={stopMobileDrag}
             onPointerCancel={event => stopMobileDrag(event, true)}
-            onClickCapture={event => {
-              if (!mobileSuppressClickRef.current) return;
-              event.preventDefault();
-              event.stopPropagation();
-              mobileSuppressClickRef.current = false;
-            }}
             sx={{
               touchAction: 'none',
               userSelect: 'none',
@@ -732,7 +731,9 @@ export default function CalendarTab({
                   aria-label={item.kind === 'action' ? item.ariaLabel : item.label}
                   bg="transparent"
                   borderWidth="0"
-                  onClick={() => selectRailItem(item)}
+                  onClick={event => {
+                    if (event.detail === 0) selectRailItem(item);
+                  }}
                 />
               ))}
             </Flex>
@@ -879,7 +880,7 @@ export default function CalendarTab({
 
       <Box mt={searchOpen ? 0 : type === 'subscribe' ? { base: 4, lg: 3 } : 3} {...boxProps} />
       <Box onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} overflow="hidden">
-        {type === 'subscribe' ? (
+        {type === 'subscribe' || isMobile ? (
           <Box>{standaloneContent ? standaloneContent : children}</Box>
         ) : (
           <AnimatePresence mode="wait" initial={false} custom={direction}>

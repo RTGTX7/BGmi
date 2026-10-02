@@ -78,6 +78,7 @@ def move_to_formatted_path(dl: Download, files: List[str]) -> bool:
 
     print_success(f"Moving {src} -> {target}")
     shutil.move(str(src), str(target))
+    dl.video_path = "/" + target.relative_to(cfg.save_path).as_posix()
     return True
 
 
