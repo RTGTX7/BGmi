@@ -51,7 +51,10 @@ export default function BangumiGroupSection({
       const paddingRight = Number.parseFloat(styles.paddingRight || '0');
       const contentWidth = Math.max(0, width - paddingLeft - paddingRight);
       const desktopGap = window.matchMedia('(min-width: 80em)').matches ? 20 : 16;
-      const desktopCardWidth = 220;
+      // Keep the preview count in sync with the actual desktop card width.
+      // Using a smaller estimate here makes the next card overflow into a
+      // second grid row before the horizontal track can be expanded.
+      const desktopCardWidth = 272;
       const nextCount = Math.max(1, Math.floor((contentWidth + desktopGap) / (desktopCardWidth + desktopGap)));
 
       setDesktopPreviewCount(currentCount => (currentCount === nextCount ? currentCount : nextCount));
@@ -221,22 +224,21 @@ export default function BangumiGroupSection({
       </Box>
 
       <Box
-        display={{ base: 'none', md: expanded ? 'flex' : 'grid' }}
+        display={{ base: 'none', md: 'flex' }}
         mt="5"
-        gridTemplateColumns={expanded ? undefined : 'repeat(auto-fit, minmax(13.75rem, 17rem))'}
-        flexWrap={expanded ? 'nowrap' : undefined}
-        flexDirection={expanded ? 'row' : undefined}
-        overflowX={expanded ? 'auto' : 'visible'}
+        flexWrap="nowrap"
+        flexDirection="row"
+        overflowX={expanded ? 'auto' : 'hidden'}
         gap={{ md: 5 }}
         alignItems="start"
         justifyContent="start"
         width="100%"
-        sx={expanded ? { WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' } : undefined}
+        sx={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}
         onClick={handleNavigateToGroup}
         cursor="pointer"
       >
         {desktopItems.map(bangumi => (
-          <Box key={bangumi.id} w={expanded ? '17rem' : 'full'} maxW="17rem" flexShrink={0} justifySelf="start">
+          <Box key={bangumi.id} w="17rem" minW="17rem" maxW="17rem" flexShrink={0}>
             <BangumiCard bangumiData={bangumi} />
           </Box>
         ))}
