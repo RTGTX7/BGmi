@@ -25,7 +25,7 @@ import { bangumiFilterAtom, type DataKind } from '~/hooks/use-bangumi';
 import { useCalendar } from '~/hooks/use-calendar';
 import { useColorMode } from '~/hooks/use-color-mode';
 
-import type { Calendar, CalendarDataEntries, CalendarDataKey, WeekCalendar } from '~/types/calendar';
+import type { CalendarData, CalendarDataEntries, CalendarDataKey, WeekCalendar } from '~/types/calendar';
 
 interface FilterOptionsState {
   subscribed: boolean;
@@ -361,26 +361,19 @@ export default function Subscribe() {
   const calendarData = useMemo(() => {
     if (!data) return;
 
-    const sortData = window.structuredClone(data) as Calendar;
     const normalizedKeyword = keyword.trim().toLowerCase();
-
-    Object.values(sortData.data).forEach(week => {
-      week?.sort(b => (!b.status ? 1 : -1));
-    });
-
-    const filterData = sortData.data;
-    for (const [week, weekData] of Object.entries(sortData.data) as CalendarDataEntries) {
-      filterData[week] = weekData?.filter(bangumi => {
+    return Object.fromEntries(
+      (Object.entries(data.data) as CalendarDataEntries).map(([week, weekData]) => [
+        week,
+        weekData?.filter(bangumi => {
         const matchKeyword = normalizedKeyword.length === 0 || bangumi.name.toLowerCase().includes(normalizedKeyword);
-
         if (!matchKeyword) return false;
         if (state.subscribed) return bangumi.status;
         if (state.unSubscribed) return !bangumi.status;
         return true;
-      });
-    }
-
-    return filterData;
+        }).sort((a, b) => Number(Boolean(b.status)) - Number(Boolean(a.status))),
+      ])
+    ) as CalendarData;
   }, [data, keyword, state]);
 
   const weekdayTabItems = useMemo(() => {

@@ -179,6 +179,7 @@ export default function CalendarTab({
   const reduceMotion = useReducedMotion();
   const tabScrollRef = useRef<HTMLDivElement | null>(null);
   const mobileRailRef = useRef<HTMLDivElement | null>(null);
+  const mobileRailBoundsRef = useRef<{ left: number; width: number } | null>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const previousTabKeyRef = useRef<string | undefined>(undefined);
   const mobileDragRef = useRef({
@@ -190,6 +191,10 @@ export default function CalendarTab({
     lastIndex: 0,
   });
   const mobileSuppressClickRef = useRef(false);
+  const mobileDropletRef = useRef<HTMLDivElement | null>(null);
+  const mobileVisualRef = useRef({ index: 0, moving: false });
+  const mobileDragFrameRef = useRef<number | null>(null);
+  const pendingMobilePositionRef = useRef<{ x: number; index: number } | null>(null);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [mobileRailSize, setMobileRailSize] = useState({ width: 0, height: 0 });
   const [mobileDragState, setMobileDragState] = useState({
@@ -198,6 +203,10 @@ export default function CalendarTab({
     index: 0,
     x: 0,
   });
+
+  useEffect(() => () => {
+    if (mobileDragFrameRef.current !== null) window.cancelAnimationFrame(mobileDragFrameRef.current);
+  }, []);
 
   const engToZh: Record<string, string> = {
     dashboard: 'Dashboard',
@@ -401,7 +410,7 @@ export default function CalendarTab({
     const rail = mobileRailRef.current;
     if (!rail || railItems.length === 0 || railItemBounds.length === 0) return 0;
 
-    const rect = rail.getBoundingClientRect();
+    const rect = mobileRailBoundsRef.current ?? rail.getBoundingClientRect();
     const localX = clamp(clientX - rect.left, 0, rect.width);
     const matchedIndex = railItemBounds.findIndex(bounds => localX >= bounds.left && localX <= bounds.left + bounds.width);
     return matchedIndex >= 0 ? matchedIndex : railItems.length - 1;
@@ -414,22 +423,26 @@ export default function CalendarTab({
       return;
     }
 
-    const rect = rail.getBoundingClientRect();
+    const rect = mobileRailBoundsRef.current ?? rail.getBoundingClientRect();
     const bounds = railItemBounds[index] ?? railItemBounds[0];
     const safeHalfWidth = Math.max(1, bounds.width / 2);
     const continuousCenter = clamp(clientX - rect.left, safeHalfWidth, rect.width - safeHalfWidth);
-    setMobileDragState({
-      active: true,
-      moving,
-      index,
-      x: continuousCenter,
-    });
+    if (mobileDropletRef.current) {
+      const dropletWidth = bounds.width * (type === 'subscribe' ? 0.98 : 1.12);
+      mobileDropletRef.current.style.left = `${continuousCenter - dropletWidth / 2}px`;
+    }
+    if (!moving || mobileVisualRef.current.index !== index || !mobileVisualRef.current.moving) {
+      mobileVisualRef.current = { index, moving };
+      setMobileDragState({ active: true, moving, index, x: continuousCenter });
+    }
   };
 
   const handleMobilePointerDown = (event: React.PointerEvent<HTMLElement>) => {
     if (event.button !== 0 || railItems.length === 0) return;
 
     event.preventDefault();
+    const rect = mobileRailRef.current?.getBoundingClientRect();
+    mobileRailBoundsRef.current = rect ? { left: rect.left, width: rect.width } : null;
     const index = getMobileIndexFromPoint(event.clientX);
     event.currentTarget.setPointerCapture?.(event.pointerId);
     mobileDragRef.current = {
@@ -440,7 +453,6 @@ export default function CalendarTab({
       startY: event.clientY,
       lastIndex: index,
     };
-    selectRailItem(railItems[index]);
     updateMobileDroplet(event.clientX, index, false);
   };
 
@@ -451,20 +463,33 @@ export default function CalendarTab({
     event.preventDefault();
     const movedEnough = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4;
     drag.moved = drag.moved || movedEnough;
+    if (!drag.moved) return;
     const index = getMobileIndexFromPoint(event.clientX);
-    if (movedEnough && index !== drag.lastIndex) {
-      drag.lastIndex = index;
-      selectRailItem(railItems[index]);
-    }
-    updateMobileDroplet(event.clientX, index, movedEnough);
+    if (movedEnough) drag.lastIndex = index;
+    pendingMobilePositionRef.current = { x: event.clientX, index };
+    if (mobileDragFrameRef.current !== null) return;
+    mobileDragFrameRef.current = window.requestAnimationFrame(() => {
+      mobileDragFrameRef.current = null;
+      const pending = pendingMobilePositionRef.current;
+      pendingMobilePositionRef.current = null;
+      if (pending) updateMobileDroplet(pending.x, pending.index, true);
+    });
   };
 
-  const stopMobileDrag = (event: React.PointerEvent<HTMLElement>) => {
+  const stopMobileDrag = (event: React.PointerEvent<HTMLElement>, cancelled = false) => {
     const drag = mobileDragRef.current;
     if (!drag.active || drag.pointerId !== event.pointerId) return;
 
     event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (mobileDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(mobileDragFrameRef.current);
+      mobileDragFrameRef.current = null;
+    }
+    pendingMobilePositionRef.current = null;
+    mobileRailBoundsRef.current = null;
+    if (!cancelled && drag.moved) selectRailItem(railItems[drag.lastIndex]);
     mobileSuppressClickRef.current = drag.moved;
+    mobileVisualRef.current.moving = false;
     mobileDragRef.current = {
       active: false,
       moved: false,
@@ -591,7 +616,7 @@ export default function CalendarTab({
             onPointerDown={handleMobilePointerDown}
             onPointerMove={handleMobilePointerMove}
             onPointerUp={stopMobileDrag}
-            onPointerCancel={stopMobileDrag}
+            onPointerCancel={event => stopMobileDrag(event, true)}
             onClickCapture={event => {
               if (!mobileSuppressClickRef.current) return;
               event.preventDefault();
@@ -624,6 +649,7 @@ export default function CalendarTab({
             ) : null}
             {mobileDragState.moving && mobileRailSize.width > 0 && mobileRailSize.height > 0 ? (
               <MobileLiquidGlass
+                elementRef={mobileDropletRef}
                 width={railDropletWidth}
                 height={railDropletHeight}
                 borderRadius={railDropletHeight / 2}
@@ -854,16 +880,16 @@ export default function CalendarTab({
       <Box mt={searchOpen ? 0 : type === 'subscribe' ? { base: 4, lg: 3 } : 3} {...boxProps} />
       <Box onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} overflow="hidden">
         {type === 'subscribe' ? (
-          <Box key={resolvedContentKey}>{standaloneContent ? standaloneContent : children}</Box>
+          <Box>{standaloneContent ? standaloneContent : children}</Box>
         ) : (
           <AnimatePresence mode="wait" initial={false} custom={direction}>
             <MotionBox
               key={resolvedContentKey}
               custom={direction}
-              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction > 0 ? animationDistance : -animationDistance }}
+              initial={reduceMotion || isMobile ? { opacity: 0 } : { opacity: 0, x: direction > 0 ? animationDistance : -animationDistance }}
               animate={{ opacity: 1, x: 0 }}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction > 0 ? -animationDistance : animationDistance }}
-              transition={reduceMotion ? { duration: 0.16 } : { duration: 0.32, ease: CONTENT_EASE }}
+              exit={reduceMotion || isMobile ? { opacity: 0 } : { opacity: 0, x: direction > 0 ? -animationDistance : animationDistance }}
+              transition={reduceMotion || isMobile ? { duration: 0.12 } : { duration: 0.32, ease: CONTENT_EASE }}
             >
               {standaloneContent ? standaloneContent : children}
             </MotionBox>

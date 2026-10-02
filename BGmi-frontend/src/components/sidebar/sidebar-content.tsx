@@ -19,11 +19,14 @@ import Link from '../router-link';
 import SidebarNavItem from './sidebar-nav-item';
 
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { getLiquidGlassGroupStyles, useLongPressDragSelect } from '~/lib/liquid-glass';
+import ThemePanel from '../layout/theme-panel';
 const LOGO = '/logo.png';
 
 export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () => void }) => {
   const { colorMode, toggleColorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -48,25 +51,16 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
       overflowY="auto"
       overscrollBehavior="contain"
       borderRightWidth="1px"
-      borderRightColor={colorMode === 'dark' ? 'rgba(125,211,252,0.14)' : 'rgba(125, 167, 184, 0.28)'}
+      borderRightColor={theme.border}
       w={{ base: 'full', lg: '60' }}
-      bg={colorMode === 'dark' ? 'rgba(6, 10, 22, 0.82)' : 'rgba(238, 248, 252, 0.78)'}
+      bg="var(--bgmi-glass-sidebar)"
       backdropFilter="blur(26px) saturate(178%) contrast(1.05)"
       boxShadow={
         colorMode === 'dark'
-          ? '18px 0 42px rgba(0,0,0,0.28), inset -1px 0 0 rgba(125,211,252,0.08), inset 1px 0 0 rgba(255,255,255,0.05)'
+          ? `18px 0 42px rgba(0,0,0,0.28), inset -1px 0 0 ${colors.accent}18, inset 1px 0 0 rgba(255,255,255,0.05)`
           : '16px 0 36px rgba(36,78,88,0.10), inset -1px 0 0 rgba(255,255,255,0.72), inset 1px 0 0 rgba(255,255,255,0.34)'
       }
-      _before={{
-        content: '""',
-        position: 'absolute',
-        inset: '0',
-        pointerEvents: 'none',
-        background:
-          colorMode === 'dark'
-            ? 'radial-gradient(circle at 18% 4%, rgba(125,211,252,0.13), transparent 30%), radial-gradient(circle at 110% 24%, rgba(91,141,255,0.12), transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.012) 38%, rgba(255,255,255,0))'
-            : 'radial-gradient(circle at 16% 2%, rgba(255,255,255,0.94), transparent 32%), radial-gradient(circle at 110% 26%, rgba(125,211,252,0.24), transparent 36%), linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.18) 38%, rgba(255,255,255,0.04))',
-      }}
+      _before={{ content: 'none' }}
       sx={{
         WebkitBackdropFilter: 'blur(26px) saturate(178%) contrast(1.05)',
       }}
@@ -95,7 +89,7 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
           borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.88)'}
           boxShadow={
             colorMode === 'dark'
-              ? '0 12px 30px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16), 0 0 24px rgba(125,211,252,0.08)'
+              ? `0 12px 30px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16), 0 0 24px ${colors.accent}18`
               : '0 12px 26px rgba(36,78,88,0.12), inset 0 1px 0 rgba(255,255,255,0.92)'
           }
           backdropFilter="blur(14px) saturate(160%)"
@@ -107,7 +101,7 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
             pointerEvents: 'none',
             background:
               colorMode === 'dark'
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.20), rgba(255,255,255,0.02) 48%, rgba(125,211,252,0.12))'
+                ? `linear-gradient(135deg, rgba(255,255,255,0.20), rgba(255,255,255,0.02) 48%, ${colors.accent}20)`
                 : 'linear-gradient(135deg, rgba(255,255,255,0.90), rgba(255,255,255,0.08) 50%, rgba(125,211,252,0.16))',
           }}
         >
@@ -139,12 +133,12 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
             WebkitTextStroke: colorMode === 'dark' ? '1px rgba(255,255,255,0.16)' : '1px rgba(255,255,255,0.72)',
             filter:
               colorMode === 'dark'
-                ? 'drop-shadow(0 8px 18px rgba(0,0,0,0.34)) drop-shadow(0 0 18px rgba(125,211,252,0.16))'
+              ? `drop-shadow(0 8px 18px rgba(0,0,0,0.34)) drop-shadow(0 0 18px ${colors.accent}29)`
                 : 'drop-shadow(0 2px 1px rgba(255,255,255,0.90)) drop-shadow(0 8px 16px rgba(31,84,110,0.24))',
           }}
           textShadow={
             colorMode === 'dark'
-              ? '0 1px 0 rgba(255,255,255,0.34), 0 0 18px rgba(125,211,252,0.18)'
+              ? `0 1px 0 rgba(255,255,255,0.34), 0 0 18px ${colors.accent}2e`
               : '0 1px 0 rgba(255,255,255,1), 0 0 10px rgba(255,255,255,0.56), 0 1px 8px rgba(7,57,92,0.22)'
           }
         >
@@ -218,6 +212,7 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
         </Link>
 
         <Box h="3" />
+        <ThemePanel />
         <SidebarNavItem icon={colorMode === 'dark' ? BsSunFill : BsMoonFill} onClick={toggleColorMode} {...navDragSelect.getOptionProps('__theme')}>
           Theme Toggle
         </SidebarNavItem>

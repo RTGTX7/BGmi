@@ -275,3 +275,39 @@ def test_embedded_ssa_extracts_as_ass(tmp_path, monkeypatch):
     assert subtitles[0]["format"] == "ass"
     assert subtitles[0]["source_format"] == "ssa"
     assert subtitles[0]["render_style"]["font_family"] == "Microsoft YaHei"
+
+
+def test_ffmpeg_inputs_are_private_and_released(tmp_path, monkeypatch):
+    monkeypatch.setattr(player_assets.cfg, "tmp_path", tmp_path / "tmp")
+    source = tmp_path / "episode.mkv"
+    source.write_bytes(b"video")
+
+    first = player_assets._safe_ffmpeg_input(source)
+    second = player_assets._safe_ffmpeg_input(source)
+    assert first != second
+    assert first.exists() and second.exists()
+
+    player_assets._release_ffmpeg_input(source, first)
+    assert not first.exists() and second.exists()
+    player_assets._release_ffmpeg_input(source, second)
+    assert not second.exists()
+    assert source.read_bytes() == b"video"
+
+
+def test_stale_player_input_cleanup_preserves_active_input(tmp_path, monkeypatch):
+    monkeypatch.setattr(player_assets.cfg, "tmp_path", tmp_path)
+    workspace = tmp_path / "player-cache" / ("a" * 16)
+    workspace.mkdir(parents=True)
+    orphan = workspace / "input.mkv"
+    orphan.write_bytes(b"orphan")
+    active = workspace / ("input-" + "b" * 32 + ".mkv")
+    active.write_bytes(b"active")
+    with player_assets._active_ffmpeg_inputs_lock:
+        player_assets._active_ffmpeg_inputs.add(active)
+    try:
+        monkeypatch.setattr(player_assets.time, "time", lambda: 10**12)
+        assert player_assets.cleanup_stale_player_inputs() == 1
+        assert not orphan.exists() and active.exists()
+    finally:
+        with player_assets._active_ffmpeg_inputs_lock:
+            player_assets._active_ffmpeg_inputs.discard(active)

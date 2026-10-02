@@ -31,11 +31,12 @@ export const buildMediaUrl = (path: string, mediaOrigin?: string) => {
 export const resolveCoverSrc = (cover: string) => {
   if (!cover) return '';
 
-  if (cover.startsWith('/bangumi/cover/')) return `.${cover}`;
+  if (cover.startsWith('/bangumi/.cover/')) return `.${cover}`;
+  if (cover.startsWith('/bangumi/cover/')) return `.${cover.replace('/bangumi/cover/', '/bangumi/.cover/')}`;
 
   if (cover.startsWith('http://') || cover.startsWith('https://')) {
-    return `./bangumi/cover/${cover}`;
+    return cover;
   }
 
-  return `./bangumi/cover/${cover}`;
+  return `./bangumi/.cover/${cover}`;
 };

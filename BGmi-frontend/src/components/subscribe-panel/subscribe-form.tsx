@@ -5,6 +5,7 @@ import {
   FormControl,
   FormLabel,
   Input,
+  Link,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -17,11 +18,14 @@ import {
   Stack,
   Text,
 } from '@chakra-ui/react';
-import { Select } from 'chakra-react-select';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import useSWR from 'swr';
 
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useSubscribeAction } from '~/hooks/use-subscribe-action';
+import { fetcherWithTimeout } from '~/lib/fetcher';
+import { findMikanSubtitleLink, type MikanSubtitleGroupResponse } from '~/lib/mikan-subtitle';
 
 import type { SyncData } from './subscribe-card';
 
@@ -45,13 +49,9 @@ interface Props {
   syncData: SyncData;
 }
 
-interface SelectOption {
-  label: string;
-  value: string;
-}
-
 export default function SubscribeForm({ isOpen, onClose, initialData, setSyncData, syncData }: Props) {
   const { colorMode } = useColorMode();
+  const { theme: accentTheme } = useAccentTheme();
   const [formData, setFormData] = useState<InitialData>();
   const { handleSaveFilter, handleSaveMark, handleUnSubscribe, handleTriggerDownload } = useSubscribeAction();
 
@@ -59,26 +59,16 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
     setFormData(initialData);
   }, [initialData]);
 
-  const selectOptions = useMemo<SelectOption[]>(
-    () =>
-      formData?.subtitleGroups.map(subtitleGroup => ({
-        label: subtitleGroup,
-        value: subtitleGroup,
-      })) ?? [],
-    [formData]
-  );
-
-  const selectValue = useMemo<SelectOption[]>(
-    () =>
-      formData?.follwedSubtitleGroups.map(followedSubtitleGroup => ({
-        label: followedSubtitleGroup,
-        value: followedSubtitleGroup,
-      })) ?? [],
-    [formData]
+  const { data: mikanGroups } = useSWR<MikanSubtitleGroupResponse>(
+    isOpen && formData?.bangumiName ? `/api/mikan/subtitle-groups?bangumi=${encodeURIComponent(formData.bangumiName)}` : null,
+    (key: string) => fetcherWithTimeout([key], {}, 60000),
+    { revalidateOnFocus: false, shouldRetryOnError: false }
   );
 
   const glassFieldBg = colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(234,248,255,0.42)';
   const glassFieldBorder = colorMode === 'dark' ? 'whiteAlpha.180' : 'rgba(255,255,255,0.76)';
+  const primaryText = colorMode === 'dark' ? '#10212F' : '#FFFFFF';
+  const bangumiPlanUrl = formData ? `https://bgm.tv/subject_search/${encodeURIComponent(formData.bangumiName)}` : '';
 
   const handleSave = async () => {
     if (!formData) return;
@@ -135,16 +125,17 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
     <Modal onClose={onClose} isOpen={isOpen} closeOnOverlayClick={false}>
       <ModalOverlay />
       <ModalContent
+        data-bgmi-glass-panel
         maxW={{ base: 'calc(100vw - 1rem)', sm: 'sm', md: 'xl' }}
         overflow="visible"
-        bg={colorMode === 'dark' ? 'rgba(25,30,42,0.84)' : 'rgba(244,252,255,0.80)'}
+        bg="var(--bgmi-glass-background)"
         borderColor={glassFieldBorder}
         boxShadow={
           colorMode === 'dark'
             ? '0 30px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)'
             : '0 30px 80px rgba(39,87,116,0.14), 0 10px 28px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.64)'
         }
-        backdropFilter="blur(28px) saturate(175%)"
+        backdropFilter="blur(var(--bgmi-glass-blur)) saturate(175%)"
       >
         <ModalHeader pb="2">订阅设置</ModalHeader>
         <ModalCloseButton />
@@ -161,11 +152,14 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
               </Text>
 
               <Flex gap="3" flexWrap="wrap">
-                <Button variant="outline" onClick={() => void handleResetCompleted()} isLoading={handleSaveMark.isMutating}>
+                <Button variant="outline" borderColor={accentTheme.border} color={accentTheme.primary} onClick={() => void handleResetCompleted()} isLoading={handleSaveMark.isMutating}>
                   完成剧集清零
                 </Button>
-                <Button onClick={() => void handleSubmitDownload()} isLoading={handleTriggerDownload.isMutating}>
+                <Button bg={accentTheme.primary} color={primaryText} _hover={{ filter: 'brightness(0.92)' }} onClick={() => void handleSubmitDownload()} isLoading={handleTriggerDownload.isMutating}>
                   提交下载
+                </Button>
+                <Button as="a" href={bangumiPlanUrl} target="_blank" rel="noopener noreferrer" variant="outline" borderColor={accentTheme.border} color={accentTheme.primary}>
+                  番剧计划 ↗
                 </Button>
               </Flex>
 
@@ -230,80 +224,23 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
               </FormControl>
 
               <FormControl id="subtitleGroups">
-                <FormLabel>选择字幕组</FormLabel>
-                <Select<SelectOption, true>
-                  isMulti
-                  placeholder="选择要跟随的字幕组"
-                  options={selectOptions}
-                  value={selectValue}
-                  onChange={items =>
-                    setFormData({
-                      ...formData,
-                      follwedSubtitleGroups: items.map(item => item.value),
-                    })
-                  }
-                  closeMenuOnSelect={false}
-                  chakraStyles={{
-                    container: provided => ({
-                      ...provided,
-                      w: '100%',
-                    }),
-                    control: provided => ({
-                      ...provided,
-                      minH: '3rem',
-                      bg: glassFieldBg,
-                      borderColor: glassFieldBorder,
-                      boxShadow:
-                        colorMode === 'dark'
-                          ? 'inset 0 1px 0 rgba(255,255,255,0.05)'
-                          : '0 10px 24px rgba(39,87,116,0.08), inset 0 1px 0 rgba(255,255,255,0.44)',
-                      backdropFilter: 'blur(18px) saturate(165%)',
-                      borderRadius: '0.9rem',
-                    }),
-                    valueContainer: provided => ({
-                      ...provided,
-                      py: '0.45rem',
-                    }),
-                    menu: provided => ({
-                      ...provided,
-                      bg: colorMode === 'dark' ? 'rgba(25,30,42,0.90)' : 'rgba(244,252,255,0.88)',
-                      border: '1px solid',
-                      borderColor: glassFieldBorder,
-                      boxShadow:
-                        colorMode === 'dark'
-                          ? '0 18px 44px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)'
-                          : '0 18px 44px rgba(39,87,116,0.12), 0 6px 18px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.56)',
-                      backdropFilter: 'blur(22px) saturate(170%)',
-                      borderRadius: '1rem',
-                      overflow: 'hidden',
-                    }),
-                    menuList: provided => ({
-                      ...provided,
-                      py: '0.4rem',
-                    }),
-                    option: (provided, state) => ({
-                      ...provided,
-                      mx: '0.35rem',
-                      my: '0.2rem',
-                      borderRadius: '0.8rem',
-                      bg: state.isFocused
-                        ? colorMode === 'dark'
-                          ? 'rgba(255,255,255,0.10)'
-                          : 'rgba(234,248,255,0.72)'
-                        : 'transparent',
-                    }),
-                    multiValue: provided => ({
-                      ...provided,
-                      bg: colorMode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(234,248,255,0.78)',
-                      borderRadius: '999px',
-                      px: '0.15rem',
-                    }),
-                    dropdownIndicator: provided => ({
-                      ...provided,
-                      px: '0.7rem',
-                    }),
-                  }}
-                />
+                <FormLabel>已识别字幕组</FormLabel>
+                <Flex wrap="wrap" gap="2">
+                  {formData.subtitleGroups.length ? formData.subtitleGroups.map(name => {
+                    const selected = formData.follwedSubtitleGroups.includes(name);
+                    const url = findMikanSubtitleLink(mikanGroups?.data.groups, name);
+                    return (
+                      <Flex key={name} align="center" gap="2" maxW="full" minW="0" p="2" rounded="lg" borderWidth="1px" borderColor={selected ? accentTheme.primary : glassFieldBorder} bg={selected ? accentTheme.soft : glassFieldBg}>
+                        <Link href={url} target={url ? '_blank' : undefined} rel={url ? 'noopener noreferrer' : undefined} minW="0" fontSize="sm" lineHeight="1.4" overflowWrap="anywhere" color={url ? accentTheme.primary : undefined} textDecoration={url ? 'underline' : undefined}>
+                          {name}{url ? ' ↗' : ''}
+                        </Link>
+                        <Button size="xs" minW="3rem" flexShrink={0} bg={selected ? accentTheme.primary : 'transparent'} color={selected ? primaryText : accentTheme.primary} borderWidth="1px" borderColor={accentTheme.border} onClick={() => setFormData({ ...formData, follwedSubtitleGroups: selected ? formData.follwedSubtitleGroups.filter(item => item !== name) : [...formData.follwedSubtitleGroups, name] })}>
+                          {selected ? '已选' : '选择'}
+                        </Button>
+                      </Flex>
+                    );
+                  }) : <Text fontSize="sm" opacity={0.7}>暂无已识别字幕组</Text>}
+                </Flex>
               </FormControl>
             </Stack>
           )}
@@ -311,15 +248,17 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
 
         <ModalFooter pt="4">
           <Flex w="full" justify="space-between" gap="3" flexWrap="wrap">
-            <Button onClick={onClose} variant="outline">
+            <Button onClick={onClose} variant="outline" borderColor={accentTheme.border} color={accentTheme.primary}>
               返回
             </Button>
             <Flex gap="3" ml={{ md: 'auto', base: 0 }}>
-              <Button colorScheme="red" variant="solid" onClick={() => void handleUnSub()}>
+              <Button variant="outline" borderColor={accentTheme.border} color={accentTheme.primary} onClick={() => void handleUnSub()}>
                 取消订阅
               </Button>
               <Button
-                colorScheme="blue"
+                bg={accentTheme.primary}
+                color={primaryText}
+                _hover={{ filter: 'brightness(0.92)' }}
                 onClick={() => void handleSave()}
                 isLoading={handleSaveFilter.isMutating || handleSaveMark.isMutating}
               >

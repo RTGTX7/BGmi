@@ -40,11 +40,10 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
 
   return (
     <MotionBox
-      layout
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.992 }}
-      transition={reduceMotion ? { duration: 0.14 } : { duration: 0.26, ease: ITEM_EASE }}
+      transition={reduceMotion ? { duration: 0.14 } : { duration: 0.18, ease: ITEM_EASE }}
     >
       <Card
         maxW="full"
@@ -122,6 +121,8 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
             <Fade in={isLoaded}>
               <Image
                 src={resolveCoverSrc(bangumi.cover)}
+                loading="lazy"
+                decoding="async"
                 width="100%"
                 height="100%"
                 objectFit="cover"

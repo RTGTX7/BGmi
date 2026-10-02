@@ -644,9 +644,6 @@ def save_local_media_routing_config(
     local_media_origin = str(localMediaOrigin or "").strip().rstrip("/")
     origin_pattern = re.compile(r"^https?://[^/:\s]+:\d+$")
 
-    if enabled and not local_entry_hosts:
-        return {"status": "error", "message": "localEntryHosts is required when local media routing is enabled"}
-
     if local_media_origin and not origin_pattern.match(local_media_origin):
         return {"status": "error", "message": "localMediaOrigin must include protocol, host, and port"}
 

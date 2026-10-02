@@ -44,6 +44,7 @@ export interface BangumiData {
   libraryPath?: string;
   source?: string;
   player: Record<string, Record<(string & {}) | 'path', string> | undefined>;
+  player_versions?: Record<string, { group: string; path: string }[]>;
 }
 
 export interface SubtitleAsset {

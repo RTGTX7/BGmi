@@ -1,4 +1,5 @@
 import { useToast } from '@chakra-ui/react';
+import { useMemo } from 'react';
 import useSWR from 'swr';
 import { fetcher } from '~/lib/fetcher';
 import type { Calendar, CalendarData } from '~/types/calendar';
@@ -18,9 +19,10 @@ export function useCalendar() {
       });
     },
   });
+  const sortedData = useMemo(() => sortCalendar(data), [data]);
 
   return {
-    data: sortCalendar(data),
+    data: sortedData,
     isLoading,
     mutate,
   };

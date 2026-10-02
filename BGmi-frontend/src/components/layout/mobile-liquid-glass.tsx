@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, type Ref } from 'react';
 
 interface MobileLiquidGlassProps {
   width: number;
@@ -18,6 +18,7 @@ interface MobileLiquidGlassProps {
     strength?: number;
   };
   className?: string;
+  elementRef?: Ref<HTMLDivElement>;
   style?: React.CSSProperties;
 }
 
@@ -45,6 +46,7 @@ export default function MobileLiquidGlass({
   opacity = 1,
   droplet,
   className,
+  elementRef,
   style,
 }: MobileLiquidGlassProps) {
   const rawId = useId();
@@ -139,6 +141,7 @@ export default function MobileLiquidGlass({
       </svg>
       <canvas ref={canvasRef} width={Math.round(width)} height={Math.round(height)} style={{ display: 'none' }} />
       <div
+        ref={elementRef}
         className={className}
         style={{
           position: 'absolute',

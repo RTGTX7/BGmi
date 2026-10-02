@@ -5,11 +5,12 @@ import re
 import shutil
 import subprocess
 import time
+import uuid
 from collections import defaultdict, deque
 from functools import lru_cache
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from pathlib import Path
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 from typing import Any, Callable, Dict, Optional
 
 from bgmi.config import cfg
@@ -48,6 +49,10 @@ _hls_jobs_lock = Lock()
 _hls_jobs: dict[str, dict[str, Any]] = {}
 _browser_assets_cache_lock = Lock()
 _browser_assets_cache: dict[str, tuple[tuple[tuple[str, int, int], ...], Dict[str, Any]]] = {}
+_active_ffmpeg_inputs: set[Path] = set()
+_active_ffmpeg_inputs_lock = Lock()
+_cache_maintenance_started = False
+_cache_maintenance_lock = Lock()
 
 
 def local_media_routing_config() -> dict[str, Any]:
@@ -102,6 +107,11 @@ def resolve_media_origin_for_host(request_host: str) -> str:
     return state["localMediaOrigin"] if host in set(state["localEntryHosts"]) else ""
 
 
+def local_video_origin_candidate() -> str:
+    state = local_media_routing_state()
+    return state["localMediaOrigin"] if state["enabled"] and state["isValidOrigin"] else ""
+
+
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=True, capture_output=True, text=True, encoding="utf-8")
 
@@ -139,7 +149,10 @@ def _legacy_browser_video_target_path(source_path: Path) -> Path:
 
 
 def _relative_url(path: Path) -> str:
-    return "/" + path.relative_to(cfg.save_path).as_posix()
+    # Escape literal percent signs in filenames so the browser does not
+    # decode them before the static file handler resolves the path.
+    relative = path.relative_to(cfg.save_path).as_posix()
+    return "/" + quote(relative, safe="/:@-._~!$&'()*+,;=[]")
 
 
 def _cache_key(source_path: Path) -> str:
@@ -195,7 +208,79 @@ def _safe_workspace_copy(source_path: Path, name: str) -> Path:
 
 
 def _safe_ffmpeg_input(source_path: Path) -> Path:
-    return _safe_workspace_copy(source_path, f"input{source_path.suffix.lower()}")
+    # Every conversion gets its own input so one FFmpeg job cannot unlink a
+    # source still in use by another profile or subtitle extraction.
+    safe_source = _safe_workspace_copy(source_path, f"input-{uuid.uuid4().hex}{source_path.suffix.lower()}")
+    with _active_ffmpeg_inputs_lock:
+        _active_ffmpeg_inputs.add(safe_source)
+    return safe_source
+
+
+def _release_ffmpeg_input(source_path: Path, safe_source: Path) -> None:
+    if safe_source == source_path:
+        return
+    workspace = _workspace_dir(source_path)
+    if safe_source.parent != workspace or not safe_source.name.startswith("input-"):
+        return
+    try:
+        safe_source.unlink(missing_ok=True)
+    finally:
+        with _active_ffmpeg_inputs_lock:
+            _active_ffmpeg_inputs.discard(safe_source)
+    try:
+        workspace.rmdir()
+    except OSError:
+        pass
+
+
+def cleanup_stale_player_inputs(max_age_hours: int = 24) -> int:
+    """Remove orphaned FFmpeg inputs, including legacy input.mkv files."""
+    root = cfg.tmp_path.joinpath("player-cache")
+    if not root.is_dir():
+        return 0
+    cutoff = time.time() - max_age_hours * 3600
+    removed = 0
+    for workspace in root.iterdir():
+        if workspace.is_symlink() or not workspace.is_dir() or not re.fullmatch(r"[0-9a-f]{16}", workspace.name):
+            continue
+        for path in workspace.iterdir():
+            if not path.is_file() or not re.fullmatch(r"input(?:-[0-9a-f]{32})?\.(?:mkv|mp4|avi|webm|flv|rmvb|mov|ts)", path.name, re.I):
+                continue
+            with _active_ffmpeg_inputs_lock:
+                if path in _active_ffmpeg_inputs:
+                    continue
+            try:
+                if path.stat().st_ctime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except OSError:
+                continue
+        try:
+            workspace.rmdir()
+        except OSError:
+            pass
+    return removed
+
+
+def start_player_cache_maintenance() -> None:
+    global _cache_maintenance_started
+    with _cache_maintenance_lock:
+        if _cache_maintenance_started:
+            return
+        _cache_maintenance_started = True
+
+    def maintain() -> None:
+        wake = Event()
+        while True:
+            try:
+                removed = cleanup_stale_player_inputs()
+                if removed:
+                    print(f"[bgmi] Removed {removed} stale FFmpeg input files", flush=True)
+            except OSError as error:
+                print(f"[bgmi] Player cache maintenance failed: {error}", flush=True)
+            wake.wait(3600)
+
+    Thread(target=maintain, name="bgmi-player-cache-maintenance", daemon=True).start()
 
 
 def _video_dimensions(probe: Dict[str, Any]) -> tuple[int, int]:
@@ -541,23 +626,27 @@ def _convert_to_vtt(input_path: Path, target_path: Path, source_path: Path) -> N
         if tmp_path.exists():
             tmp_path.unlink()
 
-        if input_path.suffix.lower() == ".vtt":
-            shutil.copy2(safe_input, tmp_path)
-        else:
-            _run(
-                [
-                    "ffmpeg",
-                    "-nostdin",
-                    "-y",
-                    "-i",
-                    str(safe_input),
-                    "-f",
-                    "webvtt",
-                    str(tmp_path),
-                ]
-            )
+        try:
+            if input_path.suffix.lower() == ".vtt":
+                shutil.copy2(safe_input, tmp_path)
+            else:
+                _run(
+                    [
+                        "ffmpeg",
+                        "-nostdin",
+                        "-y",
+                        "-i",
+                        str(safe_input),
+                        "-f",
+                        "webvtt",
+                        str(tmp_path),
+                    ]
+                )
 
-        _replace_atomic(tmp_path, target_path)
+            _replace_atomic(tmp_path, target_path)
+        finally:
+            if safe_input != input_path:
+                safe_input.unlink(missing_ok=True)
 
 
 def _cleanup_browser_video_cache(source_path: Path) -> None:
@@ -968,17 +1057,20 @@ def ensure_hls_profile(source_path: Path, profile_name: str, probe: Optional[Dic
         )
 
         try:
-            _run(gpu_command)
-        except subprocess.CalledProcessError as exc:
-            print(
-                f"[bgmi] GPU HLS build failed for {source_path.name} [{profile_name}], "
-                f"falling back to CPU.\n{(exc.stderr or exc.stdout or str(exc)).strip()}",
-                flush=True,
-            )
-            if tmp_dir.exists():
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-                tmp_dir.mkdir(parents=True, exist_ok=True)
-            _run(cpu_command)
+            try:
+                _run(gpu_command)
+            except subprocess.CalledProcessError as exc:
+                print(
+                    f"[bgmi] GPU HLS build failed for {source_path.name} [{profile_name}], "
+                    f"falling back to CPU.\n{(exc.stderr or exc.stdout or str(exc)).strip()}",
+                    flush=True,
+                )
+                if tmp_dir.exists():
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                    tmp_dir.mkdir(parents=True, exist_ok=True)
+                _run(cpu_command)
+        finally:
+            _release_ffmpeg_input(source_path, safe_source)
 
         if target_dir.exists():
             shutil.rmtree(target_dir, ignore_errors=True)
@@ -1027,8 +1119,9 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
 
             manifest_path = tmp_dir.joinpath("index.m3u8")
             segment_pattern = tmp_dir.joinpath("segment-%05d.ts")
+            safe_source = _safe_ffmpeg_input(source_path)
             gpu_command = _build_hls_ffmpeg_command(
-                _safe_ffmpeg_input(source_path),
+                safe_source,
                 profile_name,
                 profile,
                 probe,
@@ -1037,7 +1130,7 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
                 prefer_gpu=True,
             )
             cpu_command = _build_hls_ffmpeg_command(
-                _safe_ffmpeg_input(source_path),
+                safe_source,
                 profile_name,
                 profile,
                 probe,
@@ -1062,28 +1155,31 @@ def _generate_hls_profile_job(source_path: Path, profile_name: str) -> None:
 
             report(0.0)
             try:
-                _run_ffmpeg_with_progress(gpu_command, duration_seconds=duration_seconds, on_progress=report)
-            except subprocess.CalledProcessError as exc:
-                if tmp_dir.exists():
-                    shutil.rmtree(tmp_dir, ignore_errors=True)
-                    tmp_dir.mkdir(parents=True, exist_ok=True)
-                gpu_error = (exc.output or str(exc)).strip()
-                print(
-                    f"[bgmi] GPU HLS job failed for {source_path.name} [{profile_name}], "
-                    f"falling back to CPU.\n{gpu_error}",
-                    flush=True,
-                )
-                _write_hls_job(
-                    source_path,
-                    profile_name,
-                    state="running",
-                    progress=0.0,
-                    profile=profile_name,
-                    stage="cpu-fallback",
-                    url="",
-                    error=gpu_error,
-                )
-                _run_ffmpeg_with_progress(cpu_command, duration_seconds=duration_seconds, on_progress=report)
+                try:
+                    _run_ffmpeg_with_progress(gpu_command, duration_seconds=duration_seconds, on_progress=report)
+                except subprocess.CalledProcessError as exc:
+                    if tmp_dir.exists():
+                        shutil.rmtree(tmp_dir, ignore_errors=True)
+                        tmp_dir.mkdir(parents=True, exist_ok=True)
+                    gpu_error = (exc.output or str(exc)).strip()
+                    print(
+                        f"[bgmi] GPU HLS job failed for {source_path.name} [{profile_name}], "
+                        f"falling back to CPU.\n{gpu_error}",
+                        flush=True,
+                    )
+                    _write_hls_job(
+                        source_path,
+                        profile_name,
+                        state="running",
+                        progress=0.0,
+                        profile=profile_name,
+                        stage="cpu-fallback",
+                        url="",
+                        error=gpu_error,
+                    )
+                    _run_ffmpeg_with_progress(cpu_command, duration_seconds=duration_seconds, on_progress=report)
+            finally:
+                _release_ffmpeg_input(source_path, safe_source)
 
             if target_dir.exists():
                 shutil.rmtree(target_dir, ignore_errors=True)
@@ -1277,14 +1373,17 @@ def ensure_browser_video(source_path: Path, probe: Dict[str, Any]) -> str:
         ]
 
         try:
-            if _is_mp4_ready(probe):
-                _run(copy_command)
-            else:
+            try:
+                if _is_mp4_ready(probe):
+                    _run(copy_command)
+                else:
+                    _run(transcode_command)
+            except subprocess.CalledProcessError:
+                if tmp_path.exists():
+                    tmp_path.unlink()
                 _run(transcode_command)
-        except subprocess.CalledProcessError:
-            if tmp_path.exists():
-                tmp_path.unlink()
-            _run(transcode_command)
+        finally:
+            _release_ffmpeg_input(source_path, safe_source)
 
         _replace_atomic(tmp_path, target_path)
 
@@ -1403,8 +1502,11 @@ def ensure_subtitle_assets(source_path: Path, probe: Dict[str, Any]) -> list[Dic
                             ]
                         )
 
-                    _run(command)
-                    _replace_atomic(tmp_path, target_path)
+                    try:
+                        _run(command)
+                        _replace_atomic(tmp_path, target_path)
+                    finally:
+                        _release_ffmpeg_input(source_path, safe_source)
         except Exception as exc:
             print(
                 f"[bgmi] Skip invalid embedded subtitle for {source_path.name} stream {stream['index']}: {exc}",

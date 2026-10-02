@@ -17,7 +17,7 @@
 } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiAlertTriangle, FiFastForward, FiRewind } from 'react-icons/fi';
+import { FiAlertTriangle } from 'react-icons/fi';
 
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
@@ -49,6 +49,11 @@ interface Props {
   playerAssetErrorMessage?: string;
   playerAssetErrorStatus?: number;
   playerAssetMissing?: boolean;
+  playerGroup?: string;
+  activeGroup?: string;
+  onGroupSelect?: (group: string) => void;
+  onEnded?: () => void;
+  autoPlay?: boolean;
 }
 
 interface HlsProgressState {
@@ -250,9 +255,18 @@ export default function VideoPlayer({
   playerAssetErrorMessage,
   playerAssetErrorStatus,
   playerAssetMissing = false,
+  playerGroup = '',
+  activeGroup = '',
+  onGroupSelect,
+  onEnded,
+  autoPlay = false,
 }: Props) {
   const { colorMode } = useColorMode();
   const toast = useToast();
+  const onEndedRef = useRef(onEnded);
+  onEndedRef.current = onEnded;
+  const autoPlayRef = useRef(autoPlay);
+  autoPlayRef.current = autoPlay;
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const pollTimerRef = useRef<number | null>(null);
@@ -277,6 +291,7 @@ export default function VideoPlayer({
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number>(0);
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
   const [currentSourceType, setCurrentSourceType] = useState('auto');
+  const [localVideoProbe, setLocalVideoProbe] = useState<{ url: string; status: 'none' | 'checking' | 'connected' | 'unavailable' }>({ url: '', status: 'none' });
   const [hlsProgress, setHlsProgress] = useState<HlsProgressState>({
     active: false,
     profile: '',
@@ -294,11 +309,45 @@ export default function VideoPlayer({
 
   const { updateCurrentTime, getCurrentTime } = useVideoCurrentTime(bangumiData.bangumi_name);
 
-  const rawPath = bangumiData.player[episode]?.path ?? '';
+  const rawPath = bangumiData.player_versions?.[episode]?.find(version => version.group === playerGroup)?.path
+    ?? bangumiData.player[episode]?.path ?? '';
   const sourcePath = playerAsset?.source_path ?? rawPath;
   const playbackPath = playerAsset?.browser_path ?? sourcePath;
   const mediaOrigin = playerAsset?.mediaOrigin;
-  const directUrl = playbackPath ? buildMediaUrl(toBangumiAssetPath(playbackPath), mediaOrigin) : '';
+  const localDirectUrl = playbackPath && mediaOrigin ? buildMediaUrl(toBangumiAssetPath(playbackPath), mediaOrigin) : '';
+  const localVideoStatus = !localDirectUrl ? 'none' : localVideoProbe.url === localDirectUrl ? localVideoProbe.status : 'checking';
+  const effectiveMediaOrigin = localVideoStatus === 'connected' ? mediaOrigin : undefined;
+  const directUrl = playbackPath ? buildMediaUrl(toBangumiAssetPath(playbackPath), effectiveMediaOrigin) : '';
+
+  useEffect(() => {
+    if (!localDirectUrl || !mediaOrigin) {
+      setLocalVideoProbe({ url: '', status: 'none' });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 5000);
+    setLocalVideoProbe({ url: localDirectUrl, status: 'checking' });
+    fetch(localDirectUrl, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+      .then(response => {
+        if (!controller.signal.aborted) setLocalVideoProbe({ url: localDirectUrl, status: response.ok || response.status === 206 ? 'connected' : 'unavailable' });
+        void response.body?.cancel().catch(() => undefined);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLocalVideoProbe({ url: localDirectUrl, status: 'unavailable' });
+      })
+      .finally(() => window.clearTimeout(timer));
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [localDirectUrl, mediaOrigin]);
   const subtitleTracks = useMemo(
     () => playerAsset?.subtitles ?? (playerAsset?.subtitle ? [playerAsset.subtitle] : []),
     [playerAsset]
@@ -313,13 +362,13 @@ export default function VideoPlayer({
           return {
             ...item,
             profile,
-            playUrl: toPlayerQualityUrl(item.url, mediaOrigin),
+            playUrl: toPlayerQualityUrl(item.type === 'customHls' && playerGroup ? `${item.url}&player_group=${encodeURIComponent(playerGroup)}` : item.url, effectiveMediaOrigin),
             isHls: item.type === 'customHls',
             displayName: formatQualityLabel(profile, item.name),
           };
         })
         .sort((a, b) => qualityOrder(a.profile) - qualityOrder(b.profile)),
-    [mediaOrigin, playerAsset]
+    [effectiveMediaOrigin, playerAsset, playerGroup]
   );
   const fallbackQualityOptions = useMemo<QualityOption[]>(() => {
     if (!directUrl) return [];
@@ -362,7 +411,7 @@ export default function VideoPlayer({
   const activeNativeSubtitleType = getNativeSubtitleType(activeSubtitle);
   const activeNativeSubtitlePath =
     activeSubtitle && !isAssSubtitle
-      ? buildMediaUrl(toEncodedBangumiAssetPath(activeSubtitle.path), mediaOrigin)
+      ? buildMediaUrl(toEncodedBangumiAssetPath(activeSubtitle.path), effectiveMediaOrigin)
       : '';
   const activeNativeSubtitleStyle = buildNativeSubtitleStyle(
     activeSubtitle?.render_style,
@@ -375,9 +424,9 @@ export default function VideoPlayer({
       ? basePlaybackUrl
       : basePlaybackUrl.startsWith('./api/')
       ? createAbsoluteUrl(basePlaybackUrl)
-      : buildMediaUrl(toMediaPath(basePlaybackUrl), mediaOrigin)
+      : buildMediaUrl(toMediaPath(basePlaybackUrl), effectiveMediaOrigin)
     : '';
-  const downloadUrl = sourcePath ? buildMediaUrl(toBangumiAssetPath(sourcePath), mediaOrigin) : '';
+  const downloadUrl = sourcePath ? buildMediaUrl(toBangumiAssetPath(sourcePath), effectiveMediaOrigin) : '';
 
   const toolButtonBg = colorMode === 'light' ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.06)';
   const toolButtonBorder = colorMode === 'light' ? 'rgba(255,255,255,0.72)' : 'whiteAlpha.300';
@@ -415,13 +464,7 @@ export default function VideoPlayer({
   );
 
   useEffect(() => {
-    const directOption = displayedQualityOptions.find(item => item.profile === 'source');
-    const nextUrl = directOption?.playUrl || directUrl;
-    const nextType = directOption?.type || 'auto';
-
     setSelectedProfile('source');
-    setCurrentSourceUrl(nextUrl);
-    setCurrentSourceType(nextType);
     setHlsProgress({
       active: false,
       profile: '',
@@ -431,10 +474,30 @@ export default function VideoPlayer({
       error: '',
     });
     stopPolling();
-  }, [directUrl, displayedQualityOptions]);
+  }, [bangumiData.bangumi_name, episode, playbackPath]);
+
+  useEffect(() => {
+    if (selectedProfile !== 'source') return;
+    const directOption = displayedQualityOptions.find(item => item.profile === 'source');
+    const nextUrl = directOption?.playUrl || directUrl;
+    const nextType = directOption?.type || 'auto';
+
+    setCurrentSourceUrl(nextUrl);
+    setCurrentSourceType(nextType);
+  }, [directUrl, displayedQualityOptions, selectedProfile]);
+
+  useEffect(() => {
+    if (selectedProfile === 'source' || currentSourceType !== 'customHls') return;
+    setCurrentSourceUrl(current => {
+      if (!current) return current;
+      const url = new URL(current, window.location.href);
+      if (!url.pathname.startsWith('/bangumi/')) return current;
+      return buildMediaUrl(`${url.pathname}${url.search}${url.hash}`, effectiveMediaOrigin);
+    });
+  }, [currentSourceType, effectiveMediaOrigin, selectedProfile]);
 
   const pollHlsStatus = (option: QualityOption) => {
-    const statusUrl = `./api/player/hls/status?bangumi=${encodeURIComponent(
+    const statusUrl = `./api/player/hls/status?player_group=${encodeURIComponent(playerGroup)}&bangumi=${encodeURIComponent(
       bangumiData.bangumi_name
     )}&episode=${encodeURIComponent(episode)}&profile=${encodeURIComponent(option.profile)}`;
 
@@ -458,7 +521,7 @@ export default function VideoPlayer({
 
         if (status.state === 'ready' && status.url) {
           stopPolling();
-          setCurrentSourceUrl(buildMediaUrl(status.url, mediaOrigin));
+          setCurrentSourceUrl(buildMediaUrl(toBangumiAssetPath(status.url), effectiveMediaOrigin));
           setCurrentSourceType('customHls');
           setLoading(true);
           setHlsProgress({
@@ -524,7 +587,7 @@ export default function VideoPlayer({
       error: '',
     });
 
-    const startUrl = `./api/player/hls/start?bangumi=${encodeURIComponent(
+    const startUrl = `./api/player/hls/start?player_group=${encodeURIComponent(playerGroup)}&bangumi=${encodeURIComponent(
       bangumiData.bangumi_name
     )}&episode=${encodeURIComponent(episode)}&profile=${encodeURIComponent(option.profile)}`;
 
@@ -534,7 +597,7 @@ export default function VideoPlayer({
       const status = payload.data;
 
       if (status.state === 'ready' && status.url) {
-        setCurrentSourceUrl(buildMediaUrl(status.url, mediaOrigin));
+        setCurrentSourceUrl(buildMediaUrl(toBangumiAssetPath(status.url), effectiveMediaOrigin));
         setCurrentSourceType('customHls');
         setLoading(true);
         setHlsProgress({
@@ -729,6 +792,34 @@ export default function VideoPlayer({
       plugins,
     });
 
+    const controls = art.controls as unknown as {
+      add: (options: {
+        name: string;
+        position?: 'left' | 'right';
+        html: string;
+        tooltip?: string;
+        click: () => void;
+      }) => unknown;
+    };
+    controls.add({
+      name: 'bgmi-rewind-5',
+      position: 'left',
+      html: '<span aria-hidden="true">↶5</span>',
+      tooltip: '后退 5 秒',
+      click: () => {
+        art.seek = Math.max(0, art.video.currentTime - 5);
+      },
+    });
+    controls.add({
+      name: 'bgmi-forward-5',
+      position: 'left',
+      html: '<span aria-hidden="true">↷5</span>',
+      tooltip: '前进 5 秒',
+      click: () => {
+        art.seek = Math.min(art.duration || Infinity, art.video.currentTime + 5);
+      },
+    });
+
     // Let the player shell receive touch gestures instead of the native <video> element,
     // otherwise Chrome on mobile may hijack long-press with the browser's save/download menu.
     art.template.$player.style.touchAction = 'manipulation';
@@ -748,6 +839,7 @@ export default function VideoPlayer({
 
     const handleCanPlay = () => {
       setLoading(false);
+      if (autoPlayRef.current) void art.play().catch(() => undefined);
       if (!restoredTimeRef.current) {
         const currentTime = getCurrentTime();
         if (currentTime > 0) {
@@ -859,6 +951,8 @@ export default function VideoPlayer({
     syncControlsVisible();
 
     art.video.addEventListener('canplay', handleCanPlay);
+    const handleEnded = () => onEndedRef.current?.();
+    art.video.addEventListener('ended', handleEnded);
     art.video.addEventListener('timeupdate', handleTimeUpdate);
     art.video.addEventListener('seeking', handleSeeking);
     art.video.addEventListener('contextmenu', handleContextMenu);
@@ -878,6 +972,7 @@ export default function VideoPlayer({
       setControlsVisible(true);
       setShowLongPressIndicator(false);
       art.video.removeEventListener('canplay', handleCanPlay);
+      art.video.removeEventListener('ended', handleEnded);
       art.video.removeEventListener('timeupdate', handleTimeUpdate);
       art.video.removeEventListener('seeking', handleSeeking);
       art.video.removeEventListener('contextmenu', handleContextMenu);
@@ -973,7 +1068,7 @@ export default function VideoPlayer({
 
     const subtitleUrl = buildMediaUrl(
       toEncodedBangumiAssetPath(isAssSubtitle ? subtitle.original_path || subtitle.path : subtitle.path),
-      mediaOrigin
+      effectiveMediaOrigin
     );
     const subtitleType = getNativeSubtitleType(subtitle);
     const subtitleStyle = buildNativeSubtitleStyle(
@@ -1028,7 +1123,7 @@ export default function VideoPlayer({
       art.video.removeEventListener('loadedmetadata', retryNativeSubtitle);
       art.video.removeEventListener('canplay', retryNativeSubtitle);
     };
-  }, [activeSubtitle, artMountSeq, isAssSubtitle, mediaOrigin]);
+  }, [activeSubtitle, artMountSeq, effectiveMediaOrigin, isAssSubtitle]);
 
   // Sync subtitle selector into ArtPlayer settings panel
   useEffect(() => {
@@ -1341,72 +1436,53 @@ export default function VideoPlayer({
           ) : null}
         </Box>
 
-        <Flex justify="space-between" align="center" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
+        <Flex justify="flex-end" align="center" mt="2" px="0.5" gap={{ base: '1.5', sm: '2' }}>
+          {(bangumiData.player_versions?.[episode]?.length ?? 0) > 1 ? (
+            <HStack spacing="1.5" flex="1" flexWrap="wrap" aria-label="字幕组视频">
+              {bangumiData.player_versions?.[episode]?.map(version => (
+                <Button
+                  key={version.group}
+                  size="xs"
+                  rounded="full"
+                  aria-pressed={version.group === activeGroup}
+                  onClick={() => onGroupSelect?.(version.group)}
+                  bg={version.group === activeGroup ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBg}
+                  color={version.group === activeGroup ? 'white' : undefined}
+                  borderWidth="1px"
+                  borderColor={toolButtonBorder}
+                  _hover={{ opacity: 0.85 }}
+                >
+                  {version.group}
+                </Button>
+              ))}
+            </HStack>
+          ) : null}
           <HStack spacing="1.5">
             <IconButton
-              aria-label="后退 5 秒"
-              title="后退 5 秒"
-              icon={<FiRewind />}
+              aria-label={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
+              title={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
+              icon={<FiAlertTriangle />}
+              onClick={() => setMissingEpisodesDialogOpen(true)}
               size="sm"
+              minW={{ base: '1.82rem', sm: '2.55rem' }}
+              h={{ base: '1.82rem', sm: '2.55rem' }}
+              fontSize={{ base: '0.76rem', sm: '1rem' }}
               rounded="full"
               variant="outline"
-              isDisabled={!currentSourceUrl}
-              onClick={() => {
-                const art = playerRef.current;
-                if (art) art.seek = Math.max(0, art.video.currentTime - 5);
-              }}
-              bg={toolButtonBg}
-              borderColor={toolButtonBorder}
-              color={colorMode === 'light' ? '#516274' : 'whiteAlpha.900'}
+              bg={hasMissingEpisodes ? 'rgba(245,158,11,0.18)' : toolButtonBg}
+              borderColor={hasMissingEpisodes ? 'rgba(245,158,11,0.42)' : toolButtonBorder}
+              boxShadow={hasMissingEpisodes ? '0 0 18px rgba(245,158,11,0.18), inset 0 1px 0 rgba(255,255,255,0.08)' : toolButtonShadow}
+              backdropFilter="blur(18px) saturate(170%)"
+              color={hasMissingEpisodes ? '#FBBF24' : colorMode === 'light' ? '#516274' : 'rgba(255,255,255,0.92)'}
+              _hover={{ transform: 'translateY(-1px)', bg: hasMissingEpisodes ? 'rgba(245,158,11,0.24)' : colorMode === 'light' ? 'rgba(255,255,255,0.36)' : 'rgba(255,255,255,0.10)' }}
+              _active={{ transform: 'translateY(0)' }}
+              isLoading={missingEpisodesLoading}
             />
-            <IconButton
-              aria-label="前进 5 秒"
-              title="前进 5 秒"
-              icon={<FiFastForward />}
-              size="sm"
-              rounded="full"
-              variant="outline"
-              isDisabled={!currentSourceUrl}
-              onClick={() => {
-                const art = playerRef.current;
-                if (art) art.seek = Math.min(art.duration || Infinity, art.video.currentTime + 5);
-              }}
-              bg={toolButtonBg}
-              borderColor={toolButtonBorder}
-              color={colorMode === 'light' ? '#516274' : 'whiteAlpha.900'}
-            />
+            {externalUrl ? <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} /> : null}
           </HStack>
-          <IconButton
-            aria-label={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
-            title={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
-            icon={<FiAlertTriangle />}
-            onClick={() => setMissingEpisodesDialogOpen(true)}
-            size="sm"
-            minW={{ base: '1.82rem', sm: '2.55rem' }}
-            h={{ base: '1.82rem', sm: '2.55rem' }}
-            fontSize={{ base: '0.76rem', sm: '1rem' }}
-            rounded="full"
-            variant="outline"
-            bg={hasMissingEpisodes ? 'rgba(245,158,11,0.18)' : toolButtonBg}
-            borderColor={hasMissingEpisodes ? 'rgba(245,158,11,0.42)' : toolButtonBorder}
-            boxShadow={
-              hasMissingEpisodes
-                ? '0 0 18px rgba(245,158,11,0.18), inset 0 1px 0 rgba(255,255,255,0.08)'
-                : toolButtonShadow
-            }
-            backdropFilter="blur(18px) saturate(170%)"
-            color={hasMissingEpisodes ? '#FBBF24' : colorMode === 'light' ? '#516274' : 'rgba(255,255,255,0.92)'}
-            _hover={{
-              transform: 'translateY(-1px)',
-              bg: hasMissingEpisodes ? 'rgba(245,158,11,0.24)' : colorMode === 'light' ? 'rgba(255,255,255,0.36)' : 'rgba(255,255,255,0.10)',
-            }}
-            _active={{ transform: 'translateY(0)' }}
-            isLoading={missingEpisodesLoading}
-          />
-          {externalUrl ? <ExternalPlayer url={externalUrl} downloadUrl={downloadUrl} /> : null}
         </Flex>
       </Flex>
-      <EpisodeCard flexShrink={0} setPlayState={() => undefined} bangumiData={episodeCardProps} />
+      <EpisodeCard flexShrink={0} setPlayState={() => undefined} bangumiData={episodeCardProps} localVideoStatus={localVideoStatus} />
 
       <AlertDialog isOpen={missingEpisodesDialogOpen} leastDestructiveRef={missingEpisodesCancelRef} onClose={() => setMissingEpisodesDialogOpen(false)} isCentered>
         <AlertDialogOverlay backdropFilter="blur(10px)">

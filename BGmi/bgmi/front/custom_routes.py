@@ -6,29 +6,35 @@ import re
 import subprocess
 import sys
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import parse_qs, unquote, urlparse
 
 import fastapi
 import sqlalchemy as sa
+from bs4 import BeautifulSoup
 from fastapi.responses import RedirectResponse
 
 from bgmi import __version__
 from bgmi.config import BGMI_PATH, CONFIG_FILE_PATH, cfg
-from bgmi.front.index import get_player
+from bgmi.front.index import get_player, get_player_versions
 from bgmi.front.player_assets import (
     build_browser_assets,
     ensure_hls_profile,
     get_hls_profile_status,
     local_media_routing_state,
+    local_video_origin_candidate,
     resolve_media_origin_for_host,
     start_hls_profile_generation,
 )
 from bgmi.lib import controllers as ctl
 from bgmi.lib.fetch import website
 from bgmi.lib.maintenance import execute_rebuild_repository, preview_rebuild_repository
+from bgmi.lib.mikan_resolver import resolve_bangumi
 from bgmi.lib.table import Bangumi, BangumiIssue, Followed, Session, Subtitle
 from bgmi.utils import normalize_path
+from bgmi.website.mikan import get_text, server_root
 
 router = fastapi.APIRouter()
 ISSUE_MISSING_EPISODES = "missing_episodes"
@@ -98,6 +104,43 @@ def debug_seed() -> dict[str, Any]:
             if session.get(Followed, name) is None:
                 session.add(Followed(bangumi_name=name, episodes=episodes, status=follow_status,
                                      updated_time=now, season=1))
+
+        # Also expose any user-provided top-level video folders as fixtures.
+        for folder in sorted(cfg.save_path.iterdir()) if cfg.save_path.exists() else ():
+            if not folder.is_dir() or folder.name.startswith(".") or folder.name.startswith("_"):
+                continue
+            video_files = [path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in {".mp4", ".mkv", ".avi", ".webm", ".mov", ".ts"}]
+            if not video_files:
+                continue
+            episode_numbers = set()
+            for video_file in video_files:
+                match = re.search(
+                    r"(?:^|[-_\s])(?:e|ep|第)?\s*(\d{1,3})(?=\s|$|\[|\.)",
+                    unquote(video_file.stem),
+                    re.IGNORECASE,
+                )
+                episode_numbers.add(int(match.group(1)) if match else 1)
+            item_id = f"simulator:file:{folder.name}"
+            local_bangumi = session.get(Bangumi, item_id)
+            # Keep local test media visible in the season based frontend.
+            local_cover = "https://dummyimage.com/480x720/0f766e/ffffff.png?text=Bangumi/202610"
+            if local_bangumi is None:
+                session.add(Bangumi(id=item_id, name=folder.name, update_day="Simulator", cover=local_cover,
+                                    status=Bangumi.STATUS_UPDATING, source="local", in_library=True,
+                                    library_path=str(folder)))
+            else:
+                local_bangumi.cover = local_cover
+                local_bangumi.status = Bangumi.STATUS_UPDATING
+                local_bangumi.source = "local"
+                local_bangumi.in_library = True
+                local_bangumi.library_path = str(folder)
+            followed = session.get(Followed, folder.name)
+            if followed is None:
+                session.add(Followed(bangumi_name=folder.name, episodes=episode_numbers, status=Followed.STATUS_FOLLOWED,
+                                     updated_time=now, season=1))
+            else:
+                followed.episodes = episode_numbers
+                followed.updated_time = now
     return debug_status()
 
 
@@ -138,9 +181,18 @@ def player_map(bangumi: Bangumi, followed: Optional[Followed]) -> dict[int, dict
     )
 
 
-def list_item(bangumi: Bangumi, followed: Optional[Followed], missing: set[str]) -> dict[str, Any]:
+def player_versions_map(bangumi: Bangumi, followed: Optional[Followed]) -> dict[int, list[dict[str, str]]]:
+    episodes = followed.episodes if followed and cfg.enable_path_formatter else ()
+    return get_player_versions(
+        bangumi.name, episodes=episodes, season=followed.season if followed else 1,
+        episode_offset=followed.episode_offset if followed else 0,
+        display_name=followed.display_name if followed else "",
+    )
+
+
+def list_item(bangumi: Bangumi, followed: Optional[Followed], missing: set[str], *, include_versions: bool = False) -> dict[str, Any]:
     year, quarter, season = cover_season(bangumi.cover)
-    return {
+    item = {
         "id": bangumi.id,
         "name": bangumi.name,
         "bangumi_name": bangumi.name,
@@ -159,6 +211,9 @@ def list_item(bangumi: Bangumi, followed: Optional[Followed], missing: set[str])
         "libraryPath": bangumi.library_path,
         "player": player_map(bangumi, followed),
     }
+    if include_versions:
+        item["player_versions"] = player_versions_map(bangumi, followed)
+    return item
 
 
 def find_bangumi(name: str) -> Bangumi:
@@ -173,7 +228,7 @@ def find_bangumi(name: str) -> Bangumi:
     return bangumi
 
 
-def find_source(name: str, episode: str) -> Path:
+def find_source(name: str, episode: str, player_group: str = "") -> Path:
     bangumi = find_bangumi(name)
     try:
         number = int(episode)
@@ -181,7 +236,9 @@ def find_source(name: str, episode: str) -> Path:
         raise fastapi.HTTPException(400, "invalid episode") from error
     with Session.begin() as session:
         followed = session.get(Followed, bangumi.name)
-    entry = player_map(bangumi, followed).get(number)
+    versions = player_versions_map(bangumi, followed).get(number, []) if player_group else []
+    entry = next((version for version in versions if version["group"] == player_group), None)
+    entry = entry or player_map(bangumi, followed).get(number)
     if not entry:
         set_issue(name, ISSUE_MISSING_PLAYABLE_SOURCE, episode)
         raise fastapi.HTTPException(404, "episode source not found")
@@ -247,36 +304,92 @@ def legacy_player_bangumi(bangumi: str) -> dict[str, Any]:
                 sa.select(BangumiIssue.bangumi_name).where(BangumiIssue.issue_type == ISSUE_MISSING_EPISODES)
             )
         )
-    return envelope(list_item(row, followed, missing))
+    return envelope(list_item(row, followed, missing, include_versions=True))
+
+
+@lru_cache(maxsize=256)
+def mikan_overview(mikan_id: str) -> str:
+    html = get_text(f"{server_root}Home/Bangumi/{mikan_id}")
+    soup = BeautifulSoup(html, "html.parser")
+    info = soup.select_one(".m-detail-intro .info")
+    return info.get_text("\n", strip=True) if info else ""
+
+
+@lru_cache(maxsize=256)
+def mikan_subtitle_group_links(mikan_id: str) -> list[dict[str, str]]:
+    soup = BeautifulSoup(get_text(f"{server_root}Home/Bangumi/{mikan_id}"), "html.parser")
+    groups: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for section in soup.select(".subgroup-text"):
+        group_link = section.select_one('a[href^="/Home/PublishGroup/"]')
+        rss_link = section.select_one('a[href^="/RSS/Bangumi?"]')
+        if not group_link or not rss_link:
+            continue
+        publish_id = str(group_link.get("href") or "").rsplit("/", 1)[-1]
+        subgroup_id = parse_qs(urlparse(str(rss_link.get("href") or "")).query).get("subgroupid", [""])[0]
+        if not publish_id.isdigit() or not subgroup_id.isdigit() or subgroup_id in seen:
+            continue
+        seen.add(subgroup_id)
+        groups.append({
+            "id": subgroup_id,
+            "name": group_link.get_text(" ", strip=True),
+            "url": f"{server_root}Home/PublishGroup/{publish_id}",
+        })
+    return groups
+
+
+def linked_mikan_id(row: Bangumi) -> str:
+    if re.fullmatch(r"\d+", row.id):
+        return row.id
+    matched, _, _ = resolve_bangumi(row.name)
+    return str(matched.get("keyword") or "") if matched else ""
+
+
+@router.get("/player/overview")
+def legacy_player_overview(bangumi: str) -> dict[str, Any]:
+    row = find_bangumi(bangumi.strip())
+    mikan_id = linked_mikan_id(row)
+    if not re.fullmatch(r"\d+", mikan_id):
+        return envelope({"synopsis": "", "mikanId": ""})
+    return envelope({"synopsis": mikan_overview(mikan_id), "mikanId": mikan_id})
+
+
+@router.get("/mikan/subtitle-groups")
+def legacy_mikan_subtitle_groups(bangumi: str) -> dict[str, Any]:
+    row = find_bangumi(bangumi.strip())
+    mikan_id = linked_mikan_id(row)
+    if not re.fullmatch(r"\d+", mikan_id):
+        return envelope({"groups": []})
+    return envelope({"groups": mikan_subtitle_group_links(mikan_id)})
 
 
 @router.get("/player")
-def legacy_player_assets(request: fastapi.Request, bangumi: str, episode: str) -> dict[str, Any]:
-    source = find_source(bangumi, episode)
+def legacy_player_assets(request: fastapi.Request, bangumi: str, episode: str, player_group: str = "") -> dict[str, Any]:
+    source = find_source(bangumi, episode, player_group)
     try:
         data = build_browser_assets(source, bangumi, episode)
     except Exception as error:
         raise fastapi.HTTPException(500, str(error)) from error
-    data["mediaOrigin"] = resolve_media_origin_for_host(request.headers.get("host", ""))
+    data["mediaOrigin"] = local_video_origin_candidate()
     return envelope(data)
 
 
 @router.get("/player/hls")
-def legacy_player_hls(request: fastapi.Request, bangumi: str, episode: str, profile: str) -> RedirectResponse:
-    source = find_source(bangumi, episode)
+def legacy_player_hls(request: fastapi.Request, bangumi: str, episode: str, profile: str, player_group: str = "") -> RedirectResponse:
+    source = find_source(bangumi, episode, player_group)
     hls_path = ensure_hls_profile(source, profile)
     origin = resolve_media_origin_for_host(request.headers.get("host", ""))
     return RedirectResponse(f"{origin}/bangumi{hls_path}")
 
 
 @router.post("/player/hls/start")
-def legacy_player_hls_start(bangumi: str, episode: str, profile: str) -> dict[str, Any]:
-    return envelope(start_hls_profile_generation(find_source(bangumi, episode), profile))
+def legacy_player_hls_start(bangumi: str, episode: str, profile: str, player_group: str = "") -> dict[str, Any]:
+    return envelope(start_hls_profile_generation(find_source(bangumi, episode, player_group), profile))
 
 
 @router.get("/player/hls/status")
-def legacy_player_hls_status(bangumi: str, episode: str, profile: str) -> dict[str, Any]:
-    return envelope(get_hls_profile_status(find_source(bangumi, episode), profile))
+def legacy_player_hls_status(bangumi: str, episode: str, profile: str, player_group: str = "") -> dict[str, Any]:
+    return envelope(get_hls_profile_status(find_source(bangumi, episode, player_group), profile))
 
 
 @router.get("/cal")
@@ -541,8 +654,6 @@ def dashboard_media_routing(payload: dict[str, Any]) -> dict[str, Any]:
     enabled = bool(payload.get("enabled"))
     hosts = list(dict.fromkeys(str(host).strip().lower() for host in payload.get("localEntryHosts") or [] if str(host).strip()))
     origin = str(payload.get("localMediaOrigin") or "").strip().rstrip("/")
-    if enabled and not hosts:
-        raise fastapi.HTTPException(400, "localEntryHosts required")
     if origin and not re.fullmatch(r"https?://[^/:\s]+:\d+", origin):
         raise fastapi.HTTPException(400, "localMediaOrigin must include protocol, host, and port")
     if enabled and not origin:

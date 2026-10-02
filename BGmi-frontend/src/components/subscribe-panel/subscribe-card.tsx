@@ -3,6 +3,7 @@ import {
   Button,
   Flex,
   Image,
+  Link,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -17,9 +18,13 @@ import {
 } from '@chakra-ui/react';
 import type { TouchEvent } from 'react';
 import { useRef, useState } from 'react';
+import useSWR from 'swr';
 
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useSubscribeAction } from '~/hooks/use-subscribe-action';
+import { fetcherWithTimeout } from '~/lib/fetcher';
+import { findMikanSubtitleLink, type MikanSubtitleGroupResponse } from '~/lib/mikan-subtitle';
 import { resolveCoverSrc } from '~/lib/utils';
 
 import SubscribeForm from './subscribe-form';
@@ -38,7 +43,9 @@ export interface SyncData {
 
 export default function SubscribeCard({ bangumi }: Props) {
   const { colorMode } = useColorMode();
+  const { theme: accentTheme } = useAccentTheme();
   const isDark = colorMode === 'dark';
+  const primaryText = isDark ? '#10212F' : '#FFFFFF';
   const [imageLoaded, setImageLoaded] = useState(false);
   const { isOpen, onClose, onOpen } = useDisclosure();
   const {
@@ -57,6 +64,11 @@ export default function SubscribeCard({ bangumi }: Props) {
   });
   const followedSubtitleGroups = initialData?.follwedSubtitleGroups ?? [];
   const bangumiPlanUrl = `https://bgm.tv/subject_search/${encodeURIComponent(bangumi.name)}`;
+  const { data: mikanGroups } = useSWR<MikanSubtitleGroupResponse>(
+    isPreviewOpen && bangumi.subtitle_group?.length ? `/api/mikan/subtitle-groups?bangumi=${encodeURIComponent(bangumi.name)}` : null,
+    (key: string) => fetcherWithTimeout([key], {}, 60000),
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
 
   const loadFilterData = async (name: string, ep: number) => {
     const data = await handleFetchFilter(name);
@@ -123,6 +135,7 @@ export default function SubscribeCard({ bangumi }: Props) {
     <>
       <Box
         role="group"
+        data-bgmi-glass-panel
         w="full"
         minW="0"
         cursor={isMobile ? 'pointer' : 'default'}
@@ -145,6 +158,8 @@ export default function SubscribeCard({ bangumi }: Props) {
             h="full"
             w="full"
             src={resolveCoverSrc(bangumi.cover)}
+            loading="lazy"
+            decoding="async"
             alt={bangumi.name}
             objectFit="cover"
             opacity={imageLoaded ? 1 : 0}
@@ -260,12 +275,8 @@ export default function SubscribeCard({ bangumi }: Props) {
                   px={{ base: '3', md: '5' }}
                   fontSize={{ base: '11px', md: 'sm' }}
                   fontWeight="700"
-                  color="gray.900"
-                  bg={
-                    syncData.status
-                      ? 'linear-gradient(135deg, #6ee7b7, #34d399)'
-                      : 'linear-gradient(135deg, #7dd3fc, #60a5fa)'
-                  }
+                  color={primaryText}
+                  bg={accentTheme.primary}
                   boxShadow="0 10px 22px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.36)"
                   _hover={{ opacity: 0.96, transform: 'translateY(-1px)' }}
                 >
@@ -373,13 +384,17 @@ export default function SubscribeCard({ bangumi }: Props) {
                     <Wrap spacing="2">
                       {bangumi.subtitle_group.map(item => {
                         const isSelected = followedSubtitleGroups.includes(item.name);
+                        const url = findMikanSubtitleLink(mikanGroups?.data.groups, item.name, item.id);
                         return (
                           <WrapItem key={item.id}>
+                            <Link href={url} target={url ? '_blank' : undefined} rel={url ? 'noopener noreferrer' : undefined} display="block">
                             <Tag
-                              rounded="full"
+                              rounded="lg"
                               px="3"
                               py="1.5"
                               fontSize="xs"
+                              whiteSpace="normal"
+                              overflowWrap="anywhere"
                               color={
                                 isSelected
                                   ? isDark
@@ -416,9 +431,11 @@ export default function SubscribeCard({ bangumi }: Props) {
                                   : 'none'
                               }
                               backdropFilter="blur(12px) saturate(165%)"
+                              _hover={url ? { borderColor: accentTheme.primary, color: accentTheme.primary } : undefined}
                             >
-                              {item.name}
+                              {item.name}{url ? ' ↗' : ''}
                             </Tag>
+                            </Link>
                           </WrapItem>
                         );
                       })}
@@ -437,10 +454,10 @@ export default function SubscribeCard({ bangumi }: Props) {
                     px="4"
                     fontSize="sm"
                     fontWeight="700"
-                    color={isDark ? 'pink.100' : 'pink.600'}
-                    bg={isDark ? 'rgba(244,114,182,0.14)' : 'rgba(252,231,243,0.88)'}
+                    color={accentTheme.primary}
+                    bg={accentTheme.soft}
                     borderWidth="1px"
-                    borderColor={isDark ? 'rgba(244,114,182,0.28)' : 'rgba(244,114,182,0.26)'}
+                    borderColor={accentTheme.border}
                     boxShadow={
                       isDark
                         ? '0 10px 22px rgba(190,24,93,0.16), inset 0 1px 0 rgba(255,255,255,0.06)'
@@ -456,12 +473,8 @@ export default function SubscribeCard({ bangumi }: Props) {
                     px="4"
                     fontSize="sm"
                     fontWeight="700"
-                    color="gray.900"
-                    bg={
-                      syncData.status
-                        ? 'linear-gradient(135deg, #6ee7b7, #34d399)'
-                        : 'linear-gradient(135deg, #7dd3fc, #60a5fa)'
-                    }
+                    color={primaryText}
+                    bg={accentTheme.primary}
                     boxShadow="0 10px 22px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.36)"
                   >
                     {syncData.status ? '查看' : '订阅'}

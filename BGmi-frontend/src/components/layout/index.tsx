@@ -1,12 +1,28 @@
 import { Box } from '@chakra-ui/react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState, type CSSProperties } from 'react';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import MobileBottomNav from './mobile-bottom-nav';
 import Sidebar from '../sidebar';
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const { theme: accentTheme, colors, glassStyle } = useAccentTheme();
   const { colorMode } = useColorMode();
+  const glassBackground = glassStyle === 'clear' ? `${colors.surface}55` : glassStyle === 'frosted' ? `${colors.surface}D9` : `${colors.surface}A8`;
+  const glassSidebar = colorMode === 'dark'
+    ? colors.sidebar
+    : glassStyle === 'clear' ? `${colors.sidebar}88` : glassStyle === 'frosted' ? `${colors.sidebar}F2` : `${colors.sidebar}CC`;
+  const glassBlur = glassStyle === 'clear' ? '5px' : glassStyle === 'frosted' ? '28px' : '18px';
+  const glassShadow = glassStyle === 'clear' ? 'inset 0 1px 0 #ffffff55, 0 5px 18px #00000012' : glassStyle === 'frosted' ? '0 12px 28px #0000001c' : 'inset 0 1px 0 #ffffff66, 0 12px 28px #00000020';
+
+  useEffect(() => {
+    const root = document.documentElement.style;
+    root.setProperty('--bgmi-glass-background', glassBackground);
+    root.setProperty('--bgmi-glass-sidebar', glassSidebar);
+    root.setProperty('--bgmi-glass-blur', glassBlur);
+    root.setProperty('--bgmi-glass-shadow', glassShadow);
+  }, [glassBackground, glassSidebar, glassBlur, glassShadow]);
 
   const handleToggle = () => setOpen(o => !o);
   return (
@@ -15,11 +31,30 @@ function Layout({ children }: { children: React.ReactNode }) {
       ml={{ lg: '60' }}
       position="relative"
       overflowX="hidden"
-      bg={
-        colorMode === 'dark'
-          ? 'radial-gradient(circle at 12% 18%, rgba(108,76,255,0.18), transparent 24%), radial-gradient(circle at 82% 22%, rgba(53,95,196,0.16), transparent 26%), radial-gradient(circle at 58% 78%, rgba(124,58,237,0.12), transparent 28%), linear-gradient(180deg, #0b0e17 0%, #0a1020 46%, #0b0f1a 100%)'
-          : 'radial-gradient(circle at 14% 16%, rgba(122,203,214,0.22), transparent 24%), radial-gradient(circle at 84% 14%, rgba(170,221,226,0.18), transparent 26%), linear-gradient(180deg, #d9e9eb 0%, #d2e4e7 42%, #ccdde1 100%)'
-      }
+      data-accent={accentTheme.name}
+      data-glass-style={glassStyle}
+      style={{
+        '--bgmi-accent': accentTheme.primary,
+        '--bgmi-accent-soft': accentTheme.soft,
+        '--bgmi-accent-border': accentTheme.border,
+        '--bgmi-background': colors.background,
+        '--bgmi-sidebar': colors.sidebar,
+        '--bgmi-surface': colors.surface,
+        '--bgmi-text': colors.text,
+        '--bgmi-glass-background': glassBackground,
+        '--bgmi-glass-sidebar': glassSidebar,
+        '--bgmi-glass-blur': glassBlur,
+        '--bgmi-glass-shadow': glassShadow,
+      } as CSSProperties}
+      sx={{
+        '[data-bgmi-glass-panel]': {
+          bg: 'var(--bgmi-glass-background)',
+          backdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(160%)',
+          WebkitBackdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(160%)',
+          boxShadow: 'var(--bgmi-glass-shadow)',
+        },
+      }}
+      bg={colors.background}
     >
       <Sidebar isOpen={open} onClose={handleToggle} />
       <MobileBottomNav sidebarToggle={handleToggle} />
@@ -40,9 +75,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           inset: '0',
           pointerEvents: 'none',
           background:
-            colorMode === 'dark'
-              ? 'radial-gradient(circle at 20% 0%, rgba(145,112,255,0.10), transparent 28%), linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))'
-              : 'radial-gradient(circle at 18% 0%, rgba(156,214,221,0.18), transparent 26%), linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 12%)',
+            'none',
           borderRadius: '24px',
         }}
       >

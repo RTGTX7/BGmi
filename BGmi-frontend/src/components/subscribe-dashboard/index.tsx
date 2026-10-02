@@ -14,6 +14,7 @@ import {
   SimpleGrid,
   Spinner,
   Stack,
+  Switch,
   Text,
   useDisclosure,
   useToast,
@@ -24,8 +25,8 @@ import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { fetcher, fetcherWithMutation } from '~/lib/fetcher';
-import { getLiquidGlassButtonStyles } from '~/lib/liquid-glass';
 import { normalizePath } from '~/lib/utils';
 
 import type {
@@ -48,22 +49,17 @@ type ActionPreview = {
   actionKey: Exclude<ConfirmActionKey, null>;
 };
 
-const getPanelBg = (isDark: boolean) =>
-  isDark
-    ? 'linear-gradient(180deg, rgba(10,16,36,0.80) 0%, rgba(8,12,30,0.72) 100%)'
-    : 'linear-gradient(180deg, rgba(247,251,255,0.96) 0%, rgba(238,246,255,0.92) 100%)';
-const getPanelBorder = (isDark: boolean) =>
-  isDark ? 'rgba(120, 170, 255, 0.14)' : 'rgba(132, 169, 235, 0.24)';
-const getPanelShadow = (isDark: boolean) =>
-  isDark ? '0 0 20px rgba(80, 140, 255, 0.06)' : '0 12px 30px rgba(80, 140, 255, 0.08)';
+const getPanelBg = (_isDark: boolean) => 'var(--bgmi-glass-background)';
+const getPanelBorder = (_isDark: boolean) => 'var(--bgmi-accent-border)';
+const getPanelShadow = (_isDark: boolean) => 'var(--bgmi-glass-shadow)';
 const getDashboardTheme = (isDark: boolean) => ({
   textPrimary: isDark ? '#F2F6FF' : '#304254',
   textSecondary: isDark ? 'rgba(220, 230, 255, 0.72)' : 'rgba(79,95,110,0.78)',
   textMuted: isDark ? 'rgba(220, 230, 255, 0.56)' : 'rgba(79,95,110,0.68)',
   textStrong: isDark ? '#F4F8FF' : '#24384d',
   unitText: isDark ? 'rgba(220, 230, 255, 0.65)' : 'rgba(79,95,110,0.72)',
-  cardBg: isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)',
-  commandBg: isDark ? 'rgba(12, 20, 46, 0.84)' : 'rgba(247,251,255,0.92)',
+  cardBg: isDark ? 'rgba(30, 41, 59, 0.72)' : 'rgba(248,250,252,0.96)',
+  commandBg: isDark ? 'rgba(30, 41, 59, 0.72)' : 'rgba(248,250,252,0.96)',
   commandTitle: isDark ? 'rgba(245, 248, 255, 0.92)' : '#304254',
   commandSubtitle: isDark ? 'rgba(220, 230, 255, 0.58)' : 'rgba(79,95,110,0.72)',
 });
@@ -132,8 +128,8 @@ function StatusChip({ label, tone = 'cyan', isDark = true }: { label: string; to
       borderColor={isDark ? style.border : style.lightBorder}
       bg={isDark ? style.bg : style.lightBg}
       color={isDark ? style.color : style.lightText}
-      boxShadow={isDark ? style.glow : '0 8px 20px rgba(80, 140, 255, 0.08)'}
-      backdropFilter='blur(14px)'
+      boxShadow='none'
+      backdropFilter='none'
       whiteSpace='nowrap'
     >
       <Text fontSize='10px' fontWeight='700' letterSpacing='0.08em'>
@@ -201,12 +197,22 @@ function summarizeOutput(output?: string) {
   return normalized.length > 400 ? `${normalized.slice(0, 400)}...` : normalized;
 }
 
+function isValidLocalMediaOrigin(origin: string) {
+  try {
+    const parsed = new URL(origin);
+    return /^https?:\/\/[^/:\s]+:\d+$/.test(origin) && Boolean(parsed.hostname) && Boolean(parsed.port) && parsed.pathname === '/' && !parsed.search && !parsed.hash;
+  } catch {
+    return false;
+  }
+}
+
 export default function SubscribeDashboard() {
   const authToken = getCookie('authToken') as string | undefined;
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
   const toast = useToast();
   const theme = getDashboardTheme(isDark);
+  const { theme: accentTheme } = useAccentTheme();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmDialog = useDisclosure();
   const [confirmInput, setConfirmInput] = useState('');
@@ -220,6 +226,10 @@ export default function SubscribeDashboard() {
   const [localMediaRoutingEnabled, setLocalMediaRoutingEnabled] = useState(false);
   const [localEntryHostsInput, setLocalEntryHostsInput] = useState('');
   const [localMediaOriginInput, setLocalMediaOriginInput] = useState('');
+  const [localMediaRoutingReady, setLocalMediaRoutingReady] = useState(false);
+  const [localMediaRoutingSaveError, setLocalMediaRoutingSaveError] = useState(false);
+  const savedLocalMediaRouting = useRef('');
+  const localMediaRoutingSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   const { data, error, isLoading, mutate } = useSWR<DashboardOverviewResponse>(['/api/dashboard', authToken], fetcher, {
     revalidateOnFocus: false,
@@ -303,11 +313,47 @@ export default function SubscribeDashboard() {
   const localMediaRouting = data?.data?.playerSettings?.localMediaRouting;
 
   useEffect(() => {
-    if (!localMediaRouting) return;
+    if (!localMediaRouting || localMediaRoutingReady) return;
     setLocalMediaRoutingEnabled(Boolean(localMediaRouting.enabled));
     setLocalEntryHostsInput((localMediaRouting.localEntryHosts ?? []).join(', '));
     setLocalMediaOriginInput(localMediaRouting.localMediaOrigin ?? '');
-  }, [localMediaRouting?.enabled, localMediaRouting?.localEntryHosts, localMediaRouting?.localMediaOrigin]);
+    savedLocalMediaRouting.current = JSON.stringify({
+      enabled: Boolean(localMediaRouting.enabled),
+      localEntryHosts: localMediaRouting.localEntryHosts ?? [],
+      localMediaOrigin: localMediaRouting.localMediaOrigin ?? '',
+    });
+    setLocalMediaRoutingReady(true);
+  }, [localMediaRouting, localMediaRoutingReady]);
+
+  useEffect(() => {
+    if (!localMediaRoutingReady) return;
+    const origin = localMediaOriginInput.trim().replace(/\/+$/, '');
+    const hosts = localEntryHostsInput.split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+    const previous = JSON.parse(savedLocalMediaRouting.current) as { enabled: boolean; localMediaOrigin: string };
+    const validOrigin = origin ? isValidLocalMediaOrigin(origin) : false;
+    if (localMediaRoutingEnabled && !validOrigin) return;
+    if (origin && !validOrigin && localMediaRoutingEnabled === previous.enabled) return;
+    const payload = { enabled: localMediaRoutingEnabled, localEntryHosts: hosts, localMediaOrigin: validOrigin ? origin : previous.localMediaOrigin };
+    const signature = JSON.stringify(payload);
+    if (signature === savedLocalMediaRouting.current) return;
+
+    const timeout = window.setTimeout(() => {
+      localMediaRoutingSaveQueue.current = localMediaRoutingSaveQueue.current.catch(() => undefined).then(async () => {
+        if (signature === savedLocalMediaRouting.current) return;
+        try {
+          await saveLocalMediaRouting(payload);
+          savedLocalMediaRouting.current = signature;
+          setLocalMediaRoutingSaveError(false);
+        } catch (err) {
+          setLocalMediaRoutingSaveError(true);
+          const savedEnabled = (JSON.parse(savedLocalMediaRouting.current) as { enabled: boolean }).enabled;
+          setLocalMediaRoutingEnabled(current => current === payload.enabled ? savedEnabled : current);
+          showError('保存本地播放加速设置失败', err);
+        }
+      });
+    }, localMediaRoutingEnabled !== JSON.parse(savedLocalMediaRouting.current).enabled ? 0 : 650);
+    return () => window.clearTimeout(timeout);
+  }, [localMediaRoutingReady, localMediaRoutingEnabled, localEntryHostsInput, localMediaOriginInput]);
 
   const openConfirm = (state: ActionPreview) => {
     setConfirmInput('');
@@ -448,47 +494,6 @@ export default function SubscribeDashboard() {
     }
   };
 
-  const handleSaveLocalMediaRouting = async () => {
-    const hosts = localEntryHostsInput
-      .split(',')
-      .map(item => item.trim().toLowerCase())
-      .filter(Boolean);
-    const origin = localMediaOriginInput.trim().replace(/\/+$/, '');
-
-    if (localMediaRoutingEnabled && hosts.length === 0) {
-      showError('请先填写本地入口主机', new Error('missing local entry hosts'));
-      return;
-    }
-
-    if (localMediaRoutingEnabled && !origin) {
-      showError('请先填写本地媒体 origin', new Error('missing local media origin'));
-      return;
-    }
-
-    if (origin) {
-      try {
-        const parsed = new URL(origin);
-        if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.pathname !== '/') throw new Error('invalid origin');
-      } catch {
-        showError('本地媒体 origin 必须是有效的 http(s) 地址，例如 http://192.168.1.10:8899', new Error('invalid local media origin'));
-        return;
-      }
-    }
-
-    try {
-      await saveLocalMediaRouting({
-        enabled: localMediaRoutingEnabled,
-        localEntryHosts: hosts,
-        localMediaOrigin: origin,
-      });
-      showSuccess('本地播放加速设置已保存');
-      await mutate();
-    } catch (err) {
-      showError('保存本地播放加速设置失败', err);
-    }
-  };
-
-
   const handleClearMissingEpisodes = async (bangumiName: string) => {
     try {
       await clearMissingEpisodeMark({ bangumiName });
@@ -540,10 +545,10 @@ export default function SubscribeDashboard() {
   ];
 
   const commandCards = [
-    { title: '重新同步 Mikan 数据', subtitle: 'Fetch metadata', tone: 'cyan' as Tone, onClick: handleSync, loading: syncMutating },
-    { title: '提交下载任务', subtitle: 'bgmi update', tone: 'blue' as Tone, onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
-    { title: '更新剧集和海报', subtitle: 'Refresh episodes & posters', tone: 'green' as Tone, onClick: handleOpenRefreshMetadataConfirm, loading: refreshMetadataMutating },
-    { title: '检查异常数据', subtitle: 'Scan issues', tone: 'blue' as Tone, onClick: handleCheckAnomalies, loading: anomalyMutating },
+    { title: '重新同步 Mikan 数据', subtitle: 'Fetch metadata', onClick: handleSync, loading: syncMutating },
+    { title: '提交下载任务', subtitle: 'bgmi update', onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
+    { title: '更新剧集和海报', subtitle: 'Refresh episodes & posters', onClick: handleOpenRefreshMetadataConfirm, loading: refreshMetadataMutating },
+    { title: '检查异常数据', subtitle: 'Scan issues', onClick: handleCheckAnomalies, loading: anomalyMutating },
   ];
 
   if (isLoading) {
@@ -557,7 +562,7 @@ export default function SubscribeDashboard() {
   if (error) {
     return (
       <Box
-        rounded='22px'
+        rounded='10px'
         borderWidth='1px'
         borderColor={getPanelBorder(isDark)}
         bg={getPanelBg(isDark)}
@@ -580,8 +585,8 @@ export default function SubscribeDashboard() {
 
   return (
     <Stack
-      spacing={{ base: 3, md: 3.5 }}
-      px={{ base: 0.5, md: 0 }}
+      spacing={{ base: 2.5, md: 3.5 }}
+      px={{ base: 0, md: 0 }}
       pb={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)', md: 6 }}
       minW='0'
       overflowX='hidden'
@@ -591,40 +596,34 @@ export default function SubscribeDashboard() {
         borderWidth='1px'
         borderColor={getPanelBorder(isDark)}
         bg={getPanelBg(isDark)}
-        px={{ base: 3.5, md: 5 }}
-        py={{ base: 3, md: 4 }}
-        minH={{ base: '58px', md: '72px' }}
+        px={{ base: 3, md: 5 }}
+        py={{ base: 2.5, md: 4 }}
+        minH={{ base: '54px', md: '72px' }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
         position='relative'
         overflow='hidden'
         minW='0'
-        _before={{
-          content: '""',
-          position: 'absolute',
-          inset: 0,
-          pointerEvents: 'none',
-          background: isDark
-            ? 'radial-gradient(circle at 90% 0%, rgba(80,140,255,0.14), transparent 30%), linear-gradient(180deg, rgba(255,255,255,0.05), transparent 50%)'
-            : 'radial-gradient(circle at 90% 0%, rgba(80,140,255,0.10), transparent 30%), linear-gradient(180deg, rgba(255,255,255,0.28), transparent 50%)',
-        }}
+        _before={{ content: 'none' }}
       >
-        <Grid templateColumns={{ base: '1fr', sm: '1fr auto' }} alignItems='center' gap='3' position='relative' zIndex='1' minW='0'>
+        <Grid templateColumns={{ base: '1fr auto', sm: '1fr auto' }} alignItems='center' gap={{ base: 2, md: 3 }} position='relative' zIndex='1' minW='0'>
           <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
-              Dashboard
+              控制台
             </Heading>
-            <Text mt='1' fontSize='11px' color={theme.textSecondary} noOfLines={1}>
+            <Text mt='0.5' fontSize={{ base: '10px', md: '11px' }} color={theme.textSecondary} noOfLines={1}>
               {formatSeasonKeyLabel(stats.currentSeasonKey)} · Synced {formatTime(stats.lastSyncTime)}
             </Text>
-            <Text mt='1' fontSize='10px' color={theme.textMuted} noOfLines={1}>
+            <Text display={{ base: 'none', sm: 'block' }} mt='1' fontSize='10px' color={theme.textMuted} whiteSpace='nowrap' overflow='hidden' textOverflow='ellipsis'>
               cwd: {stats.workingDirectory ?? '--'}
             </Text>
-            <Text mt='0.5' fontSize='10px' color={theme.textMuted} noOfLines={1}>
+            <Text display={{ base: 'none', sm: 'block' }} mt='0.5' fontSize='10px' color={theme.textMuted} whiteSpace='nowrap' overflow='hidden' textOverflow='ellipsis'>
               config: {stats.configPath ?? '--'}
             </Text>
           </Box>
-          <StatusChip label='SYNC OK' tone='green' isDark={isDark} />
+          <Flex align='center' gap='2' justify='flex-end'>
+            <StatusChip label='已同步' tone='green' isDark={isDark} />
+          </Flex>
         </Grid>
       </Box>
 
@@ -635,7 +634,7 @@ export default function SubscribeDashboard() {
           md: 'repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr))',
           xl: 'repeat(auto-fit, minmax(10.5rem, 1fr))',
         }}
-        gap={{ base: 2, md: 2.5 }}
+        gap={{ base: 1.5, md: 2.5 }}
         minW='0'
       >
         {statCards.map(item => {
@@ -643,13 +642,13 @@ export default function SubscribeDashboard() {
           return (
             <Box
               key={item.label}
-              rounded='18px'
+              rounded='8px'
               borderWidth='1px'
               borderColor={getPanelBorder(isDark)}
               bg={isDark ? theme.cardBg : getPanelBg(isDark)}
-              minH={{ base: '66px', md: '76px' }}
-              px={{ base: '3', md: '3.5' }}
-              py={{ base: '2.5', md: '3' }}
+              minH={{ base: '58px', md: '76px' }}
+              px={{ base: '2.5', md: '3.5' }}
+              py={{ base: '2', md: '3' }}
               boxShadow={getPanelShadow(isDark)}
               backdropFilter='blur(18px)'
               position='relative'
@@ -660,18 +659,18 @@ export default function SubscribeDashboard() {
                 position='absolute'
                 inset='0'
                 pointerEvents='none'
-                background={`radial-gradient(circle at 100% 0%, ${toneStyle.bg.replace('0.10', '0.18')}, transparent 36%)`}
-                opacity={0.9}
+                background='none'
+                opacity={0}
               />
               <Grid templateRows='auto 1fr' h='full' position='relative' zIndex='1'>
                 <Grid templateColumns='1fr auto' alignItems='start' gap='2'>
-                  <Text fontSize='11px' color={theme.textSecondary} noOfLines={1}>
+                  <Text fontSize={{ base: '10px', md: '11px' }} color={theme.textSecondary} noOfLines={1}>
                     {item.label}
                   </Text>
                   <Box w='6px' h='6px' rounded='full' bg={toneStyle.color} mt='1' boxShadow={isDark ? `inset 0 1px 0 rgba(255,255,255,0.04), ${toneStyle.glow}` : toneStyle.glow} />
                 </Grid>
                 <Flex align='end' gap='1.5' mt='1.5'>
-                  <Text fontSize={{ base: '22px', md: '28px' }} lineHeight='1' fontWeight='700' color={theme.textStrong}>
+                  <Text fontSize={{ base: '20px', md: '28px' }} lineHeight='1' fontWeight='700' color={theme.textStrong}>
                     {item.value}
                   </Text>
                   <Text pb='1' fontSize='11px' color={theme.textSecondary}>
@@ -685,28 +684,28 @@ export default function SubscribeDashboard() {
       </Box>
 
       <Box
-        rounded='22px'
+        rounded='10px'
         borderWidth='1px'
         borderColor={getPanelBorder(isDark)}
         bg={getPanelBg(isDark)}
-        px={{ base: 3.5, md: 5 }}
-        py={{ base: 3.5, md: 4.5 }}
+        px={{ base: 3, md: 5 }}
+        py={{ base: 3, md: 4.5 }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
         position='relative'
         overflow='hidden'
         minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+        <Flex align='center' justify='space-between' gap='2' mb={{ base: 2, md: 3 }} wrap='wrap'>
           <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
-              Command Center
+              任务操作
             </Heading>
             <Text mt='1' fontSize='11px' color={theme.textSecondary}>
               执行订阅维护、同步与诊断任务
             </Text>
           </Box>
-          <StatusChip label='READY' tone='cyan' isDark={isDark} />
+          <Text fontSize='xs' color={theme.textSecondary}>就绪</Text>
         </Flex>
 
         <Box
@@ -716,23 +715,22 @@ export default function SubscribeDashboard() {
             md: 'repeat(auto-fit, minmax(min(100%, 13rem), 1fr))',
             xl: 'repeat(auto-fit, minmax(13rem, 1fr))',
           }}
-          gap={{ base: 2, md: 2.5 }}
+          gap={{ base: 1.5, md: 2.5 }}
           minW='0'
         >
           {commandCards.map(card => {
-            const toneStyle = getToneStyles(card.tone);
             return (
               <Button
                 key={card.title}
                 onClick={card.onClick}
                 isLoading={card.loading}
-                rounded='18px'
-                h={{ base: '58px', md: '66px' }}
-                px='3'
-                py='2.5'
+                rounded='8px'
+                h={{ base: '54px', md: '66px' }}
+                px={{ base: 2.5, md: 3 }}
+                py='2'
                 borderWidth='1px'
-                borderColor={toneStyle.border}
-                bg={isDark ? theme.commandBg : `linear-gradient(180deg, ${toneStyle.bg}, rgba(255,255,255,0.82))`}
+                borderColor={getPanelBorder(isDark)}
+                bg={isDark ? theme.commandBg : 'rgba(248,250,252,0.96)'}
                 display='flex'
                 alignItems='center'
                 justifyContent='flex-start'
@@ -740,13 +738,13 @@ export default function SubscribeDashboard() {
                 whiteSpace='normal'
                 minW='0'
                 w='full'
-                boxShadow={isDark ? `inset 0 1px 0 rgba(255,255,255,0.04), ${toneStyle.glow}` : toneStyle.glow}
-                transition='transform .18s ease, box-shadow .18s ease'
-                _hover={{ bg: isDark ? 'rgba(16, 26, 58, 0.9)' : `linear-gradient(180deg, ${toneStyle.bg}, rgba(255,255,255,0.92))`, transform: 'translateY(-1px)', boxShadow: isDark ? `0 0 22px ${toneStyle.border}, inset 0 1px 0 rgba(255,255,255,0.05)` : toneStyle.glow }}
+                boxShadow='none'
+                transition='background .15s ease, border-color .15s ease'
+                _hover={{ bg: 'var(--bgmi-accent-soft)', borderColor: 'var(--bgmi-accent)' }}
                 _active={{ transform: 'scale(0.985)' }}
               >
                 <Box minW='0'>
-                  <Text fontSize={{ base: '12px', md: '13px' }} fontWeight='600' color={theme.textPrimary} noOfLines={1}>
+                  <Text fontSize={{ base: '11px', md: '13px' }} fontWeight='600' color={theme.textPrimary} noOfLines={1}>
                     {card.title}
                   </Text>
                   <Text mt='0.5' fontSize='10px' color={theme.textSecondary} noOfLines={1}>
@@ -790,44 +788,55 @@ export default function SubscribeDashboard() {
       </Box>
 
       <Box
-        rounded='22px'
+        rounded='10px'
         borderWidth='1px'
         borderColor={getPanelBorder(isDark)}
         bg={getPanelBg(isDark)}
-        px={{ base: 3.5, md: 5 }}
-        py={{ base: 3.5, md: 4.5 }}
+        px={{ base: 3, md: 5 }}
+        py={{ base: 3, md: 4.5 }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
         minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+        <Flex align='center' justify='space-between' gap='2' mb={{ base: 2, md: 3 }} wrap='wrap'>
           <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
               本地播放加速
             </Heading>
-            <Text mt='1' fontSize='11px' color={theme.textSecondary}>
-              仅当你通过本地入口访问页面时，把视频、字幕、HLS 和外置播放器直链切到局域网媒体地址。
+            <Text display={{ base: 'none', md: 'block' }} mt='1' fontSize='11px' color={theme.textSecondary}>
+              播放时检测本地地址。连接成功后，视频、字幕、下载、HLS 和外置播放器链接使用局域网地址。
+            </Text>
+            <Text display={{ base: 'block', md: 'none' }} mt='1' fontSize='11px' color={theme.textSecondary}>
+              视频和相关媒体资源优先使用局域网地址。
             </Text>
           </Box>
-          <StatusChip label={localMediaRoutingEnabled ? 'ENABLED' : 'DISABLED'} tone={localMediaRoutingEnabled ? 'green' : 'blue'} isDark={isDark} />
+          <Flex align='center' gap='2' flexShrink={0}>
+            <Text as='label' htmlFor='local-media-routing-switch' fontSize='xs' color={theme.textSecondary} cursor='pointer'>
+              {localMediaRoutingEnabled ? '已启用' : '未启用'}
+            </Text>
+            <Switch
+              id='local-media-routing-switch'
+              aria-label='启用本地播放加速'
+              isChecked={localMediaRoutingEnabled}
+              isDisabled={!localMediaRoutingReady}
+              onChange={event => {
+                if (event.target.checked && !isValidLocalMediaOrigin(localMediaOriginInput.trim().replace(/\/+$/, ''))) {
+                  showError('请先填写有效的本地媒体 origin，例如 http://192.168.1.10:8899', new Error('invalid local media origin'));
+                  return;
+                }
+                setLocalMediaRoutingEnabled(event.target.checked);
+              }}
+              sx={{ '.chakra-switch__track[data-checked]': { background: accentTheme.primary }, '.chakra-switch__track[data-checked]:hover': { background: accentTheme.primary } }}
+            />
+          </Flex>
         </Flex>
 
         <Stack spacing='3' minW='0'>
-          <Button
-            alignSelf='flex-start'
-            size='sm'
-            rounded='full'
-            variant='outline'
-            onClick={() => setLocalMediaRoutingEnabled(value => !value)}
-            sx={getLiquidGlassButtonStyles(colorMode, localMediaRoutingEnabled)}
-          >
-            {localMediaRoutingEnabled ? '已启用，点击关闭' : '已关闭，点击启用'}
-          </Button>
-
           <Input
             value={localEntryHostsInput}
             onChange={e => setLocalEntryHostsInput(e.target.value)}
-            placeholder='本地入口主机，逗号分隔，例如 192.168.1.10, nas.local'
+            isDisabled={!localMediaRoutingReady}
+            placeholder='本地入口主机（可选），例如 192.168.1.10, nas.local'
             rounded='16px'
             borderColor={getPanelBorder(isDark)}
             bg={isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)'}
@@ -837,6 +846,7 @@ export default function SubscribeDashboard() {
           <Input
             value={localMediaOriginInput}
             onChange={e => setLocalMediaOriginInput(e.target.value)}
+            isDisabled={!localMediaRoutingReady}
             placeholder='本地媒体 origin，例如 http://192.168.1.10:8899'
             rounded='16px'
             borderColor={getPanelBorder(isDark)}
@@ -845,48 +855,39 @@ export default function SubscribeDashboard() {
           />
 
           <Text fontSize='xs' color={theme.textSecondary}>
-            仅本地入口访问时生效，公网入口不会切换。若页面是 HTTPS、本地媒体 origin 是 HTTP，浏览器可能拦截网页内直播放，但外置播放器仍可能可用。
+            公网入口也会检测本地地址。连接失败时使用公网地址；HTTPS 页面可能无法访问 HTTP 局域网地址。
           </Text>
 
-          <Button
-            onClick={() => void handleSaveLocalMediaRouting()}
-            isLoading={saveLocalMediaRoutingMutating}
-            rounded='16px'
-            alignSelf='flex-start'
-            bg={isDark ? 'rgba(20, 58, 122, 0.72)' : 'rgba(59,130,246,0.14)'}
-            borderWidth='1px'
-            borderColor='rgba(59,130,246,0.24)'
-            _hover={{ bg: isDark ? 'rgba(28, 82, 180, 0.76)' : 'rgba(59,130,246,0.22)' }}
-          >
-            保存设置
-          </Button>
+          <Text fontSize='xs' color={localMediaRoutingSaveError ? (isDark ? '#FCA5A5' : '#A33A3A') : theme.textSecondary}>
+            {localMediaRoutingSaveError ? '保存失败，请修改后重试' : saveLocalMediaRoutingMutating ? '正在保存…' : '修改后自动保存'}
+          </Text>
         </Stack>
       </Box>
 
       <Box
-        rounded='22px'
+        rounded='10px'
         borderWidth='1px'
         borderColor={getPanelBorder(isDark)}
         bg={getPanelBg(isDark)}
-        px={{ base: 3.5, md: 5 }}
-        py={{ base: 3.5, md: 4.5 }}
+        px={{ base: 3, md: 5 }}
+        py={{ base: 3, md: 4.5 }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
         minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+        <Flex align='center' justify='space-between' gap='2' mb={{ base: 2, md: 3 }} wrap='wrap'>
           <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
-              Database Search
+              库内检索
             </Heading>
             <Text mt='1' fontSize='11px' color={theme.textSecondary}>
               查询番剧 id，方便 SSH / CLI 按 id 删除
             </Text>
           </Box>
-          <StatusChip label='LOOKUP' tone='blue' isDark={isDark} />
+          <Text fontSize='xs' color={theme.textSecondary}>按名称或 ID</Text>
         </Flex>
 
-        <Flex gap='2' direction={{ base: 'column', md: 'row' }} minW='0'>
+        <Flex gap='2' direction='row' align='stretch' minW='0'>
           <Input
             value={databaseSearchInput}
             onChange={e => setDatabaseSearchInput(e.target.value)}
@@ -895,7 +896,8 @@ export default function SubscribeDashboard() {
             borderColor={getPanelBorder(isDark)}
             bg={isDark ? 'rgba(8, 14, 32, 0.78)' : 'rgba(255,255,255,0.72)'}
             minW='0'
-            _focusVisible={{ borderColor: 'rgba(59,130,246,0.42)', boxShadow: '0 0 0 1px rgba(59,130,246,0.24)' }}
+            h={{ base: '40px', md: '40px' }}
+            _focusVisible={{ borderColor: 'var(--bgmi-accent)', boxShadow: '0 0 0 1px var(--bgmi-accent-border)' }}
             onKeyDown={event => {
               if (event.key === 'Enter' && !databaseSearchMutating) {
                 void handleDatabaseSearch();
@@ -905,12 +907,15 @@ export default function SubscribeDashboard() {
           <Button
             onClick={() => void handleDatabaseSearch()}
             isLoading={databaseSearchMutating}
-            rounded='16px'
-            minW={{ base: '100%', md: '112px' }}
-            bg={isDark ? 'rgba(20, 58, 122, 0.72)' : 'rgba(59,130,246,0.14)'}
+            rounded='8px'
+            minW={{ base: '64px', md: '112px' }}
+            h='40px'
+            px={{ base: 3, md: 6 }}
+            bg={theme.commandBg}
+            color={theme.textPrimary}
             borderWidth='1px'
-            borderColor='rgba(59,130,246,0.24)'
-            _hover={{ bg: isDark ? 'rgba(28, 82, 180, 0.76)' : 'rgba(59,130,246,0.22)' }}
+            borderColor={getPanelBorder(isDark)}
+            _hover={{ bg: 'var(--bgmi-accent-soft)', borderColor: 'var(--bgmi-accent)' }}
           >
             查询
           </Button>
@@ -955,37 +960,37 @@ export default function SubscribeDashboard() {
       </Box>
 
       <Box
-        rounded='22px'
+        rounded='10px'
         borderWidth='1px'
         borderColor={getPanelBorder(isDark)}
         bg={getPanelBg(isDark)}
-        px={{ base: 3.5, md: 5 }}
-        py={{ base: 3.5, md: 4.5 }}
+        px={{ base: 3, md: 5 }}
+        py={{ base: 3, md: 4.5 }}
         boxShadow={getPanelShadow(isDark)}
         backdropFilter='blur(18px)'
         minW='0'
       >
-        <Flex align='center' justify='space-between' gap='3' mb='3' wrap='wrap'>
+        <Flex align='center' justify='space-between' gap='2' mb={{ base: 2, md: 3 }} wrap='wrap'>
           <Box minW='0'>
             <Heading size='sm' color={theme.textPrimary}>
-              Diagnostics
+              数据检查
             </Heading>
             <Text mt='1' fontSize='11px' color={theme.textSecondary}>
               快速查看当前数据库异常与缺失状态
             </Text>
           </Box>
-          {allNormal ? <StatusChip label='ALL SYSTEMS NORMAL' tone='green' isDark={isDark} /> : <StatusChip label='CHECK REQUIRED' tone='amber' isDark={isDark} />}
+          {allNormal ? <StatusChip label='正常' tone='green' isDark={isDark} /> : <StatusChip label='需要处理' tone='amber' isDark={isDark} />}
         </Flex>
 
-        <SimpleGrid columns={{ base: 2, md: 3, xl: 5 }} spacing='2' minChildWidth={{ md: '8.5rem' }}>
+        <SimpleGrid columns={{ base: 2, md: 3, xl: 5 }} spacing={{ base: 1.5, md: 2 }} minChildWidth={{ md: '8.5rem' }}>
           {diagnostics.map(item => {
             const isWarning = item.value > 0;
             return (
               <Box
                 key={item.label}
-                rounded='16px'
-                px='3'
-                py='2.5'
+                rounded='8px'
+                px={{ base: 2.5, md: 3 }}
+                py={{ base: 1.5, md: 2.5 }}
                 minH='36px'
                 bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.40)'}
                 borderWidth='1px'
@@ -1018,7 +1023,7 @@ export default function SubscribeDashboard() {
           </Box>
         ) : (
           <>
-            <Button mt='3' variant='ghost' px='0' h='auto' minH='unset' onClick={() => setShowDiagnosticsDetail(value => !value)} _hover={{ bg: 'transparent' }}>
+            <Button mt='3' variant='ghost' px='0' h='auto' minH='unset' color={accentTheme.primary} onClick={() => setShowDiagnosticsDetail(value => !value)} _hover={{ bg: 'transparent', textDecoration: 'underline' }}>
               {showDiagnosticsDetail ? '收起详情' : '查看详情'}
             </Button>
             {showDiagnosticsDetail ? (

@@ -279,11 +279,11 @@ export default function Bangumi() {
         display="grid"
         gridTemplateColumns={{
           base: 'repeat(2, minmax(0, 1fr))',
-          md: 'repeat(auto-fit, minmax(min(100%, 13.75rem), 1fr))',
+          md: 'repeat(auto-fit, minmax(13.75rem, 16.5rem))',
         }}
         gap={{ base: 3, md: 5 }}
         alignItems="start"
-        justifyContent={{ base: 'stretch', md: 'stretch' }}
+        justifyContent={{ base: 'stretch', md: 'start' }}
         width="100%"
         minW="0"
       >
@@ -293,7 +293,7 @@ export default function Bangumi() {
             minW="0"
             w="full"
             maxW={{ base: 'none', md: '16.5rem' }}
-            justifySelf="stretch"
+            justifySelf="start"
           >
             <BangumiCard bangumiData={bangumi} />
           </Box>

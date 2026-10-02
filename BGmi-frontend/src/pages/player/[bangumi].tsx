@@ -1,6 +1,7 @@
 import { Box, Flex, Heading } from '@chakra-ui/react';
 import { Helmet } from 'react-helmet-async';
 import useSWR from 'swr';
+import { useEffect, useState } from 'react';
 
 import { useParams } from 'react-router-dom';
 
@@ -18,8 +19,15 @@ interface PlayerBangumiResponse {
 
 export default function Player() {
   const params = useParams();
-  const [currentWatchHistory] = useWatchHistory();
+  const [currentWatchHistory, setWatchHistory] = useWatchHistory();
   const bangumiName = params.bangumi ? decodeURIComponent(params.bangumi) : '';
+  const [preferredGroup, setPreferredGroup] = useState(() =>
+    typeof window === 'undefined' ? '' : window.localStorage.getItem(`bgmi-player-group:${bangumiName}`) ?? ''
+  );
+  const [autoPlayEpisode, setAutoPlayEpisode] = useState('');
+  useEffect(() => {
+    setPreferredGroup(window.localStorage.getItem(`bgmi-player-group:${bangumiName}`) ?? '');
+  }, [bangumiName]);
 
   const {
     data: bangumiResponse,
@@ -37,9 +45,40 @@ export default function Player() {
 
   const bangumiData = bangumiResponse?.data;
   const currentBangumiHistory = bangumiData ? currentWatchHistory[bangumiData.bangumi_name] : undefined;
-  const episode = currentBangumiHistory?.['current-watch']?.episode ?? '1';
+  const availableEpisodes = bangumiData
+    ? Object.keys(bangumiData.player ?? {})
+        .map(Number)
+        .filter(Number.isFinite)
+        .sort((a, b) => b - a)
+    : [];
+  const defaultEpisode = availableEpisodes.length ? String(availableEpisodes[0]) : '1';
+  const historyEpisode = currentBangumiHistory?.['current-watch']?.episode;
+  const episode = historyEpisode && availableEpisodes.includes(Number(historyEpisode)) ? historyEpisode : defaultEpisode;
+  const versions = bangumiData?.player_versions?.[episode] ?? [];
+  const playerGroup = versions.some(version => version.group === preferredGroup) ? preferredGroup : '';
+  const activeGroup = playerGroup || versions.find(version => version.path === bangumiData?.player?.[episode]?.path)?.group || versions[0]?.group || '';
+  const chooseGroup = (group: string) => {
+    if (!bangumiData) return;
+    window.localStorage.setItem(`bgmi-player-group:${bangumiData.bangumi_name}`, group);
+    setPreferredGroup(group);
+  };
+  const playNext = () => {
+    if (!bangumiData) return;
+    const next = availableEpisodes.filter(number => number > Number(episode)).sort((a, b) => a - b)[0];
+    if (!next || !bangumiData.player_versions?.[String(next)]?.some(version => version.group === activeGroup)) return;
+    chooseGroup(activeGroup);
+    setAutoPlayEpisode(String(next));
+    setWatchHistory(previous => ({
+      ...previous,
+      [bangumiData.bangumi_name]: {
+        ...previous[bangumiData.bangumi_name],
+        [String(next)]: 'mark',
+        'current-watch': { episode: String(next), currentTime: '0' },
+      },
+    }));
+  };
   const playerAssetKey = bangumiData
-    ? `/api/player?bangumi=${encodeURIComponent(bangumiData.bangumi_name)}&episode=${encodeURIComponent(episode)}`
+    ? `/api/player?bangumi=${encodeURIComponent(bangumiData.bangumi_name)}&episode=${encodeURIComponent(episode)}&player_group=${encodeURIComponent(playerGroup)}`
     : null;
 
   const {
@@ -104,6 +143,11 @@ export default function Player() {
           playerAssetErrorMessage={playerAssetErrorMessage}
           playerAssetErrorStatus={playerAssetErrorStatus}
           playerAssetMissing={playerAssetMissing}
+          playerGroup={playerGroup}
+          activeGroup={activeGroup}
+          onGroupSelect={chooseGroup}
+          onEnded={playNext}
+          autoPlay={autoPlayEpisode === episode}
         />
       </Flex>
     </Box>

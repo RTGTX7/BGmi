@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import MobileLiquidGlass from './mobile-liquid-glass';
 
 interface NavItem {
@@ -34,6 +35,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { colorMode, toggleColorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
   const isPlayerPage = pathname.startsWith('/player/');
   const navRailRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef({
@@ -228,8 +230,8 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
               blur={0.55}
               style={{
                 zIndex: 1,
-                background: colorMode === 'dark' ? 'rgba(8,12,24,0.40)' : 'rgba(242,248,252,0.42)',
-                borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.34)' : 'rgba(255,255,255,0.62)',
+                background: 'var(--bgmi-glass-sidebar)',
+                borderColor: theme.border,
                 boxShadow:
                   colorMode === 'dark'
                     ? 'inset 0 1px 1px rgba(255,255,255,0.38), inset 0 -14px 26px rgba(120,170,220,0.06), 0 16px 38px rgba(0,0,0,0.24)'
@@ -249,8 +251,8 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
               opacity={0.94}
               style={{
                 zIndex: 3,
-                background: colorMode === 'dark' ? 'rgba(12,18,34,0.30)' : 'rgba(242,248,252,0.34)',
-                borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.38)' : 'rgba(255,255,255,0.72)',
+                background: theme.soft,
+                borderColor: theme.border,
                 boxShadow:
                   colorMode === 'dark'
                     ? 'inset 0 1px 2px rgba(255,255,255,0.52), inset 0 -12px 22px rgba(255,255,255,0.10), 0 10px 28px rgba(0,0,0,0.14)'
@@ -280,11 +282,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   aria-label={item.label}
                   direction="column"
                   gap="0.5"
-                  color={
-                    active
-                      ? colorMode === 'dark' ? '#e0f7ff' : '#004e89'
-                      : colorMode === 'dark' ? 'rgba(226,232,240,0.58)' : 'rgba(30,41,59,0.62)'
-                  }
+                  color={active ? colors.accent : colors.text}
                   bg="transparent"
                   transition="color 0.18s ease, transform 0.18s ease, font-size 0.18s ease"
                   transform={influence ? `translateY(${navLift}px) scale(${navScale})` : active ? 'translateY(-1px)' : 'translateY(0)'}
@@ -359,7 +357,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
             zIndex="2"
             align="center"
             justify="center"
-            color={colorMode === 'dark' ? 'blue.100' : '#075985'}
+            color={colors.accent}
             pointerEvents="none"
             transition="color 0.18s ease, transform 0.18s ease"
           >
@@ -374,8 +372,8 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
               blur={0.5}
               style={{
                 zIndex: 1,
-                background: colorMode === 'dark' ? 'rgba(8,12,24,0.42)' : 'rgba(242,248,252,0.42)',
-                borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.34)' : 'rgba(255,255,255,0.72)',
+                background: 'var(--bgmi-glass-sidebar)',
+                borderColor: theme.border,
                 boxShadow:
                   colorMode === 'dark'
                     ? 'inset 0 1px 2px rgba(255,255,255,0.44), inset 0 -12px 24px rgba(120,170,220,0.07), 0 14px 34px rgba(0,0,0,0.25)'

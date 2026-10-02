@@ -65,10 +65,9 @@ export default function SubscribePanel({ bangumis, standalone = false }: Props) 
 
   const content = bangumis?.length ? (
     <AnimatePresence initial={false}>
-      {bangumis.map((bangumi, index) => (
+      {bangumis.map(bangumi => (
         <MotionBox
           key={bangumi.id}
-          layout
           minW="0"
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -76,7 +75,7 @@ export default function SubscribePanel({ bangumis, standalone = false }: Props) 
           transition={
             reduceMotion
               ? { duration: 0.14 }
-              : { duration: 0.24, delay: Math.min(index * 0.018, 0.12), ease: ITEM_EASE }
+              : { duration: 0.18, ease: ITEM_EASE }
           }
         >
           <SubscribeCard bangumi={bangumi} />

@@ -74,6 +74,9 @@ def download_feed(_: Request) -> Response:
 
 
 def make_app(debug: bool = False) -> Starlette:
+    from bgmi.front.player_assets import start_player_cache_maintenance
+
+    start_player_cache_maintenance()
     mcp_app = create_mcp_app()
     routes = [
         create_mcp_streamable_route("/mcp"),

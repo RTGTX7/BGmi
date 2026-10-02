@@ -223,10 +223,10 @@ export default function BangumiGroupSection({
       <Box
         display={{ base: 'none', md: 'grid' }}
         mt="5"
-        gridTemplateColumns="repeat(auto-fill, minmax(min(100%, 13.75rem), 1fr))"
+        gridTemplateColumns="repeat(auto-fit, minmax(13.75rem, 17rem))"
         gap={{ md: 5 }}
         alignItems="start"
-        justifyContent="stretch"
+        justifyContent="start"
         width="100%"
         onClick={handleNavigateToGroup}
         cursor="pointer"

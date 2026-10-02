@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useBangumi } from '~/hooks/use-bangumi';
 import { useColorMode } from '~/hooks/use-color-mode';
 
-const CUSTOM_VERSION = '定制版 1.1.6';
+const CUSTOM_VERSION = '定制版 2.0.0';
 
 function FeatureTag({
   children,
@@ -54,7 +54,7 @@ export default function About() {
         <Stack spacing="4" position="relative" zIndex="1">
           <Box>
             <Heading size="2xl" color={isDark ? 'orange.50' : 'gray.800'}>
-              BGmi {data?.version ?? '4.5.2'}
+              BGmi {data?.version ?? '5.0.2'}
             </Heading>
             <Text mt="3" fontSize="xl" fontWeight="semibold" color={isDark ? 'orange.100' : 'orange.500'}>
               {CUSTOM_VERSION}
@@ -74,7 +74,7 @@ export default function About() {
             后端版本
           </Text>
           <Text mt="2" fontSize="lg" fontWeight="bold" color={isDark ? 'gray.50' : 'gray.800'}>
-            {data?.version ? `BGmi ${data.version}` : 'BGmi 4.5.2'}
+            {data?.version ? `BGmi ${data.version}` : 'BGmi 5.0.2'}
           </Text>
         </Box>
         <Box {...sectionProps} p="4">
