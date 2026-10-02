@@ -1,11 +1,10 @@
 import functools
-import glob
 import gzip
+import itertools
 import json
 import os
 import re
-import struct
-import subprocess
+import shutil
 import sys
 import tarfile
 import time
@@ -14,16 +13,17 @@ from io import BytesIO
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
 from shutil import move, rmtree
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar
 
 import requests
 import semver
 from anime_episode_parser import parse_episode as _parse_episode
 from loguru import logger
+from packaging.version import Version
 from requests import Response
 
 from bgmi import __admin_version__, __version__
-from bgmi.config import BGMI_PATH, IS_WINDOWS, cfg, is_windows_absolute_path, normalize_config_path_value
+from bgmi.config import BGMI_PATH, IS_WINDOWS, cfg
 from bgmi.lib.constants import SUPPORT_WEBSITE
 from bgmi.session import session
 from bgmi.website.model import Episode
@@ -42,20 +42,6 @@ else:
     YELLOW = "\033[1;33m"
     RED = "\033[1;31m"
     COLOR_END = "\033[0m"
-
-color_map = {
-    "print_info": "",
-    "print_success": GREEN,
-    "print_warning": YELLOW,
-    "print_error": RED,
-}
-
-indicator_map = {
-    "print_info": "[*] ",
-    "print_success": "[+] ",
-    "print_warning": "[-] ",
-    "print_error": "[x] ",
-}
 
 
 def print_info(message: str, indicator: bool = True) -> None:
@@ -103,61 +89,13 @@ def bug_report() -> None:  # pragma: no cover
     )
 
 
-_DEFAULT_TERMINAL_WIDTH = 80
-
-
 def get_terminal_col() -> int:  # pragma: no cover
-    # pylint: disable=import-outside-toplevel,import-error
-    # https://gist.github.com/jtriley/1108174
-    if not IS_WINDOWS:
-        import fcntl
-        import termios
-
-        try:
-            col = struct.unpack(
-                "HHHH",
-                fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0)),
-            )[
-                1
-            ]  # type: int
-
-            return col
-        except Exception:
-            return _DEFAULT_TERMINAL_WIDTH
-    else:
-        try:
-            from ctypes import create_string_buffer, windll  # type: ignore[attr-defined]
-
-            # stdin handle is -10
-            # stdout handle is -11
-            # stderr handle is -12
-            h = windll.kernel32.GetStdHandle(-12)
-            csbi = create_string_buffer(22)
-            res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
-            if res:
-                (
-                    bufx,
-                    bufy,
-                    curx,
-                    cury,
-                    wattr,
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    maxx,
-                    maxy,
-                ) = struct.unpack("hhhhHhhhhhh", csbi.raw)
-                sizex = right - left + 1  # type: int
-                return sizex
-            else:
-                cols = int(subprocess.check_output("tput cols"))
-                return cols
-        except Exception:
-            return _DEFAULT_TERMINAL_WIDTH
+    w, h = shutil.get_terminal_size()
+    return w
 
 
 FRONTEND_NPM_URL = "https://registry.npmjs.com/bgmi-frontend/"
+FRONTEND_GITHUB_RELEASES_URL = "https://api.github.com/repos/BGmi/BGmi-frontend/releases"
 
 
 @functools.lru_cache
@@ -180,6 +118,61 @@ def latest_npm_package_version() -> semver.VersionInfo:
     return max(available_versions)
 
 
+@functools.lru_cache
+def github_release_manifest() -> List[Dict[str, Any]]:
+    r = session.get(FRONTEND_GITHUB_RELEASES_URL, timeout=60)
+    r.raise_for_status()
+    return r.json()  # type: ignore
+
+
+def _github_release_version(release: Dict[str, Any]) -> semver.VersionInfo:
+    tag = release["tag_name"].removeprefix("v")
+    return semver.VersionInfo.parse(tag)
+
+
+def _github_release_asset(release: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    for asset in release.get("assets", []):
+        if asset.get("name", "").endswith(".tgz"):
+            return asset  # type: ignore
+    return None
+
+
+@functools.lru_cache
+def latest_github_release() -> Tuple[semver.VersionInfo, Dict[str, Any], Dict[str, Any]]:
+    releases = github_release_manifest()
+    candidates = []
+    for release in releases:
+        if release.get("draft") or release.get("prerelease"):
+            continue
+        asset = _github_release_asset(release)
+        if asset is None:
+            continue
+        try:
+            release_version = _github_release_version(release)
+        except ValueError:
+            continue
+        if all(release_version.match(r) for r in __admin_version__):
+            candidates.append((release_version, release, asset))
+
+    if not candidates:
+        raise RuntimeError("failed to find available web-ui GitHub release")
+
+    return max(candidates, key=lambda item: item[0])
+
+
+def latest_frontend_version() -> semver.VersionInfo:
+    try:
+        version, _, _ = latest_github_release()
+        return version
+    except Exception as e:
+        logger.warning("failed to check GitHub frontend release, fallback to npm: {}", e)
+        return latest_npm_package_version()
+
+
+def _is_newer_version(available: str, current: str) -> bool:
+    return Version(available) > Version(current)
+
+
 def check_update(mark: bool = True) -> None:
     def update() -> None:
         try:
@@ -190,7 +183,7 @@ def check_update(mark: bool = True) -> None:
             with open(os.path.join(BGMI_PATH, "latest"), "w", encoding="utf8") as f:
                 f.write(version)
 
-            if version > __version__:
+            if _is_newer_version(version, __version__):
                 print_warning(
                     "Please update bgmi to the latest version {}{}{}."
                     "\nThen execute `bgmi upgrade` to migrate database".format(GREEN, version, COLOR_END)
@@ -199,7 +192,7 @@ def check_update(mark: bool = True) -> None:
                 print_success("Your BGmi is the latest version.")
 
             if cfg.front_static_path.joinpath("package.json").exists():
-                admin_version = latest_npm_package_version()
+                admin_version = latest_frontend_version()
 
                 with open(os.path.join(cfg.front_static_path, "package.json"), encoding="utf8") as f:
                     local_version = semver.VersionInfo.parse(json.loads(f.read())["version"])
@@ -212,51 +205,53 @@ def check_update(mark: bool = True) -> None:
                 update()
                 raise SystemExit
         except Exception as e:
-            print_warning(f"Error occurs when checking update, {str(e)}")
+            print_warning(f"Error occurs when checking update, {e!s}")
 
-    version_file = os.path.join(BGMI_PATH, "version")
-    if not os.path.exists(version_file):
-        with open(version_file, "w", encoding="utf8") as f:
+    version_file = BGMI_PATH.joinpath("version")
+    if not version_file.exists():
+        with version_file.open("w", encoding="utf8") as f:
             f.write(str(int(time.time())))
         update()
 
-    with open(version_file, encoding="utf8") as f:
-        try:
-            data = int(f.read())
-            if time.time() - 7 * 24 * 3600 > data:
-                with open(version_file, "w", encoding="utf8") as f:
-                    f.write(str(int(time.time())))
-                update()
-        except ValueError:
-            pass
+    try:
+        data = int(version_file.read_text(encoding="utf8"))
+        if time.time() - 7 * 24 * 3600 > data:
+            version_file.write_text(str(int(time.time())), encoding="utf8")
+            update()
+    except ValueError:
+        pass
+
+
+_separator_episode_pattern = re.compile(r"[★☆](?:第\s*)?(?P<episode>0*[1-9]\d{0,2})(?=[\s(（)）\]】★☆_.])")
+_bracketed_release_year_pattern = re.compile(r"[\[【(（]\s*(?:19|20)\d{2}\s*[\]】)）]")
 
 
 def parse_episode(episode_title: str) -> int:
+    episode_title = _bracketed_release_year_pattern.sub("", episode_title)
     s, c = _parse_episode(episode_title)
-    if c != 1:
+    if c == 1:
+        return s or 0
+
+    fallback = _separator_episode_pattern.search(episode_title)
+    if fallback is None:
         return 0
 
-    return s or 0
+    return int(fallback.group("episode"))
+
+
+_slash_pattern = re.compile(r"/+")
 
 
 def normalize_path(url: str) -> str:
     """
     normalize link to path
-
-    :param url: path or url to normalize
-    :type url: str
-    :return: normalized path
-    :rtype: str
     """
-    url = url.replace("http://", "http/").replace("https://", "https/")
+    url = _slash_pattern.sub("/", url)
     illegal_char = [":", "*", "?", '"', "<", ">", "|", "'"]
     for char in illegal_char:
         url = url.replace(char, "")
 
-    if url.startswith("/"):
-        return url[1:]
-    else:
-        return url
+    return url.lstrip("/")
 
 
 def bangumi_save_path(bangumi_name: str) -> Path:
@@ -266,28 +261,36 @@ def bangumi_save_path(bangumi_name: str) -> Path:
     if r is None:
         return cfg.save_path.joinpath(name)
 
-    normalized = normalize_config_path_value(r)
+    if r.is_absolute():
+        return r
 
-    if not IS_WINDOWS and is_windows_absolute_path(normalized):
-        print_warning(
-            f"save_path_map for {bangumi_name} uses a Windows absolute path on a non-Windows system; "
-            "falling back to the default save_path"
-        )
-        return cfg.save_path.joinpath(name)
-
-    resolved = Path(normalized)
-
-    if resolved.is_absolute():
-        return resolved
-
-    return cfg.save_path.joinpath(resolved)
+    return cfg.save_path.joinpath(r)
 
 
 def get_web_admin(method: str) -> None:
     print_info(f"{method[0].upper() + method[1:]}ing BGmi frontend")
-    admin_version = latest_npm_package_version()
+    try:
+        admin_version, release, asset = latest_github_release()
+        version = {
+            "version": str(admin_version),
+            "source": "github",
+            "tag_name": release["tag_name"],
+            "html_url": release["html_url"],
+            "asset": asset["name"],
+        }
+        tar_url = asset["browser_download_url"]
+    except requests.exceptions.ConnectionError:
+        print_warning("failed to download web admin from GitHub release, fallback to npm")
+    except json.JSONDecodeError:
+        print_warning("failed to download web admin from GitHub release, fallback to npm")
+    except Exception as e:
+        print_warning(f"failed to find BGmi frontend GitHub release, fallback to npm: {e!s}")
+    else:
+        _install_web_admin_from_tarball(method=method, tar_url=tar_url, version=version)
+        return
 
     try:
+        admin_version = latest_npm_package_version()
         r = npm_package_manifest()
         version = r["versions"][str(admin_version)]
         tar_url = version["dist"]["tarball"]
@@ -298,14 +301,19 @@ def get_web_admin(method: str) -> None:
         print_warning("failed to download web admin")
         return
 
+    _install_web_admin_from_tarball(method=method, tar_url=tar_url, version=version)
+
+
+def _install_web_admin_from_tarball(method: str, tar_url: str, version: Dict[str, Any]) -> None:
     tar = session.get(tar_url, timeout=60)
     tar.raise_for_status()
     admin_zip = BytesIO(tar.content)
     with gzip.GzipFile(fileobj=admin_zip) as f:
         tar_file = BytesIO(f.read())
 
-    rmtree(cfg.front_static_path)
-    os.makedirs(cfg.front_static_path)
+    if cfg.front_static_path.exists():
+        rmtree(cfg.front_static_path)
+    cfg.front_static_path.mkdir(parents=True, exist_ok=True)
 
     with tarfile.open(fileobj=tar_file) as tar_file_obj:
         tar_file_obj.extractall(path=cfg.front_static_path)
@@ -332,84 +340,54 @@ def convert_cover_url_to_path(cover_url: str) -> Tuple[str, str]:
     """
 
     cover_url = normalize_path(cover_url)
-    file_path = os.path.join(cfg.save_path, "cover")
+    file_path = os.path.join(cfg.save_path, ".cover")
     file_path = os.path.join(file_path, cover_url)
     dir_path = os.path.dirname(file_path)
 
     return dir_path, file_path
 
 
-def extract_cover_date_token(cover_url: str) -> Optional[str]:
-    normalized_cover_url = normalize_path(cover_url)
-    matched = re.search(r"(?:^|/)Bangumi/(\d{6})(?:/|$)", normalized_cover_url)
-    if not matched:
-        return None
-
-    return matched.group(1)
-
-
-def normalize_cover_date_token_to_season(token: str) -> Optional[str]:
-    if not re.fullmatch(r"\d{6}", token):
-        return None
-
-    year = int(token[:4])
-    month = int(token[4:])
-
-    if month < 1 or month > 12:
-        return None
-
-    if month <= 3:
-        season_month = 1
-    elif month <= 6:
-        season_month = 4
-    elif month <= 9:
-        season_month = 7
-    else:
-        season_month = 10
-
-    return f"{year}{season_month:02d}"
-
-
-def resolve_cover_season(cover_url: str) -> Tuple[Optional[int], Optional[int], Optional[str]]:
-    raw_token = extract_cover_date_token(cover_url)
-    if raw_token is None:
-        return None, None, None
-
-    season_token = normalize_cover_date_token_to_season(raw_token)
-    if season_token is None:
-        return None, None, None
-
-    return int(season_token[:4]), int(season_token[4:]), season_token
-
-
-def web_cover_url(cover_url: str) -> str:
-    normalized_cover_url = normalize_path(cover_url)
-    dir_path, file_path = convert_cover_url_to_path(cover_url)
-    if os.path.exists(file_path):
-        return f"/bangumi/cover/{normalized_cover_url}"
-    if cover_url and not cover_url.startswith(("http://", "https://", "/bangumi/cover/", "/")):
-        return f"/bangumi/cover/{normalized_cover_url}"
-    return cover_url
-
-
 def download_file(url: str) -> Optional[Response]:
     logger.debug("downloading {}", url)
-    if url.startswith("https://") or url.startswith("http://"):
+    if url.startswith(("https://", "http://")):
         print_info(f"Download: {url}")
-        return session.get(url, timeout=60)
+        try:
+            return session.get(url, timeout=60)
+        except requests.exceptions.RequestException as e:
+            print_warning(f"Failed to download {url}: {e}")
+            logger.warning("Failed to download {}: {}", url, e)
     return None
 
 
+T = TypeVar("T")
+
+
+def chunks(iterable: Iterable[T], size: int) -> Iterable[Iterable[T]]:
+    it = iter(iterable)
+    chunk = tuple(itertools.islice(it, size))
+    while chunk:
+        yield chunk
+        chunk = tuple(itertools.islice(it, size))
+
+
 def download_cover(cover_url_list: List[str]) -> None:
-    p = ThreadPool(4)
-    content_list = p.map(download_file, cover_url_list)
+    cover_url_list = [url for url in cover_url_list if url]
+    if not cover_url_list:
+        return
+
+    p = ThreadPool(3)
+    content_list = []
+
+    for chunk in chunks(cover_url_list, 9):
+        content_list.extend(p.map(download_file, chunk))
     p.close()
+
     for index, r in enumerate(content_list):
         if not r:
             continue
 
         dir_path, file_path = convert_cover_url_to_path(cover_url_list[index])
-        if not glob.glob(dir_path):
+        if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         with open(file_path, "wb") as f:
             f.write(r.content)

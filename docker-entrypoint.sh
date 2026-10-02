@@ -24,10 +24,13 @@ else
 fi
 
 if [ ! -f "${BGMI_PATH}/config.toml" ]; then
-    bgmi install >/tmp/bgmi-install.log 2>&1 || {
-        cat /tmp/bgmi-install.log
-        exit 1
-    }
+    python - <<'PY'
+from bgmi.setup import create_dir
+from bgmi.config import write_default_config
+
+create_dir()
+write_default_config()
+PY
 fi
 
 python - <<'PY'
@@ -57,6 +60,35 @@ if tmp_path:
 config_path.write_text(dumps(doc), encoding="utf-8")
 PY
 
+python - <<'PY'
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+
+from bgmi.config import cfg
+from bgmi.lib.update import update_database
+from bgmi.setup import create_dir, init_db
+
+create_dir()
+db_path = Path(cfg.db_path)
+if db_path.exists():
+    with sqlite3.connect(db_path) as source:
+        bangumi_columns = {row[1] for row in source.execute("PRAGMA table_info(bangumi)")}
+        followed_columns = {row[1] for row in source.execute("PRAGMA table_info(followed)")}
+        is_v4 = bool({"keyword", "update_time"} & bangumi_columns) or (
+            "episode" in followed_columns and "episodes" not in followed_columns
+        )
+        if is_v4:
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup_path = db_path.with_name(f"{db_path.stem}.v4-backup-{stamp}{db_path.suffix}")
+            with sqlite3.connect(backup_path) as backup:
+                source.backup(backup)
+            print(f"[bgmi] Saved v4 database backup: {backup_path}")
+
+init_db()
+update_database()
+PY
+
 rm -rf "${BGMI_PATH}/front_static"
 mkdir -p "${BGMI_PATH}/front_static/assets" "${BGMI_PATH}/front_static/package"
 cp -R /opt/bgmi-frontend-dist/. "${BGMI_PATH}/front_static/"
@@ -72,16 +104,16 @@ if [ "${1:-}" = "bgmi_http" ]; then
     (
         while true; do
             sleep "${BGMI_UPDATE_INTERVAL}"
-            echo "[bgmi] Running scheduled update --download ..."
-            bgmi update --download 2>&1 || echo "[bgmi] Update failed, will retry next cycle."
+            echo "[bgmi] Running scheduled update ..."
+            bgmi update 2>&1 || echo "[bgmi] Update failed, will retry next cycle."
         done
     ) &
     # Refresh calendar & download covers every BGMI_CAL_INTERVAL (default 4 hours)
     (
         while true; do
             sleep "${BGMI_CAL_INTERVAL}"
-            echo "[bgmi] Running scheduled cal --force-update --download-cover ..."
-            bgmi cal --force-update --download-cover 2>&1 || echo "[bgmi] Cal failed, will retry next cycle."
+            echo "[bgmi] Running scheduled cal --force-update --cover ..."
+            bgmi cal --force-update --cover 2>&1 || echo "[bgmi] Cal failed, will retry next cycle."
         done
     ) &
     exec bgmi_http --port="${BGMI_HTTP_PORT}" --address="${BGMI_HTTP_ADDRESS}" "$@"

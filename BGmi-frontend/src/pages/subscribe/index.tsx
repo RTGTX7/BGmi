@@ -401,7 +401,7 @@ export default function Subscribe() {
     return weekdayTabItems[0] ?? '';
   }, [activeTab, tabListItems, todayWeekday, weekdayTabItems]);
   const globalSearchResults = useMemo(() => {
-    const deduped = new Map<number, WeekCalendar>();
+    const deduped = new Map<string, WeekCalendar>();
 
     tabPanelsItems.forEach(([_, bangumis]) => {
       bangumis?.forEach(bangumi => {

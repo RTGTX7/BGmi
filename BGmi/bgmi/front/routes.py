@@ -1,0 +1,457 @@
+import hashlib
+from typing import Any, Dict, Generic, List, Optional, TypeVar
+
+import fastapi
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
+from starlette.exceptions import HTTPException
+
+from bgmi import __version__
+from bgmi.config import cfg
+from bgmi.front.custom_routes import router as custom_router
+from bgmi.front.index import get_player
+from bgmi.lib import controllers as ctl
+from bgmi.lib import table
+from bgmi.lib.table import Followed, NotFoundError, Scripts, Session
+from bgmi.utils import normalize_path
+
+app = fastapi.FastAPI(docs_url="/")
+app.include_router(custom_router)
+
+COVER_URL = "/bangumi/.cover"
+WEEK = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+SCRIPT_ID_PREFIX = "script:"
+
+
+def cover_path(s: str) -> str:
+    if not s:
+        return ""
+
+    return f"{COVER_URL}/{normalize_path(s)}"
+
+
+class Player(BaseModel):
+    path: str
+
+
+T = TypeVar("T")
+
+
+class Response(BaseModel, Generic[T]):
+    version: str
+    danmaku_api: str
+    data: T
+
+
+def jsonify(data: Any) -> Dict[str, Any]:
+    return {
+        "version": __version__,
+        "danmaku_api": cfg.http.danmaku_api_url,
+        "data": data,
+    }
+
+
+class Bangumi(BaseModel):
+    id: str
+    status: int
+    episode: int
+    cover: str
+    bangumi_name: str
+    updated_time: int
+    display_name: str = ""
+
+
+class BangumiPlayer(Bangumi):
+    player: Dict[int, Player]
+
+
+def script_id(name: str) -> str:
+    return f"{SCRIPT_ID_PREFIX}{hashlib.sha1(name.encode()).hexdigest()}"
+
+
+def followed_item(followed: Followed, bangumi: table.Bangumi) -> Dict[str, Any]:
+    return {
+        key: value
+        for key, value in {
+            **bangumi.__dict__,
+            **followed.__dict__,
+            "id": bangumi.id,
+            "bangumi_name": bangumi.name,
+            "episode": followed.episode,
+            "cover": cover_path(bangumi.cover),
+        }.items()
+        if not key.startswith("_")
+    }
+
+
+@app.get("/index/{t}", response_model=Response[List[Bangumi]])
+def bangumi_list(t: str) -> Any:
+    if t not in (
+        "old",
+        "index",
+    ):
+        raise HTTPException(400, "type should be `index` or `old`")
+
+    bangumi_status = table.Bangumi.STATUS_UPDATING
+    if t == "old":
+        bangumi_status = table.Bangumi.STATUS_END
+
+    data: List[Dict[str, Any]] = [
+        followed_item(followed, bangumi)
+        for followed, bangumi in Followed.get_all_followed(bangumi_status=bangumi_status)
+    ]
+
+    def sorter(_: Dict[str, int]) -> int:
+        return _["updated_time"] if _["updated_time"] else 1
+
+    if t == "index":
+        with Session.begin() as tx:
+            patch_list = tx.query(Scripts).where(Scripts.status.isnot(Followed.STATUS_DELETED)).all()
+            for s in patch_list:
+                data.append(
+                    {
+                        "id": script_id(s.bangumi_name),
+                        "bangumi_name": s.bangumi_name,
+                        "updated_time": s.updated_time,
+                        "status": s.status,
+                        "cover": s.cover,
+                        "episodes": s.episodes,
+                        "episode": max(s.episodes) if s.episodes else 0,
+                    }
+                )
+        data.sort(key=sorter)
+
+    data.reverse()
+
+    return jsonify(data)
+
+
+@app.get("/player/{bangumi_id:path}", response_model=Response[BangumiPlayer])
+def bangumi_player(bangumi_id: str) -> Any:
+    with Session.begin() as tx:
+        row = (
+            tx.query(Followed, table.Bangumi)
+            .join(table.Bangumi, Followed.bangumi_name == table.Bangumi.name)
+            .where(table.Bangumi.id == bangumi_id, Followed.status.isnot(Followed.STATUS_DELETED))
+            .one_or_none()
+        )
+
+        if row:
+            followed, bangumi = row
+            item = followed_item(followed, bangumi)
+        else:
+            item = None
+            if bangumi_id.startswith(SCRIPT_ID_PREFIX):
+                for script in tx.query(Scripts).where(Scripts.status.isnot(Followed.STATUS_DELETED)).all():
+                    if script_id(script.bangumi_name) == bangumi_id:
+                        item = {
+                            "id": bangumi_id,
+                            "bangumi_name": script.bangumi_name,
+                            "updated_time": script.updated_time,
+                            "status": script.status,
+                            "cover": script.cover,
+                            "episodes": script.episodes,
+                            "episode": max(script.episodes) if script.episodes else 0,
+                        }
+                        break
+
+        if item is None:
+            raise HTTPException(404, "bangumi not found")
+
+    episodes = item.pop("episodes", ())
+    item["player"] = get_player(
+        item["bangumi_name"],
+        episodes=episodes,
+        season=item.get("season", 1),
+        episode_offset=item.get("episode_offset", 0),
+        display_name=item.get("display_name", ""),
+    )
+
+    return jsonify(item)
+
+
+class CalendarItem(BaseModel):
+    id: str
+    cover: str
+    name: str
+    update_day: str
+    status: Optional[int]
+    episode: Optional[int]
+
+
+class Calendar(BaseModel):
+    sat: Optional[List[CalendarItem]] = None
+    sun: Optional[List[CalendarItem]] = None
+    mon: Optional[List[CalendarItem]] = None
+    tue: Optional[List[CalendarItem]] = None
+    thu: Optional[List[CalendarItem]] = None
+    wed: Optional[List[CalendarItem]] = None
+    fri: Optional[List[CalendarItem]] = None
+
+
+@app.get(
+    "/calendar",
+    responses={
+        200: {"description": "成功"},
+        404: {"description": "暂无番剧，请使用命令行更新calendar"},
+    },
+    response_model=Calendar,
+)
+def calendar() -> Any:
+    weekly_list = table.Bangumi.get_updating_bangumi()
+    if not weekly_list:
+        raise HTTPException(404, '请使用 "bgmi cal --update" 命令更新番剧列表')
+
+    for _, value in weekly_list.items():
+        for bangumi in value:
+            bangumi["cover"] = cover_path(bangumi["cover"])
+
+    Calendar.model_validate(weekly_list)
+    return weekly_list
+
+
+security = HTTPBearer()
+
+
+async def auth_header(credential: Optional[HTTPAuthorizationCredentials] = fastapi.Depends(security)) -> Any:
+    if not credential:
+        raise fastapi.HTTPException(404, "missing http header authorization")
+
+    token = credential.credentials
+
+    if token == cfg.http.admin_token:
+        return
+    raise fastapi.HTTPException(403, "wrong auth token")
+
+
+admin = fastapi.APIRouter(
+    dependencies=[fastapi.Depends(auth_header)], responses={403: {"description": "wrong api token"}}
+)
+
+
+@admin.post(
+    "/auth",
+    responses={
+        200: {"description": "成功"},
+    },
+)
+def auth() -> Any:
+    return {}
+
+
+@admin.post(
+    "/add",
+    responses={
+        200: {"description": "成功添加"},
+        404: {"description": "番剧不存在"},
+    },
+)
+def add(
+    bangumi: str = fastapi.Body(embed=True),
+    season: Optional[int] = fastapi.Body(None, embed=True),
+    episode_offset: Optional[int] = fastapi.Body(None, embed=True),
+    display_name: Optional[str] = fastapi.Body(
+        None,
+        embed=True,
+        description=(
+            "Override {name} in path_formatter for new or existing subscriptions. "
+            "Requires enable_path_formatter=true; applied during download post-processing. "
+            "Null/omitted preserves an existing override; empty string restores automatic naming. "
+            "Does not change the subscription name or rename previously organized files."
+        ),
+    ),
+) -> Any:
+    result = ctl.add(name=bangumi, season=season, episode_offset=episode_offset, display_name=display_name)
+    if result["status"] == "error":
+        raise HTTPException(404, result["message"])
+
+    return {}
+
+
+@admin.post(
+    "/delete",
+    responses={
+        200: {"description": "成功删除"},
+        404: {"description": "番剧不存在或者未订阅"},
+    },
+)
+def delete(bangumi: str = fastapi.Body(embed=True)) -> Any:
+    with Session.begin() as tx:
+        f: Optional[table.Followed] = (
+            tx.query(table.Followed)
+            .where(table.Followed.bangumi_name == bangumi, table.Followed.status.isnot(table.Followed.STATUS_DELETED))
+            .scalar()
+        )
+        if f is None:
+            raise HTTPException(404, "bangumi not exists or not followed")
+        f.status = table.Followed.STATUS_DELETED
+        tx.add(f)
+
+    return {}
+
+
+class Filter(BaseModel):
+    available_subtitle: List[str]
+    selected_subtitle: List[str]
+    include: List[str]
+    exclude: List[str]
+    regex: str
+
+
+@admin.get(
+    "/filter/{bangumi}",
+    responses={
+        200: {"description": "成功"},
+        404: {"description": "番剧不存在或者未订阅"},
+    },
+)
+def get_filter(bangumi: str = fastapi.Path()) -> Any:
+    try:
+        f = table.Followed.get(
+            table.Followed.bangumi_name == bangumi, table.Followed.status.isnot(table.Followed.STATUS_DELETED)
+        )
+    except NotFoundError as e:
+        raise HTTPException(404, "bangumi not followed") from e
+
+    try:
+        b = table.Bangumi.get(table.Bangumi.name == bangumi)
+    except NotFoundError as e:
+        raise HTTPException(404, "bangumi not exists") from e
+
+    available_subtitle = table.Subtitle.get_subtitle_by_id(b.subtitle_group)
+
+    return {
+        "available_subtitle": [x.name for x in available_subtitle],
+        "selected_subtitle": [x.name for x in table.Subtitle.get_subtitle_by_id(f.subtitle)],
+        "include": f.include,
+        "exclude": f.exclude,
+        "regex": f.regex,
+        "season": f.season,
+        "episode_offset": f.episode_offset,
+        "display_name": f.display_name,
+    }
+
+
+@admin.patch(
+    "/filter/{bangumi}",
+    responses={
+        200: {"description": "成功"},
+        400: {"description": "字幕组不可用"},
+        404: {"description": "番剧不存在或者未订阅"},
+    },
+)
+def update_filter(
+    bangumi: str = fastapi.Path(),
+    selected_subtitle: Optional[List[str]] = fastapi.Body(None, embed=True),
+    include: Optional[List[str]] = fastapi.Body(None, embed=True),
+    exclude: Optional[List[str]] = fastapi.Body(None, embed=True),
+    regex: Optional[str] = fastapi.Body(None, embed=True),
+) -> Any:
+    try:
+        f = table.Followed.get(
+            table.Followed.bangumi_name == bangumi, table.Followed.status.isnot(table.Followed.STATUS_DELETED)
+        )
+    except NotFoundError as e:
+        raise HTTPException(404, "bangumi not followed") from e
+
+    try:
+        b = table.Bangumi.get(
+            table.Bangumi.name == bangumi,
+        )
+    except NotFoundError as e:
+        raise HTTPException(404, "bangumi not exists") from e
+
+    if selected_subtitle is not None:
+        available_subtitle = {x.name: x.id for x in table.Subtitle.get_subtitle_by_id(b.subtitle_group)}
+        for s in selected_subtitle:
+            if s not in available_subtitle:
+                raise HTTPException(404, f"字幕组 {s} 不可用")
+
+        f.subtitle = [available_subtitle[x] for x in selected_subtitle]
+
+    if include is not None:
+        f.include = include
+    if exclude is not None:
+        f.exclude = exclude
+    if regex is not None:
+        f.regex = regex
+
+    f.save()
+
+    return {}
+
+
+@admin.get(
+    "/seen/{bangumi}",
+    responses={
+        200: {"description": "成功"},
+        404: {"description": "番剧未订阅"},
+    },
+)
+def seen(bangumi: str = fastapi.Path()) -> Any:
+    result = ctl.seen(bangumi)
+    if result["status"] != "success":
+        raise HTTPException(404, result["message"])
+
+    return {
+        "bangumi": result["bangumi"],
+        "total_episode": result["total_episode"],
+        "seen": result["seen"],
+    }
+
+
+@admin.post(
+    "/seen_forget",
+    responses={
+        200: {"description": "成功"},
+        404: {"description": "番剧未订阅或集数不存在"},
+    },
+)
+def seen_forget(
+    bangumi: str = fastapi.Body(embed=True),
+    episode: Optional[int] = fastapi.Body(None, embed=True),
+    episodes: Optional[List[int]] = fastapi.Body(None, embed=True),
+) -> Any:
+    result = ctl.seen_forget_batch(bangumi, episodes or ([episode] if episode is not None else []))
+    if result["status"] != "success":
+        raise HTTPException(404, result["message"])
+
+    data = {
+        "bangumi": result["bangumi"],
+        "seen": result["seen"],
+    }
+    if episodes is None:
+        data["episode"] = episode
+    else:
+        data["episodes"] = result["episodes"]
+    return data
+
+
+@admin.post(
+    "/seen_mark",
+    responses={
+        200: {"description": "成功"},
+        404: {"description": "番剧未订阅"},
+    },
+)
+def seen_mark(
+    bangumi: str = fastapi.Body(embed=True),
+    episode: Optional[int] = fastapi.Body(None, embed=True),
+    episodes: Optional[List[int]] = fastapi.Body(None, embed=True),
+) -> Any:
+    result = ctl.seen_mark_batch(bangumi, episodes or ([episode] if episode is not None else []))
+    if result["status"] != "success":
+        raise HTTPException(404, result["message"])
+
+    data = {
+        "bangumi": result["bangumi"],
+        "seen": result["seen"],
+    }
+    if episodes is None:
+        data["episode"] = episode
+    else:
+        data["episodes"] = result["episodes"]
+    return data
+
+
+app.include_router(admin, prefix="/admin")

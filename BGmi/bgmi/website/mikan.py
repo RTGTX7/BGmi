@@ -1,5 +1,5 @@
+import contextlib
 import datetime
-import os
 import re
 import time
 from collections import defaultdict
@@ -17,13 +17,16 @@ from bgmi.utils import parse_episode, print_info
 from bgmi.website.base import BaseWebsite
 from bgmi.website.model import Episode, SubtitleGroup, WebsiteBangumi
 
-server_root = f"{cfg.mikan_url.encoded_string().rstrip('/')}/"
+server_root = "https://mikanani.me/"
 login_url = f"{server_root}Account/Login"
+REQUEST_TIMEOUT = 30
 
 _COVER_URL = server_root[:-1]
 
 # Example: /Home/ExpandEpisodeTable?bangumiId=2242&subtitleGroupId=34&take=65
-bangumi_episode_expand_api = f"{server_root}Home/ExpandEpisodeTable"
+bangumi_episode_expand_api = "https://mikanani.me/Home/ExpandEpisodeTable"
+
+_BACKGROUND_IMAGE_PATTERN = re.compile(r"url\([\"']?(?P<url>.*?)[\"']?\)")
 
 _CN_WEEK = {
     "星期日": "Sun",
@@ -48,50 +51,17 @@ _DAY_OF_WEEK = {
 }
 
 
-def _normalize_mikan_cover_url(raw_url: str) -> str:
-    cover = str(raw_url or "").strip().split("?")[0]
-    if not cover:
-        return ""
-    if cover.startswith("/"):
-        return _COVER_URL + cover
-    return cover
-
-
-def _extract_cover_from_search_link(link: bs4.Tag) -> str:
-    image = link.select_one("img[data-src], img[src], .b-lazy[data-src], span[data-src]")
-    if image is None:
-        return ""
-    return _normalize_mikan_cover_url(str(image.get("data-src") or image.get("src") or ""))
-
-
-def _extract_cover_from_bangumi_page(soup: BeautifulSoup) -> str:
-    poster = soup.select_one(".leftbar-container .bangumi-poster")
-    if isinstance(poster, bs4.Tag):
-        style = str(poster.get("style", ""))
-        matched = re.search(r"url\((['\"]?)(.*?)\1\)", style)
-        if matched:
-            return _normalize_mikan_cover_url(matched.group(2))
-
-    image = soup.select_one(".leftbar-container img[src], .leftbar-container img[data-src], .leftbar-container .b-lazy[data-src]")
-    if image is None:
-        return ""
-
-    return _normalize_mikan_cover_url(str(image.get("data-src") or image.get("src") or ""))
-
-
 def get_weekly_bangumi():
     """
     network
     """
     r = get_text(server_root)
     soup = bs4.BeautifulSoup(r, "html.parser")
-    for day_of_week in [x for x in range(0, 9) if x != 7]:
+    for day_of_week in [x for x in range(9) if x != 7]:
         d = soup.find("div", attrs={"class": "sk-bangumi", "data-dayofweek": str(day_of_week)})
         if d:
-            try:
+            with contextlib.suppress(KeyError):
                 yield _CN_WEEK[_DAY_OF_WEEK[day_of_week]], d
-            except KeyError:
-                pass
 
 
 def parse_episodes(content, bangumi_id, subtitle_list=None) -> List[Episode]:
@@ -102,7 +72,7 @@ def parse_episodes(content, bangumi_id, subtitle_list=None) -> List[Episode]:
 
     episode_container_list = {}
     expand_subtitle_map = {}
-    for tag in container.contents:
+    for tag in container.contents:  # type: ignore
         if not hasattr(tag, "attrs"):
             continue
 
@@ -114,11 +84,10 @@ def parse_episodes(content, bangumi_id, subtitle_list=None) -> List[Episode]:
         if subtitle_list:
             if subtitle_id in subtitle_list:
                 episode_container_list[tag.attrs.get("id", None)] = tag.find_next_sibling("div", class_="episode-table")
-        else:
-            if subtitle_id:
-                episode_container_list[tag.attrs.get("id", None)] = tag.find_next_sibling("div", class_="episode-table")
+        elif subtitle_id:
+            episode_container_list[tag.attrs.get("id", None)] = tag.find_next_sibling("div", class_="episode-table")
 
-    for subtitle_id, container in episode_container_list.items():
+    for subtitle_id, container in episode_container_list.items():  # type: ignore
         _container = container
         if subtitle_id in expand_subtitle_map:
             expand_r = requests.get(
@@ -128,9 +97,10 @@ def parse_episodes(content, bangumi_id, subtitle_list=None) -> List[Episode]:
                     "subtitleGroupId": subtitle_id,
                     "take": 200,
                 },
+                timeout=REQUEST_TIMEOUT,
             ).text
             expand_soup = BeautifulSoup(expand_r, "html.parser")
-            _container = expand_soup.find("table")
+            _container = expand_soup.find("table")  # type: ignore
 
         assert isinstance(_container, bs4.Tag), f"Failed to parse bangumi {bangumi_id} subtitle {subtitle_id}"
 
@@ -179,18 +149,14 @@ def parser_day_bangumi(soup) -> List[WebsiteBangumi]:
             url = url["href"]
             bangumi_id = url.split("/")[-1]
             s.find("li")
-            cover = _normalize_mikan_cover_url(str(span["data-src"])) if span else ""
-            li.append(WebsiteBangumi(name=name, keyword=bangumi_id, cover=cover))
+            li.append(WebsiteBangumi(name=name, id=bangumi_id, cover=_COVER_URL + span["data-src"]))
     return li
 
 
 def mikan_login():
-    r = requests.get(login_url)
+    r = requests.get(login_url, timeout=REQUEST_TIMEOUT)
     soup = BeautifulSoup(r.text, "html.parser")
     token = soup.find("input", attrs={"name": "__RequestVerificationToken"})["value"]
-
-    if os.environ.get("DEBUG", False):  # pragma: no cover
-        print(login_url)
 
     r = requests.post(
         login_url,
@@ -201,6 +167,7 @@ def mikan_login():
         },
         headers={"Referer": server_root},
         allow_redirects=False,
+        timeout=REQUEST_TIMEOUT,
     )
 
     if "&#x767B;&#x5F55;&#x5931;&#x8D25;&#xFF0C;&#x8BF7;&#x91CD;&#x8BD5;" in r.text:  # 实际为 "登录失败，请重试"
@@ -208,23 +175,23 @@ def mikan_login():
 
 
 def get_text(url, params=None):
-    if os.environ.get("DEBUG", False):  # pragma: no cover
-        print(url, params)
-
     if not cfg.mikan_username or not cfg.mikan_password:
-        return requests.get(url, params=params).text
+        return requests.get(url, params=params, timeout=REQUEST_TIMEOUT).text
 
     for _ in range(2):
-        r = requests.get(url, params=params)
+        r = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
         if r.headers.get("content-type").startswith("text/html"):
             if "退出" in r.text:
                 return r.text
-            else:
-                mikan_login()
+            mikan_login()
         else:
             return r.text
 
     raise ValueError("mikan login failed")
+
+
+def _normalize_cover_url(cover_url: str) -> str:
+    return str(yarl.URL(server_root).join(yarl.URL(cover_url))).split("?")[0]
 
 
 class Mikanani(BaseWebsite):
@@ -236,11 +203,20 @@ class Mikanani(BaseWebsite):
         # info
         bangumi_info = {"status": 0}
         left_container = soup.select_one("div.pull-left.leftbar-container")
+        if left_container is None:
+            return None
         title = left_container.find("p", class_="bangumi-title")
+        if title is None:
+            return None
         day = title.find_next_sibling("p", class_="bangumi-info")
         bangumi_info["name"] = title.text
         bangumi_info["update_time"] = _CN_WEEK[day.text[-3:]]
-        bangumi_info["cover"] = _extract_cover_from_bangumi_page(soup)
+        poster = left_container.find("div", class_="bangumi-poster")
+        if poster is not None:
+            background_image = poster.attrs.get("style", "")
+            cover_match = _BACKGROUND_IMAGE_PATTERN.search(background_image)
+            if cover_match:
+                bangumi_info["cover"] = _normalize_cover_url(cover_match.group("url"))
 
         ######
         soup = BeautifulSoup(r, "html.parser")
@@ -350,14 +326,14 @@ class Mikanani(BaseWebsite):
         if not best_sim_match_group:
             return []
         subgroup, subgroup_names, subgroup_links, sub_info = best_sim_match_group
-        bangumiId, subgroupid = sub_info["bangumiId"], sub_info["subgroupid"]
-        rss_url = f"{server_root}RSS/Bangumi?bangumiId={bangumiId}&subgroupid={subgroupid}"
+        bangumi_id, subgroup_id = sub_info["bangumiId"], sub_info["subgroupid"]
+        rss_url = f"{server_root}RSS/Bangumi?bangumiId={bangumi_id}&subgroupid={subgroup_id}"
 
         subtitle_group = " ".join(subgroup_names)
         if subtitle:
-            print_info(f"Matched subtitle: {subtitle_group} ({subgroupid})")
+            print_info(f"Matched subtitle: {subtitle_group} ({subgroup_id})")
         else:
-            print_info(f"Use first subtitle: {subtitle_group} ({subgroupid})")
+            print_info(f"Use first subtitle: {subtitle_group} ({subgroup_id})")
 
         r = get_text(rss_url)
         rss_root = ElementTree.fromstring(r)
@@ -369,7 +345,7 @@ class Mikanani(BaseWebsite):
             title_el = item.find("title")
             title: Optional[str] = title_el.text if title_el is not None else None
 
-            xmlns = "{" + server_root + "0.1/}"
+            xmlns = "{https://mikanani.me/0.1/}"
             torrent = item.find(f"{xmlns}torrent")
             pub_date_el = torrent.find(f"{xmlns}pubDate") if torrent is not None else None
             pub_date = pub_date_el.text if pub_date_el is not None else None
@@ -402,13 +378,11 @@ class Mikanani(BaseWebsite):
             u = yarl.URL(tr.find("a", class_="magnet-link").attrs.get("data-clipboard-text", ""))
             result.append(
                 Episode(
-                    **{
-                        "download": str(u.update_query({"dn": title})),
-                        "name": keyword,
-                        "title": title,
-                        "episode": self.parse_episode(title),
-                        "time": int(time.mktime(time.strptime(time_string, "%Y/%m/%d %H:%M"))),
-                    }
+                    download=str(u.with_query({"dn": title})),
+                    name=keyword,
+                    title=title,
+                    episode=self.parse_episode(title),
+                    time=int(time.mktime(time.strptime(time_string, "%Y/%m/%d %H:%M"))),
                 )
             )
         return result
@@ -421,7 +395,7 @@ class Mikanani(BaseWebsite):
         bangumi_list = []
         for update_time, day in get_weekly_bangumi():
             for obj in parser_day_bangumi(day):
-                obj.update_time = update_time
+                obj.update_day = update_time
                 obj.cover = obj.cover.split("?")[0]
                 bangumi_list.append(obj)
         return bangumi_list
@@ -434,12 +408,14 @@ class Mikanani(BaseWebsite):
     ) -> Optional[WebsiteBangumi]:
         html = get_text(server_root + f"Home/Bangumi/{bangumi_id}")
         info = self.parse_bangumi_details_page(html)
+        if info is None:
+            return None
         return WebsiteBangumi(
             name=info["name"],
-            keyword=bangumi_id,
+            id=bangumi_id,
             status=info["status"],
-            update_time=info["update_time"],
-            subtitle_group=info["subtitle_group"],
+            update_day=info["update_time"],
             cover=info.get("cover", ""),
+            subtitle_group=info["subtitle_group"],
             episodes=parse_episodes(html, bangumi_id, subtitle_list),
         )

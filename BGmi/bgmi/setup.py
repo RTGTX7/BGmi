@@ -1,13 +1,13 @@
 import os
+import subprocess
+import sys
 from pathlib import Path
 from shutil import copy
-from typing import List, Type
+from typing import List
 
-from bgmi import __version__
 from bgmi.config import BGMI_PATH, IS_WINDOWS, cfg
-from bgmi.lib import models
-from bgmi.lib.models import NeoDB
-from bgmi.utils import print_error, print_info, print_success, print_warning
+from bgmi.lib.table import Base, engine
+from bgmi.utils import print_error, print_info, print_success
 
 
 def install_crontab() -> None:
@@ -20,8 +20,23 @@ def install_crontab() -> None:
             )
         )
     else:
-        path = os.path.join(os.path.dirname(__file__), "others/crontab.sh")
-        os.system(f"bash '{path}'")
+        output = subprocess.getoutput("crontab -l")
+
+        extra = []
+        for line in output.splitlines():
+            if "bgmi update" in line:
+                continue
+            if "bgmi cal" in line:
+                continue
+
+            extra.append(line)
+
+        extra.append(f"10 */2 * * * LC_ALL=en_US.UTF-8 {sys.executable} -m bgmi update")
+        extra.append(f"0 */12 * * * LC_ALL=en_US.UTF-8 {sys.executable} -m bgmi cal --update --cover")
+
+        with subprocess.Popen(["crontab", "-"], stdin=subprocess.PIPE) as p:
+            for line in extra:
+                p.stdin.write(f"{line}\n".encode())  # type: ignore
 
 
 def create_dir() -> None:
@@ -29,29 +44,21 @@ def create_dir() -> None:
         BGMI_PATH,
         cfg.save_path,
         cfg.tmp_path,
+        cfg.log_path,
         cfg.script_path,
-        cfg.hook_path,
         cfg.tools_path,
         cfg.front_static_path,
     ]
 
-    if not os.environ.get("HOME", os.environ.get("USERPROFILE", "")):
-        print_warning("$HOME not set, use '/tmp/'")
-
     # bgmi home dir
     try:
         for path in path_to_create:
-            if not os.path.exists(path):
-                os.makedirs(path, exist_ok=True)
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
                 print_success(f"{path} created successfully")
-        OLD = os.path.join(BGMI_PATH, "old")
-        # create OLD if not exist oninstall
-        if not os.path.exists(OLD):
-            with open(OLD, "w", encoding="utf8") as f:
-                f.write(__version__)
     except OSError as e:
-        print_error(f"Error: {str(e)}")
+        print_error(f"Error: {e!s}")
 
 
 def init_db() -> None:
-    models.ensure_runtime_schema()
+    Base.metadata.create_all(engine, checkfirst=True)

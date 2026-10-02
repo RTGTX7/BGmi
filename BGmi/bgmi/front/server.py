@@ -1,113 +1,117 @@
-import asyncio
-from itertools import chain
-from pathlib import Path
-from typing import Any, List
+import click
+import uvicorn
+from xml.etree import ElementTree as ET
+from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, Response
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
-import tornado.httpserver
-import tornado.ioloop
-import tornado.options
-import tornado.routing
-import tornado.template
-import tornado.web
-from tornado.options import define, options
+from bgmi.config import cfg
+from bgmi.front.mcp_server import create_mcp_app, create_mcp_streamable_route
+from bgmi.front.resources import CalendarHandler
+from bgmi.lib.table import Download
+from .routes import app as api
 
-from bgmi.config import IS_WINDOWS, cfg
-from bgmi.front.admin import API_MAP_GET, API_MAP_POST, AdminApiHandler, UpdateHandler
-from bgmi.front.index import (
-    BangumiListHandler,
-    IndexHandler,
-    PlayerAssetHandler,
-    PlayerBangumiHandler,
-    PlayerHlsHandler,
-    PlayerHlsStartHandler,
-    PlayerHlsStatusHandler,
+
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: dict) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as error:
+            if error.status_code != 404 or "." in path.rsplit("/", 1)[-1]:
+                raise
+            return await super().get_response("index.html", scope)
+
+
+@click.command()
+@click.option(
+    "--port",
+    type=int,
+    default=8888,
+    help="listen on the port",
 )
-from bgmi.front.resources import BangumiHandler, CalendarHandler, RssHandler
-from bgmi.setup import create_dir, init_db
+@click.option("--address", default="0.0.0.0", help="binding at given address", type=str)
+def main(address: str, port: int) -> None:
+    app = make_app()
 
-define("port", default=8888, help="listen on the port", type=int)
-define("address", default="0.0.0.0", help="binding at given address", type=str)
-
-
-class CorsStaticFileHandler(tornado.web.StaticFileHandler):
-    def set_default_headers(self) -> None:
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "Range, Content-Type, Accept, Origin")
-        self.set_header("Access-Control-Expose-Headers", "Accept-Ranges, Content-Encoding, Content-Length, Content-Range")
-        self.set_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
-
-    def options(self, path: str = "") -> None:
-        self.set_status(204)
-        self.finish()
+    print(f"BGmi HTTP Server listening on {address}:{port:d}")
+    uvicorn.run(app, host=address, port=port)
 
 
-class SpaIndexHandler(tornado.web.RequestHandler):
-    def get(self, path: str = "") -> None:
-        index_path = Path(cfg.front_static_path).joinpath("index.html")
-        self.set_header("Content-Type", "text/html; charset=utf-8")
-        self.write(index_path.read_text(encoding="utf-8"))
-        self.finish()
+def index_need_config(_: Request) -> HTMLResponse:
+    return HTMLResponse(
+        "<h1>BGmi HTTP Service</h1>"
+        "<pre>Please modify your web server configure file\n"
+        f"to server this path to '{cfg.save_path}'.\n"
+        "e.g.\n\n"
+        "...\n"
+        "autoindex on;\n"
+        "location / {\n"
+        f"    alias {cfg.front_static_path.as_posix()}/;\n"
+        "}\n"
+        "location /bangumi {\n"
+        f"    alias {cfg.save_path.as_posix()}/;\n"
+        "}\n"
+        "...\n\n"
+        "If use want main to serve static files, please run this command and <strong>restart main</strong>\n"
+        "\n"
+        "<code>bgmi config set http serve_static_files --value true</code></pre>"
+    )
 
 
-def make_app() -> tornado.web.Application:
-    create_dir()
-    init_db()
+def download_feed(_: Request) -> Response:
+    root = ET.Element("rss", version="2.0")
+    channel = ET.SubElement(root, "channel")
+    ET.SubElement(channel, "title").text = "BGmi Feed"
+    for row in Download.get_all_downloads():
+        item = ET.SubElement(channel, "item")
+        ET.SubElement(item, "title").text = row.title
+        ET.SubElement(item, "enclosure", url=row.download, length="1", type="application/x-bittorrent")
+    return Response(ET.tostring(root, encoding="utf-8", xml_declaration=True), media_type="application/rss+xml")
 
-    settings = {
-        "autoreload": True,
-        "gzip": True,
-        "debug": True,
-    }
-    api_actions = "|".join(chain(API_MAP_GET.keys(), API_MAP_POST.keys()))
 
-    handlers: List[Any] = [
-        (r"^/api/(old|index)", BangumiListHandler),
-        (r"^/api/player/bangumi$", PlayerBangumiHandler),
-        (r"^/api/player$", PlayerAssetHandler),
-        (r"^/api/player/hls$", PlayerHlsHandler),
-        (r"^/api/player/hls/start$", PlayerHlsStartHandler),
-        (r"^/api/player/hls/status$", PlayerHlsStatusHandler),
-        (r"^/resource/feed.xml$", RssHandler),
-        (r"^/resource/calendar.ics$", CalendarHandler),
-        (r"^/api/update", UpdateHandler),
-        (rf"^/api/(?P<action>{api_actions})", AdminApiHandler),
+def make_app(debug: bool = False) -> Starlette:
+    mcp_app = create_mcp_app()
+    routes = [
+        create_mcp_streamable_route("/mcp"),
+        Mount("/mcp", app=mcp_app),
+        Mount("/api/", app=api),
+        Route("/resource/feed.xml", download_feed),
+        Route("/resource/calendar.ics", CalendarHandler),
     ]
 
     if cfg.http.serve_static_files:
-        handlers.extend(
+        print("will handle static files")
+        routes.extend(
             [
-                (r"^/bangumi/?$", BangumiHandler),
-                (r"/bangumi/(.*)", CorsStaticFileHandler, {"path": cfg.save_path}),
-                (r"^/assets/(.*)$", CorsStaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("assets")}),
-                (r"^/package/(.*)$", CorsStaticFileHandler, {"path": Path(cfg.front_static_path).joinpath("package")}),
-                (r"^/(logo2?\.(?:png|jpg))$", CorsStaticFileHandler, {"path": cfg.front_static_path}),
-                (
-                    r"^/(.*)$",
-                    SpaIndexHandler,
+                Mount(
+                    "/bangumi",
+                    app=CORSMiddleware(
+                        StaticFiles(directory=cfg.save_path),
+                        allow_origins=["*"],
+                        allow_methods=["GET", "HEAD", "OPTIONS"],
+                        allow_headers=["Range", "Content-Type", "Accept", "Origin"],
+                        expose_headers=["Accept-Ranges", "Content-Length", "Content-Range"],
+                    ),
                 ),
+                Mount("/", app=SPAStaticFiles(directory=cfg.front_static_path, html=True)),
             ]
         )
     else:
-        handlers.extend(
+        routes.extend(
             [
-                (r"^/bangumi/?(.*)", BangumiHandler),
-                (r"^/(.*)$", IndexHandler),
+                Route("/bangumi/", endpoint=index_need_config),
+                Route("/", endpoint=index_need_config),
             ]
         )
 
-    return tornado.web.Application(handlers, **settings)  # type: ignore
+    app = Starlette(routes=routes, debug=debug, lifespan=mcp_app.router.lifespan_context)
 
-
-def main() -> None:
-    if IS_WINDOWS:
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-    tornado.options.parse_command_line()
-    print(f"BGmi HTTP Server listening on {options.address}:{options.port:d}")
-    http_server = tornado.httpserver.HTTPServer(make_app())
-    http_server.listen(options.port, address=options.address)
-    tornado.ioloop.IOLoop.current().start()
+    return app
 
 
 if __name__ == "__main__":
-    main()
+    main(address="127.0.0.1", port=8999)

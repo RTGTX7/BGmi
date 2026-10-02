@@ -1,0 +1,409 @@
+import json
+import os
+import time
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple, Type, TypeVar
+
+import sqlalchemy as sa
+import sqlalchemy.event
+import sqlalchemy.ext.mutable
+from loguru import logger
+from sqlalchemy import CHAR, Column, Integer, Row, Text, create_engine, types
+from sqlalchemy.ext.mutable import Mutable
+from sqlalchemy.orm import DeclarativeBase, Mapped, sessionmaker
+
+from bgmi.config import cfg
+from bgmi.utils import episode_filter_regex
+from bgmi.website.model import Episode
+
+debug = os.getenv("DEBUG") in ["true", "True"]
+
+
+def before_cursor_execute(
+    _: Any, cursor: Any, statement: str, parameters: List[Any], *args: Any, **kwargs: Any
+) -> None:
+    logger.debug("executing sql {} {}", statement, parameters)
+    if debug:
+        print(statement, parameters)
+
+
+engine = create_engine(f"sqlite:///{cfg.db_path.absolute().as_posix()}")
+sqlalchemy.event.listen(engine, "before_cursor_execute", before_cursor_execute)
+Session = sessionmaker(engine, expire_on_commit=False)
+
+
+class NotFoundError(Exception):
+    def __init__(self, cls: Type["Base"]) -> None:
+        super().__init__(f"{cls} not found")
+
+
+T = TypeVar("T", bound="Base")
+
+
+class Base(DeclarativeBase):
+    NotFoundError = NotFoundError
+
+    @classmethod
+    def get(cls: Type[T], *where: Any) -> T:
+        with Session.begin() as session:
+            o = session.scalar(sa.select(cls).where(*where).limit(1))
+            if not o:
+                raise NotFoundError(cls)
+            return o
+
+    @classmethod
+    def all(cls: Type[T], *where: Any) -> List[T]:
+        with Session.begin() as session:
+            return list(session.scalars(sa.select(cls).where(*where)).all())
+
+    def save(self, tx: Optional[sa.orm.Session] = None) -> None:
+        if tx:
+            tx.add(self)
+            return
+
+        with Session.begin() as session:
+            session.add(self)
+
+
+if os.environ.get("DEV"):
+    print(f"using database {cfg.db_path}")
+
+
+class Bangumi(Base):
+    __tablename__ = "bangumi"
+    STATUS_UPDATING = 0
+    STATUS_END = 1
+
+    id: Mapped[str] = Column(Text, primary_key=True, nullable=False)  # type: ignore
+
+    name: Mapped[str] = Column(Text, nullable=False, unique=True)  # type: ignore
+    subtitle_group: Mapped[List[str]] = Column(sa.JSON, nullable=False, default=[], server_default="[]")  # type: ignore
+    update_day: Mapped[str] = Column(
+        CHAR(5), nullable=False, default="Unknown", server_default="Unknown"
+    )  # type: ignore
+    cover: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
+    status: Mapped[int] = Column(
+        Integer, nullable=False, default=STATUS_UPDATING, server_default=str(STATUS_UPDATING)
+    )  # type: ignore
+    source: Mapped[str] = Column(Text, nullable=False, default="remote", server_default="remote")  # type: ignore
+    in_library: Mapped[bool] = Column(sa.Boolean, nullable=False, default=False, server_default="0")  # type: ignore
+    library_path: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            id: str,
+            name: str,
+            update_day: str = "Unknown",
+            subtitle_group: Optional[List[str]] = None,
+            cover: str = "",
+            status: int = STATUS_UPDATING,
+        ):
+            super().__init__()
+
+    @classmethod
+    def mark_all_end(cls) -> None:
+        with Session.begin() as session:
+            un_updated_bangumi: List[Followed] = list(
+                session.scalars(
+                    sa.select(Followed).where(Followed.updated_time > (int(time.time()) - 2 * 7 * 24 * 3600))
+                )
+            )
+
+            if os.getenv("DEBUG"):  # pragma: no cover
+                print("ignore updating bangumi", [x.bangumi_name for x in un_updated_bangumi])
+
+            # do not mark updating bangumi as STATUS_END
+            session.execute(
+                sa.update(cls)
+                .where(
+                    cls.source != "local",
+                    cls.name.not_in([x.bangumi_name for x in un_updated_bangumi]),
+                )
+                .values(status=cls.STATUS_END)
+            )
+
+    @classmethod
+    def get_updating_bangumi(
+        cls,
+        status: Optional[int] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        Followed.refresh_lifecycle()
+
+        if status is None:
+            where = cls.status == cls.STATUS_UPDATING
+        else:
+            where = (cls.status == cls.STATUS_UPDATING) & (Followed.status == status)
+
+        with Session.begin() as session:
+            data = (
+                session.query(cls, Followed.status, Followed.episodes)  # type: ignore
+                .outerjoin(Followed, cls.name == Followed.bangumi_name)
+                .where(where)
+                .all()
+            )
+
+        weekly_list = defaultdict(list)
+        for bangumi_item, followed_status, episode in data:
+            d = {k: v for k, v in bangumi_item.__dict__.items() if not k.startswith("_")}
+            d["status"] = followed_status
+            d["episode"] = max(episode) if episode else None
+            weekly_list[bangumi_item.update_day.lower()].append(d)
+
+        return weekly_list
+
+
+class MutableSet(Mutable, set):
+    @classmethod
+    def coerce(cls, key, value):  # type: ignore
+        """Convert plain python object to MutableDict."""
+
+        if not isinstance(value, MutableSet):
+            if isinstance(value, set):
+                return MutableSet(value)
+            if isinstance(value, Iterable):
+                return MutableSet(value)
+            # this call will raise ValueError
+            return Mutable.coerce(key, value)
+
+        return value
+
+    def add(self, element: Any) -> None:
+        super().add(element)
+        self.changed()
+
+    def update(self, *s: Any) -> None:
+        super().update(*s)
+        self.changed()
+
+    def remove(self, element: Any) -> None:
+        super().remove(element)
+        self.changed()
+
+    def __hash__(self):  # type: ignore
+        return hash(tuple(sorted(self)))
+
+
+class JSONSetFieldType(types.TypeDecorator):
+    impl = types.Text
+
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):  # type: ignore
+        if value is None:
+            return None
+        return json.dumps(sorted(set(value)))
+
+    def process_result_value(self, value, dialect):  # type: ignore
+        if value is None:
+            return None
+        return MutableSet(json.loads(value))
+
+
+class Followed(Base):
+    __tablename__ = "followed"
+
+    STATUS_DELETED = 0
+    STATUS_FOLLOWED = 1
+    STATUS_UPDATED = 2
+    STATUS_END = 3
+
+    bangumi_name: Mapped[str] = Column(Text, nullable=False, primary_key=True)  # type: ignore
+    episodes: Set[int] = Column(
+        MutableSet.as_mutable(JSONSetFieldType), nullable=False, default=set(), server_default="[]"  # type: ignore
+    )  # type: ignore
+    status: Mapped[int] = Column(
+        Integer, nullable=False, default=STATUS_FOLLOWED, server_default=str(STATUS_FOLLOWED)
+    )  # type: ignore
+    updated_time: Mapped[int] = Column(Integer, nullable=False, default=0, server_default="0")  # type: ignore
+    subtitle: List[str] = Column(sa.JSON, nullable=False, default=[], server_default="[]")  # type: ignore
+    include: Mapped[List[str]] = Column(sa.JSON, nullable=False, default=[], server_default="[]")  # type: ignore
+    exclude: Mapped[List[str]] = Column(sa.JSON, nullable=False, default=[], server_default="[]")  # type: ignore
+    regex: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
+    season: Mapped[int] = Column(Integer, nullable=False, default=1, server_default="1")  # type: ignore
+    episode_offset: Mapped[int] = Column(Integer, nullable=False, default=0, server_default="0")  # type: ignore
+    display_name: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
+
+    is_script: Mapped[bool] = Column(sa.Boolean, nullable=False, default=False, server_default="0")  # type: ignore
+
+    @property
+    def episode(self) -> int:
+        if self.episodes:
+            return max(self.episodes)  # type: ignore
+        return 0
+
+    @staticmethod
+    def _is_before_today(timestamp: int, now: int) -> bool:
+        if not timestamp:
+            return True
+        updated = time.localtime(timestamp)
+        current = time.localtime(now)
+        return (updated.tm_year, updated.tm_yday) < (current.tm_year, current.tm_yday)
+
+    @classmethod
+    def refresh_lifecycle(cls: Type["Followed"], now: Optional[int] = None) -> None:
+        now = int(time.time()) if now is None else now
+
+        with Session.begin() as session:
+            followed_items = session.scalars(sa.select(cls).where(cls.status == cls.STATUS_UPDATED)).all()
+            for followed in followed_items:
+                if cls._is_before_today(followed.updated_time, now):
+                    followed.status = cls.STATUS_FOLLOWED
+
+    @classmethod
+    def delete_followed(cls, batch: bool = True) -> bool:
+        if not batch and input("[+] are you sure want to CLEAR ALL THE BANGUMI? (y/N): ") != "y":
+            return False
+
+        with Session.begin() as session:
+            session.execute(sa.delete(cls))
+        return True
+
+    @classmethod
+    def get_all_followed(
+        cls: Type["Followed"], bangumi_status: int = Bangumi.STATUS_UPDATING
+    ) -> List[Row[Tuple["Followed", "Bangumi"]]]:
+        cls.refresh_lifecycle()
+
+        with Session() as tx:
+            return list(
+                tx.query(Followed, Bangumi)
+                .join(Bangumi, cls.bangumi_name == Bangumi.name)
+                .where(cls.status.isnot(cls.STATUS_DELETED), Bangumi.status == bangumi_status)
+                .order_by(cls.updated_time.desc())
+                .all()
+            )
+
+    def apply_on_episodes(self, result: List[Episode]) -> List[Episode]:
+        if self.include:
+            # pylint:disable=no-member
+            include_list = [s.strip().lower() for s in self.include]
+            result = [e for e in result if e.contains_any_words(include_list)]
+
+        if cfg.enable_global_include_keywords:
+            include_list = [s.strip().lower() for s in cfg.global_include_keywords]
+            result = [e for e in result if e.contains_any_words(include_list)]
+
+        if self.exclude:
+            # pylint:disable=no-member
+            exclude_list = [s.strip().lower() for s in self.exclude]
+            result = [e for e in result if not e.contains_any_words(exclude_list)]
+
+        return episode_filter_regex(data=result, regex=self.regex)
+
+
+class Download(Base):
+    __tablename__ = "download"
+
+    STATUS_NOT_DOWNLOAD = 0
+    STATUS_DOWNLOADING = 1
+    STATUS_DOWNLOADED = 2
+
+    id: Mapped[int] = Column(Integer, nullable=False, primary_key=True)  # type: ignore
+    bangumi_name: Mapped[str] = Column(Text, nullable=False)  # type: ignore
+    title: Mapped[str] = Column(Text, nullable=False)  # type: ignore
+    episode: Mapped[int] = Column(Integer, nullable=False)  # type: ignore
+    download: Mapped[str] = Column(Text, nullable=False)  # type: ignore
+    status: Mapped[int] = Column(Integer, nullable=False)  # type: ignore
+    task_id: Mapped[Optional[str]] = Column(Text, nullable=True)  # type: ignore
+    created_time: Mapped[int] = Column(Integer, nullable=False, default=0, server_default="0")  # type: ignore
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            bangumi_name: str,
+            title: str,
+            episode: int,
+            download: str,
+            status: Optional[int] = None,
+            id: Optional[int] = None,
+            task_id: Optional[str] = None,
+        ):
+            super().__init__()
+
+    @classmethod
+    def get_all_downloads(cls, status: Optional[int] = None) -> List["Download"]:
+        with Session.begin() as session:
+            if status is None:
+                sql = sa.select(cls).where().order_by(cls.status)
+            else:
+                sql = sa.select(cls).where(cls.status == status).order_by(cls.status)
+
+            return list(session.scalars(sql).all())
+
+    def downloaded(self) -> None:
+        self.status = self.STATUS_DOWNLOADED
+        self.save()
+
+
+class Subtitle(Base):
+    __tablename__ = "subtitle"
+
+    id: Mapped[str] = Column(Text, nullable=False, primary_key=True)  # type: ignore
+    name: Mapped[str] = Column(Text, nullable=False)  # type: ignore
+
+    @classmethod
+    def get_subtitle_by_id(cls, id_list: List[str]) -> List["Subtitle"]:
+        with Session.begin() as session:
+            return list(session.scalars(sa.select(cls).where(cls.id.in_(id_list))))
+
+    @classmethod
+    def get_subtitle_by_name(cls, name_list: List[str]) -> List["Subtitle"]:
+        with Session.begin() as session:
+            return list(session.scalars(sa.select(cls).where(cls.name.in_(name_list))))
+
+
+class Scripts(Base):
+    __tablename__ = "scripts"
+
+    bangumi_name: Mapped[str] = Column(Text, primary_key=True, nullable=False, unique=True)  # type: ignore
+    episodes: Set[int] = Column(
+        MutableSet.as_mutable(JSONSetFieldType),  # type: ignore
+        nullable=False,
+        default=set(),
+        server_default="[]",
+    )  # type: ignore
+    status: Mapped[int] = Column(Integer, nullable=False)  # type: ignore
+    updated_time: Mapped[int] = Column(Integer, nullable=False, default=0, server_default="0")  # type: ignore
+    update_day: Mapped[str] = Column(Text, nullable=False, default="Unknown", server_default="Unknown")  # type: ignore
+    cover: Mapped[str] = Column(Text, nullable=False, default="", server_default="")  # type: ignore
+
+    @classmethod
+    def refresh_lifecycle(cls: Type["Scripts"], now: Optional[int] = None) -> None:
+        now = int(time.time()) if now is None else now
+
+        with Session.begin() as session:
+            scripts = session.scalars(sa.select(cls).where(cls.status == Followed.STATUS_UPDATED)).all()
+            for script in scripts:
+                if Followed._is_before_today(script.updated_time, now):
+                    script.status = Followed.STATUS_FOLLOWED
+
+
+class BangumiIssue(Base):
+    __tablename__ = "bangumi_issue"
+    __table_args__ = (sa.UniqueConstraint("bangumi_name", "issue_type"),)
+
+    id: Mapped[int] = Column(Integer, primary_key=True)  # type: ignore
+    bangumi_name: Mapped[str] = Column(Text, nullable=False, index=True)  # type: ignore
+    issue_type: Mapped[str] = Column(Text, nullable=False, index=True)  # type: ignore
+    episode: Mapped[Optional[str]] = Column(Text, nullable=True)  # type: ignore
+    file_path: Mapped[Optional[str]] = Column(Text, nullable=True)  # type: ignore
+    note: Mapped[Optional[str]] = Column(Text, nullable=True)  # type: ignore
+    marked_at: Mapped[int] = Column(Integer, nullable=False, default=0, server_default="0")  # type: ignore
+    issue_metadata: Mapped[Optional[str]] = Column("metadata", Text, nullable=True)  # type: ignore
+
+
+def recreate_source_relatively_table() -> None:
+    with Session.begin() as session:
+        for table in [Subtitle, Download, Followed, Bangumi]:
+            session.execute(sa.delete(table))
+
+
+def recreate_scripts_table() -> None:
+    with Session.begin() as session:
+        for table in [
+            Scripts,
+        ]:
+            session.execute(sa.delete(table))

@@ -2,7 +2,7 @@ import os
 import re
 import time
 import urllib.parse
-from typing import List, Optional
+from typing import List
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -14,7 +14,7 @@ from bgmi.utils import print_error
 from bgmi.website.base import BaseWebsite
 from bgmi.website.model import Episode, SubtitleGroup, WebsiteBangumi
 
-base_url = cfg.share_dmhy_url.encoded_string()
+base_url = str(cfg.share_dmhy_url)
 
 
 def fetch_url(url, **kwargs):
@@ -40,7 +40,7 @@ def parse_bangumi_with_week_days(content, update_time, array_name) -> List[Websi
         (cover_url, name, keyword, subtitle_raw, _) = bangumi_row
         if keyword.startswith("URLE#"):
             keyword = urllib.parse.quote(keyword[5:])
-        bangumi = WebsiteBangumi(keyword=keyword)
+        bangumi = WebsiteBangumi(id=keyword)
         cover = re.findall("(/images/.*)$", cover_url)[0]
 
         bs = BeautifulSoup(subtitle_raw, "html.parser")
@@ -52,17 +52,16 @@ def parse_bangumi_with_week_days(content, update_time, array_name) -> List[Websi
             subtitle_group_name = a.get_text(strip=True)
             subtitle_group_id_raw = re.findall("team_id%3A(.+)$", str(a["href"]))
 
-            if (len(subtitle_group_id_raw) == 0) or subtitle_group_name == "":
+            if (not subtitle_group_id_raw) or not subtitle_group_name:
                 continue
 
             subtitle_group_id = subtitle_group_id_raw[0]
 
             bangumi.subtitle_group.append(SubtitleGroup(id=subtitle_group_id, name=subtitle_group_name))
 
-        name = re.sub(r"\\'", "'", name)
         bangumi.name = name
-        bangumi.update_time = update_time
-        bangumi.keyword = keyword
+        bangumi.update_day = update_time
+        bangumi.id = keyword
         bangumi.cover = base_url + cover
 
         # append to bangumi_list
@@ -81,7 +80,7 @@ def parse_subtitle_list(content):
         subtitle_group_name = li.span.a.get("title")
         subtitle_group_id_raw = re.findall(r"team_id\/(.+)$", li.span.a.get("href"))
 
-        if (len(subtitle_group_id_raw) == 0) or subtitle_group_name == "":
+        if (not subtitle_group_id_raw) or not subtitle_group_name:
             continue
 
         subtitle_group_id = subtitle_group_id_raw[0]
@@ -187,15 +186,77 @@ class DmhySource(BaseWebsite):
 
         r = fetch_url(url)
 
-        for update_time, array_name in week_days_mapping:
-            b_list = parse_bangumi_with_week_days(r, update_time, array_name)
+        for update_day, array_name in week_days_mapping:
+            b_list = parse_bangumi_with_week_days(r, update_day, array_name)
             bangumi_list.extend(b_list)
 
         return bangumi_list
 
-    def search_by_tag(self, tag: str, subtitle: Optional[str] = None, count: Optional[int] = None) -> List[Episode]:
-        print_error("dmhy not support search by tag")
-        return []
+    def _resolve_team_id(self, subtitle_name):
+        """Look up team_id from calendar data by subtitle group name."""
+        bangumi_list = self.fetch_bangumi_calendar()
+        for b in bangumi_list:
+            for sg in b.subtitle_group:
+                if sg.name == subtitle_name:
+                    return sg.id
+        return None
+
+    def search_by_tag(self, tag, subtitle=None, count=None):
+        if count is None:
+            count = 3
+
+        result = []
+        search_url = base_url + "/topics/list/"
+
+        team_id = None
+        if subtitle:
+            team_id = self._resolve_team_id(subtitle)
+
+        for i in range(count):
+            params = {"keyword": tag, "page": i + 1}
+            if team_id:
+                params["team_id"] = team_id
+            r = fetch_url(search_url, params=params)
+            if not r:
+                break
+            bs = BeautifulSoup(r, "html.parser")
+            table = bs.find("table", {"id": "topic_list"})
+            if table is None:
+                break
+            tr_list = table.tbody.find_all("tr")
+            for tr in tr_list:
+                if "class" not in tr.attrs or len(tr.attrs["class"]) != 0:
+                    continue
+                td_list = tr.find_all("td")
+                if td_list[1].a["class"][0] != "sort-2":
+                    continue
+
+                time_string = td_list[0].span.string
+                title = td_list[2].find("a", {"target": "_blank"}).get_text(strip=True)
+                download = td_list[3].a["href"]
+                episode = self.parse_episode(title)
+                t = int(time.mktime(time.strptime(time_string, "%Y/%m/%d %H:%M")))
+
+                subtitle_group = ""
+                tag_list = td_list[2].find_all("span", {"class": "tag"})
+                for span_tag in tag_list:
+                    a = span_tag.find("a")
+                    if a:
+                        subtitle_group = a.get_text(strip=True)
+                        break
+
+                result.append(
+                    Episode(
+                        name=tag,
+                        title=title,
+                        subtitle_group=subtitle_group,
+                        download=download,
+                        episode=episode,
+                        time=t,
+                    )
+                )
+
+        return result
 
     def fetch_episode_of_bangumi(self, bangumi_id, max_page=cfg.max_path, subtitle_list=None):
         """
@@ -265,9 +326,8 @@ class DmhySource(BaseWebsite):
                         continue
                     subtitle_group = team_id_raw[0]
 
-                if subtitle_list:
-                    if subtitle_group not in subtitle_list:
-                        continue
+                if subtitle_list and subtitle_group not in subtitle_list:
+                    continue
 
                 if os.environ.get("DEBUG", False):  # pragma: no cover
                     print(name, title, subtitle_group, download, episode, t)

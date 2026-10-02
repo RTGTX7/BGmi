@@ -9,7 +9,7 @@ export interface UpdateTime {
 }
 
 export interface Bangumi {
-  bangumi_id: number;
+  bangumi_id: string;
   bangumi_name: string;
   name: string;
   cover: string;
@@ -29,7 +29,7 @@ export interface BangumiData {
   name: string;
   update_time: string;
   cover: string;
-  id: number;
+  id: string;
   bangumi_name: string;
   keyword?: string;
   episode: number;

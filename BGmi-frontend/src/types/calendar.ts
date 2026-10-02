@@ -1,7 +1,7 @@
 export interface WeekCalendar {
   status?: number;
   episode?: number;
-  id: number;
+  id: string;
   name: string;
   subtitle_group: {
     name: string;

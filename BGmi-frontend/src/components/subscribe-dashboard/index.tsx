@@ -358,7 +358,7 @@ export default function SubscribeDashboard() {
     openConfirm({
       actionKey: 'submit-downloads',
       title: '确认提交下载任务',
-      description: 'Run bgmi update --download on the backend and return stdout / stderr, exit code, and status.',
+      description: 'Run bgmi update on the backend and return stdout / stderr, exit code, and status.',
     });
   };
 
@@ -389,7 +389,7 @@ export default function SubscribeDashboard() {
       if (confirmState.actionKey === 'submit-downloads') {
         const resp = await submitDownloads({});
         setLatestActionResult(resp?.data ?? null);
-        showSuccess(resp?.data?.ok ? 'bgmi update --download completed' : 'bgmi update --download failed');
+        showSuccess(resp?.data?.ok ? 'bgmi update completed' : 'bgmi update failed');
       }
 
       if (confirmState.actionKey === 'refresh-metadata') {
@@ -536,7 +536,7 @@ export default function SubscribeDashboard() {
 
   const commandCards = [
     { title: '重新同步 Mikan 数据', subtitle: 'Fetch metadata', tone: 'cyan' as Tone, onClick: handleSync, loading: syncMutating },
-    { title: '提交下载任务', subtitle: 'bgmi update --download', tone: 'blue' as Tone, onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
+    { title: '提交下载任务', subtitle: 'bgmi update', tone: 'blue' as Tone, onClick: handleOpenSubmitDownloadsConfirm, loading: submitDownloadsMutating },
     { title: '更新剧集和海报', subtitle: 'Refresh episodes & posters', tone: 'green' as Tone, onClick: handleOpenRefreshMetadataConfirm, loading: refreshMetadataMutating },
     { title: '检查异常数据', subtitle: 'Scan issues', tone: 'blue' as Tone, onClick: handleCheckAnomalies, loading: anomalyMutating },
     { title: '重建仓库番剧', subtitle: 'Match folders', tone: 'amber' as Tone, onClick: handlePreviewRebuild, loading: previewRebuildMutating || executeRebuildMutating },

@@ -4,41 +4,45 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "bgmi"
-version = "4.5.2"
+version = "5.0.2"
 description = 'BGmi is a cli tool for subscribed bangumi.'
 authors = [{ name = "RicterZ", email = "ricterzheng@gmail.com" }]
 readme = 'README.md'
 license = 'MIT'
-requires-python = '>=3.10,<4'
+requires-python = '>=3.11,<4'
 maintainers = [{ name = "Trim21", email = "i@trim21.me" }]
 dependencies = [
-  'anime-episode-parser (==0.0.13)',
+  'anime-episode-parser (==0.0.15)',
   'beautifulsoup4 (==4.14.2)',
-  'click (==8.1.8)',
+  "click==8.3.1",
+  "fastapi==0.121.1",
   'filetype (==1.2.0)',
   'icalendar (==6.3.2)',
-  'loguru (==0.7.3)',
-  'peewee (==3.18.3)',
+  "loguru==0.7.3",
+  "mcp>=1.0.0,<2",
+  "packaging==25.0",
   'pycomplete (==0.4.0)',
   "pydantic==2.12.4",
-  'qbittorrent-api (==2025.11.1)',
+  'qbittorrent-api (==2025.7.0)',
   'requests (==2.32.5)',
   'semver (==3.0.4)',
-  'stevedore (==5.6.0)',
-  'strenum (==0.4.15)',
+  "sqlalchemy==2.0.44",
+  'stevedore (==5.4.1)',
   'strsimpy (==0.2.1)',
   'tomlkit (==0.13.3)',
-  'tornado (==6.5.2)',
   'transmission-rpc (==7.0.11)',
+  "uvicorn==0.35.0",
   'wcwidth (>=0.2.14,<0.3.0)',
-  "yarl==1.22.0",
+  "yarl==1.20.1",
 ]
 classifiers = [
-  'Development Status :: 4 - Beta',
+  'Development Status :: 5 - Production/Stable',
   'Intended Audience :: Other Audience',
   'Natural Language :: Chinese (Traditional)',
   'Programming Language :: Python',
-  'Programming Language :: Python :: 3',
+  'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: 3.13',
   'Programming Language :: Python :: Implementation :: CPython',
   'Programming Language :: Python :: Implementation :: PyPy',
 ]
@@ -57,18 +61,20 @@ bgmi_http = 'bgmi.front.server:main'
 "transmission-rpc" = 'bgmi.downloader:TransmissionRPC'
 "deluge-rpc" = 'bgmi.downloader:DelugeRPC'
 "qbittorrent-webapi" = 'bgmi.downloader:QBittorrentWebAPI'
+noop = 'bgmi.downloader:Noop'
 
 [dependency-groups]
 dev = [
   # tests
-  'coverage[toml]==7.12.0',
-  'pytest==9.0.1',
+  'coverage[toml]==7.10.2',
+  'pytest==8.4.2',
   'pytest-github-actions-annotate-failures==0.3.0',
   'requests-cache ==1.2.1',
   # lint
-  'mypy==1.18.2',
+  'mypy==1.17.1',
   # stubs
   'types-requests ==2.32.4.20250913',
+  "httpx==0.28.1",
 ]
 
 [tool.coverage.report]
@@ -85,6 +91,7 @@ exclude_lines = [
 
 [tool.pytest.ini_options]
 addopts = '-v --durations=10'
+testpaths = ['tests_v5']
 junit_family = 'legacy'
 
 [tool.isort]
@@ -98,6 +105,7 @@ use_parentheses = true
 include_trailing_comma = true
 
 [tool.mypy]
+python_version = '3.11'
 disallow_untyped_defs = true
 ignore_missing_imports = true
 warn_return_any = true
@@ -151,8 +159,8 @@ disable = [
 
 [tool.black]
 line-length = 120
-target-version = ['py39']
+target-version = ['py311']
 
 [tool.ruff]
 line-length = 120
-target-version = 'py39'
+target-version = 'py311'

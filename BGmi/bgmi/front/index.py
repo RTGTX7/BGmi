@@ -1,349 +1,108 @@
+import glob
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
-
-import peewee
+from typing import Dict, Iterable, Optional
 
 from bgmi.config import cfg
-from bgmi.front.base import BaseHandler
-from bgmi.front.player_assets import (
-    build_browser_assets,
-    ensure_hls_profile,
-    get_hls_profile_status,
-    resolve_media_origin_for_host,
-    start_hls_profile_generation,
-)
-from bgmi.lib.models import (
-    ISSUE_MISSING_PLAYABLE_SOURCE,
-    ISSUE_MISSING_EPISODES,
-    STATUS_DELETED,
-    STATUS_END,
-    STATUS_UPDATING,
-    Bangumi,
-    BangumiIssue,
-    Followed,
-)
-from bgmi.utils import bangumi_save_path, resolve_cover_season, web_cover_url
+from bgmi.lib.season import strip_season_suffix
+from bgmi.utils import bangumi_save_path, normalize_path
 
-VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".webm", ".flv", ".ts", ".m2ts"}
+VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".flv", ".rmvb", ".mov", ".ts"}
 
 
-def set_missing_playable_source_issue(bangumi_name: str, episode: str, file_path: Optional[str] = None) -> None:
-    BangumiIssue.set_issue(
-        bangumi_name=bangumi_name,
-        issue_type=ISSUE_MISSING_PLAYABLE_SOURCE,
-        episode=str(episode).strip() if episode is not None else None,
-        file_path=file_path,
-        note="episode source not found",
-        marked_at=None,
-    )
+def get_player(
+    bangumi_name: str,
+    episodes: Iterable[int] = (),
+    season: int = 1,
+    episode_offset: int = 0,
+    display_name: str = "",
+) -> Dict[int, Dict[str, str]]:
+    if cfg.enable_path_formatter:
+        return get_formatted_player(bangumi_name, episodes, season, episode_offset, display_name)
+
+    return get_legacy_player(bangumi_name, episodes)
 
 
-def clear_missing_playable_source_issue(bangumi_name: str, episode: Optional[str] = None) -> None:
-    issue = (
-        BangumiIssue.select()
-        .where(
-            (BangumiIssue.bangumi_name == bangumi_name)
-            & (BangumiIssue.issue_type == ISSUE_MISSING_PLAYABLE_SOURCE)
-        )
-        .first()
-    )
-    if issue is None:
-        return
-    if episode is None or not issue.episode or issue.episode == str(episode).strip():
-        BangumiIssue.clear_issue(bangumi_name, ISSUE_MISSING_PLAYABLE_SOURCE)
-
-
-def get_player(bangumi_name: str) -> Dict[int, Dict[str, str]]:
+def get_legacy_player(bangumi_name: str, episodes: Iterable[int] = ()) -> Dict[int, Dict[str, str]]:
     bangumi_path = bangumi_save_path(bangumi_name)
 
     if not bangumi_path.exists():
         return {}
 
-    episode_list = {}
+    episode_list: Dict[int, Dict[str, str]] = {}
+    episode_dirs = [bangumi_path / str(episode) for episode in episodes] or list(bangumi_path.iterdir())
 
-    episodes = [episode.name for episode in bangumi_path.iterdir() if episode.name.isdigit()]
-
-    for episode in episodes:
-        e = find_largest_video_file(bangumi_path.joinpath(episode))
+    for episode in episode_dirs:
+        if not episode.is_dir() or not episode.name.isdigit():
+            continue
+        e = find_largest_video_file(episode)
         if e:
-            episode_list[int(episode)] = {"path": "/" + e}
+            episode_list[int(episode.name)] = {"path": "/" + e}
 
     return episode_list
 
 
-def find_episode_source(bangumi_name: str, episode: str) -> Optional[Path]:
-    bangumi_path = bangumi_save_path(bangumi_name).joinpath(episode)
+def get_formatted_player(
+    bangumi_name: str,
+    episodes: Iterable[int],
+    season: int,
+    episode_offset: int,
+    display_name: str,
+) -> Dict[int, Dict[str, str]]:
+    name = display_name or strip_season_suffix(bangumi_name)
+    episode_files: Dict[int, Path] = {}
 
-    if not bangumi_path.exists():
-        return None
+    for episode in episodes:
+        path = find_largest_matching_video_file(
+            cfg.path_formatter.format(
+                name=glob.escape(normalize_path(name)),
+                season=season,
+                episode=episode + episode_offset,
+                suffix="*",
+                title="*",
+            )
+        )
+        if not path:
+            continue
 
-    source = find_largest_video_file(bangumi_path)
-    if not source:
-        return None
+        current = episode_files.get(episode)
+        if current is None or path.stat().st_size > current.stat().st_size:
+            episode_files[episode] = path
 
-    return cfg.save_path.joinpath(source)
+    return {
+        episode: {"path": "/" + path.relative_to(cfg.save_path).as_posix()}
+        for episode, path in sorted(episode_files.items())
+    }
 
 
 def find_largest_video_file(top_dir: Path) -> Optional[str]:
-    video_files = []
-    for root, _, files in os.walk(top_dir):
-        for file in files:
-            _, ext = os.path.splitext(file)
-            if ext.lower() in VIDEO_EXTENSIONS:
-                p = Path(root).joinpath(file)
-                video_files.append((p.stat().st_size, p))
+    video = find_largest_file(
+        Path(root).joinpath(file)
+        for root, _, files in os.walk(top_dir)
+        for file in files
+        if Path(file).suffix.lower() in VIDEO_EXTENSIONS
+    )
 
-    if not video_files:
+    if not video:
         return None
 
-    video_files.sort(key=lambda x: -x[0])
-
-    return video_files[0][1].relative_to(cfg.save_path).as_posix()
+    return video.relative_to(cfg.save_path).as_posix()
 
 
-if __name__ == "__main__":
-    print(get_player("test-save-path"))
+def find_largest_matching_video_file(pattern: str) -> Optional[Path]:
+    return find_largest_file(path for path in cfg.save_path.glob(pattern) if path.suffix.lower() in VIDEO_EXTENSIONS)
 
 
-class IndexHandler(BaseHandler):
-    def get(self, path: str) -> None:
-        if not os.path.exists(cfg.front_static_path):
-            msg = """<h1>Thanks for your using BGmi</h1>
-            <p>It seems you have not install BGmi Frontend,
-             please run <code>bgmi install</code> to install.</p>
-            """
-        else:
-            msg = """<h1>Thanks for your using BGmi</h1>
-            <p>If use want to use Tornado to serve static files, please enable
-            <code>[http]</code>,
-            <code>serve_static_files = true</code>,
-            and do not forget install bgmi-frontend by
-            running <code>bgmi install</code></p>"""
+def find_largest_file(paths: Iterable[Path]) -> Optional[Path]:
+    largest: Optional[Path] = None
+    largest_size = -1
 
-        self.write(msg)
-        self.finish()
+    for path in paths:
+        if not path.is_file():
+            continue
+        size = path.stat().st_size
+        if size > largest_size:
+            largest = path
+            largest_size = size
 
-
-class BangumiListHandler(BaseHandler):
-    def get(self, type_: str = "") -> None:
-        bangumi_status = STATUS_END if type_ == "old" else STATUS_UPDATING
-        query = (
-            Bangumi.select(Bangumi, Followed.episode, Followed.status.alias("follow_status"), Followed.updated_time)
-            .join(Followed, join_type=peewee.JOIN.LEFT_OUTER, on=(Bangumi.name == Followed.bangumi_name))
-            .where(Bangumi.status == bangumi_status)
-        )
-
-        if type_ != "old":
-            query = query.where((Followed.status.is_null(False)) & (Followed.status != STATUS_DELETED))
-
-        data = list(query.dicts())
-
-        if type_ == "index":
-            data.extend(self.patch_list)
-
-        missing_episode_set = {
-            issue.bangumi_name
-            for issue in BangumiIssue.select(BangumiIssue.bangumi_name).where(
-                BangumiIssue.issue_type == ISSUE_MISSING_EPISODES
-            )
-        }
-
-        def sorter(item: Dict[str, int]) -> tuple[int, str]:
-            return (item.get("updated_time") or 0, item.get("bangumi_name") or item.get("name") or "")
-
-        data.sort(key=sorter)
-
-        for bangumi in data:
-            bangumi_name = bangumi.get("bangumi_name") or bangumi.get("name")
-            bangumi["bangumi_name"] = bangumi_name
-            bangumi["cover"] = web_cover_url(bangumi["cover"])
-            year, quarter, season = resolve_cover_season(bangumi["cover"])
-            bangumi["year"] = year
-            bangumi["quarter"] = quarter
-            bangumi["season"] = season
-            bangumi["episode"] = bangumi.get("episode") or 0
-            bangumi["updated_time"] = bangumi.get("updated_time") or 0
-            bangumi["status"] = bangumi.get("follow_status") or 0
-            bangumi["isSubscribed"] = bangumi["status"] != STATUS_DELETED and bangumi.get("follow_status") is not None
-            bangumi["hasMissingEpisodes"] = bangumi_name in missing_episode_set
-            bangumi.setdefault("keyword", "")
-            bangumi.setdefault("source", "remote")
-            bangumi["inLibrary"] = bool(bangumi.get("in_library"))
-            bangumi["libraryPath"] = bangumi.get("library_path") or ""
-
-        data.reverse()
-
-        for item in data:
-            item["player"] = get_player(item["bangumi_name"])
-
-        self.write(self.jsonify(data))
-        self.finish()
-
-
-class PlayerBangumiHandler(BaseHandler):
-    def get(self) -> None:
-        bangumi_name = self.get_argument("bangumi", "").strip()
-        if not bangumi_name:
-            self.set_status(400)
-            self.finish(self.jsonify(status="error", message="missing bangumi"))
-            return
-
-        bangumi = Bangumi.select().where(Bangumi.name == bangumi_name).first()
-        if bangumi is None:
-            try:
-                bangumi = Bangumi.fuzzy_get(name=bangumi_name)
-            except Bangumi.DoesNotExist:
-                self.set_status(404)
-                self.finish(self.jsonify(status="error", message="bangumi not found"))
-                return
-
-        followed = Followed.select().where(Followed.bangumi_name == bangumi.name).first()
-        missing_episodes = BangumiIssue.select().where(
-            (BangumiIssue.bangumi_name == bangumi.name) & (BangumiIssue.issue_type == ISSUE_MISSING_EPISODES)
-        ).exists()
-
-        data = {
-            "id": bangumi.id,
-            "name": bangumi.name,
-            "bangumi_name": bangumi.name,
-            "update_time": bangumi.update_time,
-            "cover": web_cover_url(bangumi.cover),
-            "keyword": bangumi.keyword,
-            "episode": followed.episode if followed else 0,
-            "status": followed.status if followed else 0,
-            "updated_time": followed.updated_time if followed else 0,
-            "year": None,
-            "quarter": None,
-            "season": None,
-            "isSubscribed": bool(followed and followed.status != STATUS_DELETED),
-            "hasMissingEpisodes": missing_episodes,
-            "source": bangumi.source or "remote",
-            "inLibrary": bool(bangumi.in_library),
-            "libraryPath": bangumi.library_path or "",
-            "player": get_player(bangumi.name),
-        }
-        year, quarter, season = resolve_cover_season(data["cover"])
-        data["year"] = year
-        data["quarter"] = quarter
-        data["season"] = season
-
-        self.finish(self.jsonify(data=data))
-
-
-class PlayerAssetHandler(BaseHandler):
-    def get(self) -> None:
-        bangumi_name = self.get_argument("bangumi", "").strip()
-        episode = self.get_argument("episode", "").strip()
-
-        if not bangumi_name or not episode:
-            self.set_status(400)
-            self.finish(self.jsonify(status="error", message="missing bangumi or episode"))
-            return
-
-        source_path = find_episode_source(bangumi_name, episode)
-        if source_path is None or not source_path.exists():
-            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
-            self.set_status(404)
-            self.finish(self.jsonify(status="error", message="episode source not found"))
-            return
-        clear_missing_playable_source_issue(bangumi_name, episode)
-
-        try:
-            data = build_browser_assets(source_path, bangumi_name, episode)
-        except Exception as exc:
-            self.set_status(500)
-            self.finish(self.jsonify(status="error", message=str(exc)))
-            return
-
-        data["mediaOrigin"] = resolve_media_origin_for_host(self.request.host)
-
-        self.finish(self.jsonify(data=data))
-
-
-class PlayerHlsHandler(BaseHandler):
-    def get(self) -> None:
-        bangumi_name = self.get_argument("bangumi", "").strip()
-        episode = self.get_argument("episode", "").strip()
-        profile = self.get_argument("profile", "").strip()
-
-        if not bangumi_name or not episode or not profile:
-            self.set_status(400)
-            self.finish(self.jsonify(status="error", message="missing bangumi, episode or profile"))
-            return
-
-        source_path = find_episode_source(bangumi_name, episode)
-        if source_path is None or not source_path.exists():
-            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
-            self.set_status(404)
-            self.finish(self.jsonify(status="error", message="episode source not found"))
-            return
-        clear_missing_playable_source_issue(bangumi_name, episode)
-
-        try:
-            hls_path = ensure_hls_profile(source_path, profile)
-        except Exception as exc:
-            self.set_status(500)
-            self.finish(self.jsonify(status="error", message=str(exc)))
-            return
-        media_origin = resolve_media_origin_for_host(self.request.host)
-        redirect_path = f"/bangumi{hls_path}"
-        self.redirect(f"{media_origin}{redirect_path}" if media_origin else redirect_path, permanent=False)
-
-
-class PlayerHlsStartHandler(BaseHandler):
-    def post(self) -> None:
-        bangumi_name = self.get_argument("bangumi", "").strip()
-        episode = self.get_argument("episode", "").strip()
-        profile = self.get_argument("profile", "").strip()
-
-        if not bangumi_name or not episode or not profile:
-            self.set_status(400)
-            self.finish(self.jsonify(status="error", message="missing bangumi, episode or profile"))
-            return
-
-        source_path = find_episode_source(bangumi_name, episode)
-        if source_path is None or not source_path.exists():
-            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
-            self.set_status(404)
-            self.finish(self.jsonify(status="error", message="episode source not found"))
-            return
-        clear_missing_playable_source_issue(bangumi_name, episode)
-
-        try:
-            data = start_hls_profile_generation(source_path, profile)
-        except Exception as exc:
-            self.set_status(500)
-            self.finish(self.jsonify(status="error", message=str(exc)))
-            return
-
-        self.finish(self.jsonify(data=data))
-
-
-class PlayerHlsStatusHandler(BaseHandler):
-    def get(self) -> None:
-        bangumi_name = self.get_argument("bangumi", "").strip()
-        episode = self.get_argument("episode", "").strip()
-        profile = self.get_argument("profile", "").strip()
-
-        if not bangumi_name or not episode or not profile:
-            self.set_status(400)
-            self.finish(self.jsonify(status="error", message="missing bangumi, episode or profile"))
-            return
-
-        source_path = find_episode_source(bangumi_name, episode)
-        if source_path is None or not source_path.exists():
-            set_missing_playable_source_issue(bangumi_name, episode, None if source_path is None else str(source_path))
-            self.set_status(404)
-            self.finish(self.jsonify(status="error", message="episode source not found"))
-            return
-        clear_missing_playable_source_issue(bangumi_name, episode)
-
-        try:
-            data = get_hls_profile_status(source_path, profile)
-        except Exception as exc:
-            self.set_status(500)
-            self.finish(self.jsonify(status="error", message=str(exc)))
-            return
-
-        self.finish(self.jsonify(data=data))
+    return largest
