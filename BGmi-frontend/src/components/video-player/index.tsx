@@ -1441,14 +1441,20 @@ export default function VideoPlayer({
                     borderWidth="1px"
                     sx={{
                       ...getLiquidGlassButtonStyles(colorMode, isActive, { compact: true }),
-                      bg: isActive ? `${colors.accent}B8` : `${colors.background}66`,
-                      color: isActive ? (colorMode === 'dark' ? colors.background : '#FFFFFF') : colors.text,
-                      borderColor: isActive ? `${colors.accent}B8` : `${colors.text}40`,
-                      boxShadow: isActive ? `0 4px 12px ${colors.accent}26, inset 0 1px 0 rgba(255,255,255,0.18)` : 'none',
-                      _before: { background: `${colors.accent}12`, opacity: isActive ? 0.45 : 0.2 },
+                      bg: isActive
+                        ? `linear-gradient(135deg, ${colors.accent}1F, ${colors.background}52)`
+                        : `${colors.background}52`,
+                      color: isActive ? colors.accent : colors.text,
+                      borderColor: isActive ? `${colors.accent}75` : `${colors.text}40`,
+                      boxShadow: isActive
+                        ? `0 0 10px ${colors.accent}2B, inset 0 1px 0 rgba(255,255,255,0.22)`
+                        : 'inset 0 1px 0 rgba(255,255,255,0.10)',
+                      _before: { background: `${colors.accent}0D`, opacity: isActive ? 0.28 : 0.12 },
                       _hover: {
-                        bg: isActive ? `${colors.accent}CC` : `${colors.background}8C`,
-                        borderColor: isActive ? colors.accent : `${colors.text}66`,
+                        bg: isActive
+                          ? `linear-gradient(135deg, ${colors.accent}29, ${colors.background}66)`
+                          : `${colors.background}70`,
+                        borderColor: isActive ? `${colors.accent}99` : `${colors.text}66`,
                       },
                     }}
                     px={{ base: '1.5', md: '2' }}
