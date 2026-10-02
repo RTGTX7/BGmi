@@ -221,18 +221,22 @@ export default function BangumiGroupSection({
       </Box>
 
       <Box
-        display={{ base: 'none', md: 'grid' }}
+        display={{ base: 'none', md: expanded ? 'flex' : 'grid' }}
         mt="5"
-        gridTemplateColumns="repeat(auto-fit, minmax(13.75rem, 17rem))"
+        gridTemplateColumns={expanded ? undefined : 'repeat(auto-fit, minmax(13.75rem, 17rem))'}
+        flexWrap={expanded ? 'nowrap' : undefined}
+        flexDirection={expanded ? 'row' : undefined}
+        overflowX={expanded ? 'auto' : 'visible'}
         gap={{ md: 5 }}
         alignItems="start"
         justifyContent="start"
         width="100%"
+        sx={expanded ? { WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' } : undefined}
         onClick={handleNavigateToGroup}
         cursor="pointer"
       >
         {desktopItems.map(bangumi => (
-          <Box key={bangumi.id} w="full" maxW="17rem" justifySelf="start">
+          <Box key={bangumi.id} w={expanded ? '17rem' : 'full'} maxW="17rem" flexShrink={0} justifySelf="start">
             <BangumiCard bangumiData={bangumi} />
           </Box>
         ))}
