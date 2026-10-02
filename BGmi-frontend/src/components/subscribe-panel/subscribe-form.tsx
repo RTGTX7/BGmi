@@ -51,7 +51,7 @@ interface Props {
 
 export default function SubscribeForm({ isOpen, onClose, initialData, setSyncData, syncData }: Props) {
   const { colorMode } = useColorMode();
-  const { theme: accentTheme } = useAccentTheme();
+  const { theme: accentTheme, colors } = useAccentTheme();
   const [formData, setFormData] = useState<InitialData>();
   const { handleSaveFilter, handleSaveMark, handleUnSubscribe, handleTriggerDownload } = useSubscribeAction();
 
@@ -67,7 +67,8 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
 
   const glassFieldBg = colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(234,248,255,0.42)';
   const glassFieldBorder = colorMode === 'dark' ? 'whiteAlpha.180' : 'rgba(255,255,255,0.76)';
-  const primaryText = colorMode === 'dark' ? '#10212F' : '#FFFFFF';
+  const primaryText = colorMode === 'dark' ? colors.background : '#FFFFFF';
+  const planPink = colorMode === 'dark' ? '#FB8FA7' : '#BE4967';
   const bangumiPlanUrl = formData ? `https://bgm.tv/subject_search/${encodeURIComponent(formData.bangumiName)}` : '';
 
   const handleSave = async () => {
@@ -151,14 +152,43 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
                 调整过滤规则、已完成剧集和字幕组偏好。手动下载可立刻触发一次抓取。
               </Text>
 
-              <Flex gap="3" flexWrap="wrap">
-                <Button variant="outline" borderColor={accentTheme.border} color={accentTheme.primary} onClick={() => void handleResetCompleted()} isLoading={handleSaveMark.isMutating}>
+              <Flex gap="2.5" align="center" flexWrap="wrap">
+                <Button
+                  rounded="full"
+                  bg={accentTheme.soft}
+                  borderWidth="1px"
+                  borderColor={accentTheme.border}
+                  color={accentTheme.primary}
+                  _hover={{ bg: `${colors.accent}35`, borderColor: colors.accent }}
+                  onClick={() => void handleResetCompleted()}
+                  isLoading={handleSaveMark.isMutating}
+                >
                   完成剧集清零
                 </Button>
-                <Button bg={accentTheme.primary} color={primaryText} _hover={{ filter: 'brightness(0.92)' }} onClick={() => void handleSubmitDownload()} isLoading={handleTriggerDownload.isMutating}>
+                <Button
+                  rounded="full"
+                  bg={accentTheme.primary}
+                  color={primaryText}
+                  boxShadow={`0 5px 14px ${colors.accent}38`}
+                  _hover={{ filter: 'brightness(0.92)' }}
+                  onClick={() => void handleSubmitDownload()}
+                  isLoading={handleTriggerDownload.isMutating}
+                >
                   提交下载
                 </Button>
-                <Button as="a" href={bangumiPlanUrl} target="_blank" rel="noopener noreferrer" variant="outline" borderColor={accentTheme.border} color={accentTheme.primary}>
+                <Button
+                  as="a"
+                  href={bangumiPlanUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  ml="auto"
+                  rounded="full"
+                  bg={colorMode === 'dark' ? 'rgba(251,143,167,0.10)' : 'rgba(190,73,103,0.08)'}
+                  borderWidth="1px"
+                  borderColor={colorMode === 'dark' ? 'rgba(251,143,167,0.30)' : 'rgba(190,73,103,0.26)'}
+                  color={planPink}
+                  _hover={{ bg: colorMode === 'dark' ? 'rgba(251,143,167,0.18)' : 'rgba(190,73,103,0.14)' }}
+                >
                   番剧计划 ↗
                 </Button>
               </Flex>
