@@ -1,5 +1,5 @@
 import type { BoxProps, TabListProps, TabsProps } from '@chakra-ui/react';
-import { Box, Flex, Icon, Tab, TabList, Tabs } from '@chakra-ui/react';
+import { Box, Flex, Icon, IconButton, Tab, TabList, Tabs } from '@chakra-ui/react';
 import { AnimatePresence, LayoutGroup, motion, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
 import type { TouchEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -879,10 +879,10 @@ export default function CalendarTab({
           ) : null}
         </Flex>
 
-        {type === 'subscribe' || customElement ? (
+        {type === 'subscribe' || customElement || railActions.length > 0 ? (
           <Box
             flexShrink={0}
-            display="flex"
+            display={type === 'subscribe' || customElement ? 'flex' : { base: 'none', lg: 'flex' }}
             w={{ base: type === 'subscribe' ? 'auto' : 'full', lg: 'auto' }}
             alignItems="center"
             justifyContent="flex-end"
@@ -903,12 +903,28 @@ export default function CalendarTab({
               </ActionChip>
             ) : null}
             {customElement}
+            {type !== 'subscribe' ? railActions.map(action => (
+              <IconButton
+                key={action.key}
+                aria-label={action.ariaLabel}
+                icon={<Icon as={action.icon} boxSize="5" />}
+                onClick={action.onSelect}
+                rounded="full"
+                size="md"
+                color={action.active ? colors.accent : colors.text}
+                bg={action.active ? theme.soft : `${colors.surface}A8`}
+                borderWidth="1px"
+                borderColor={theme.border}
+                backdropFilter="blur(18px) saturate(165%)"
+                _hover={{ bg: theme.soft, borderColor: colors.accent }}
+              />
+            )) : null}
           </Box>
         ) : null}
       </Flex>
 
       <AnimatePresence initial={false}>
-        {type === 'subscribe' && searchOpen && searchPanel ? (
+        {searchOpen && searchPanel ? (
           <MotionBox
             key="search-panel"
             mt={{ base: '3', lg: '4' }}

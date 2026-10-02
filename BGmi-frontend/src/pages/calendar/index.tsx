@@ -1,11 +1,13 @@
-import { Box, Card, CardBody, Fade, Flex, HStack, Image, Link, Tag, Text } from '@chakra-ui/react';
+import { Box, Card, CardBody, Fade, Flex, HStack, Image, Input, Link, Tag, Text } from '@chakra-ui/react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
+import { CiSearch } from 'react-icons/ci';
 
 import CalendarTab from '~/components/calendar-tab';
 import { FallbackCalendar } from '~/components/fallback';
 import { useCalendar } from '~/hooks/use-calendar';
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { resolveCoverSrc } from '~/lib/utils';
 
 import type { CalendarDataKey, WeekCalendar } from '~/types/calendar';
@@ -195,8 +197,11 @@ function CalendarPanel({ bangumi }: { bangumi: WeekCalendar }) {
 export default function Calendar() {
   const { data } = useCalendar();
   const { colorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
   const isDark = colorMode === 'dark';
   const [activeTab, setActiveTab] = useState<string>('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [keyword, setKeyword] = useState('');
 
   const tabListItems = useMemo(() => Object.keys(data?.data ?? []) as CalendarDataKey[], [data]);
 
@@ -210,7 +215,18 @@ export default function Calendar() {
     }
   }, [activeTab, tabListItems]);
 
-  const activeBangumis = activeTab ? data?.data?.[activeTab as CalendarDataKey] : undefined;
+  const activeBangumis = useMemo(() => {
+    if (!data?.data) return undefined;
+    if (!searchOpen) return activeTab ? data.data[activeTab as CalendarDataKey] : undefined;
+
+    const normalized = keyword.trim().toLocaleLowerCase();
+    if (!normalized) return [];
+    const unique = new Map<string, WeekCalendar>();
+    Object.values(data.data).forEach(items => items?.forEach(item => {
+      if (item.name.toLocaleLowerCase().includes(normalized)) unique.set(item.id, item);
+    }));
+    return [...unique.values()];
+  }, [activeTab, data, keyword, searchOpen]);
 
   const activeContent = (
     <Box
@@ -249,7 +265,7 @@ export default function Calendar() {
           animate={{ opacity: 1 }}
         >
           <Text color={isDark ? 'whiteAlpha.760' : '#5b6b7c'} fontSize={{ base: 'sm', md: 'md' }}>
-            当前分类暂无番剧
+            {searchOpen ? (keyword.trim() ? '没有找到相关番剧' : '输入番剧名称开始搜索') : '当前分类暂无番剧'}
           </Text>
         </MotionBox>
       )}
@@ -261,10 +277,34 @@ export default function Calendar() {
   return (
     <CalendarTab
       activeTabKey={activeTab}
-      onActiveTabChange={setActiveTab}
+      onActiveTabChange={tab => { setActiveTab(tab); setSearchOpen(false); }}
       tabListItems={tabListItems}
       standaloneContent={activeContent}
-      contentKey={activeTab || 'calendar'}
+      contentKey={searchOpen ? 'search' : activeTab || 'calendar'}
+      searchOpen={searchOpen}
+      searchPanel={
+        <Box w="full" rounded="2xl" bg={`${colors.surface}BF`} borderWidth="1px" borderColor={theme.border} backdropFilter="blur(20px) saturate(170%)" p="2">
+          <Input
+            autoFocus
+            value={keyword}
+            onChange={event => setKeyword(event.target.value)}
+            placeholder="搜索番剧名称"
+            bg={`${colors.background}9C`}
+            color={colors.text}
+            borderColor={theme.border}
+            _placeholder={{ color: colors.text, opacity: 0.55 }}
+            _focusVisible={{ borderColor: colors.accent, boxShadow: `0 0 0 2px ${theme.border}` }}
+          />
+        </Box>
+      }
+      railActions={[{
+        key: 'search',
+        label: '搜索',
+        icon: CiSearch,
+        active: searchOpen,
+        onSelect: () => setSearchOpen(true),
+        ariaLabel: '搜索 Calendar',
+      }]}
     />
   );
 }
