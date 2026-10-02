@@ -5,6 +5,7 @@ import { ChakraProvider } from '@chakra-ui/react';
 
 import { theme } from '~/lib/chakra-theme';
 import Layout from '~/components/layout';
+import { GlassPageTransitionProvider } from '~/components/layout/glass-page-transition';
 import { handleSecondaryTitle } from '~/lib/utils';
 
 export default function App() {
@@ -17,9 +18,11 @@ export default function App() {
         <title>{headTitle}</title>
       </Helmet>
       <ChakraProvider theme={theme}>
-        <Layout>
-          <Outlet />
-        </Layout>
+        <GlassPageTransitionProvider>
+          <Layout>
+            <Outlet />
+          </Layout>
+        </GlassPageTransitionProvider>
       </ChakraProvider>
     </HelmetProvider>
   );

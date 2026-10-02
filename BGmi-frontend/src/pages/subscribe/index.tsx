@@ -24,6 +24,7 @@ import SubscribePanel from '~/components/subscribe-panel';
 import { bangumiFilterAtom, type DataKind } from '~/hooks/use-bangumi';
 import { useCalendar } from '~/hooks/use-calendar';
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 
 import type { CalendarData, CalendarDataEntries, CalendarDataKey, WeekCalendar } from '~/types/calendar';
 
@@ -69,10 +70,11 @@ interface FilterOptionsMenuProps {
 
 function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) {
   const { colorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
   const [bangumiShow, setBangumiShow] = useAtom(bangumiFilterAtom);
   const isDark = colorMode === 'dark';
 
-  const selectedBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(234,248,255,0.72)';
+  const selectedBg = theme.soft;
 
   const handleShow = (type: DataKind) => {
     setBangumiShow(current => (current === type ? 'both' : type));
@@ -96,10 +98,10 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             justifyContent="center"
             gap="1.5"
             rounded="full"
-            color={isDark ? 'whiteAlpha.920' : '#516274'}
-            bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.32)'}
+            color={colors.text}
+            bg={`${colors.surface}A8`}
             borderWidth="1px"
-            borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.82)'}
+            borderColor={theme.border}
             boxShadow={
               isDark
                 ? '0 14px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
@@ -109,8 +111,8 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             fontSize="sm"
             fontWeight="semibold"
             _hover={{
-              bg: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.42)',
-              borderColor: isDark ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.92)',
+              bg: theme.soft,
+              borderColor: colors.accent,
             }}
           >
             筛选
@@ -119,26 +121,28 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             <MenuList
               minW="36"
               zIndex={1600}
-              bg={isDark ? 'rgba(25,30,42,0.88)' : 'rgba(244,252,255,0.88)'}
-              borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.80)'}
+              bg={`${colors.surface}EB`}
+              color={colors.text}
+              borderColor={theme.border}
               boxShadow={
                 isDark
                   ? '0 18px 44px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)'
                   : '0 18px 44px rgba(39,87,116,0.12), 0 6px 18px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.56)'
               }
               backdropFilter="blur(22px) saturate(170%)"
+              sx={{ WebkitBackdropFilter: 'blur(22px) saturate(170%)' }}
             >
-              <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} onClick={() => dispatch({ type: 'subscribed', mutate })}>
+              <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'subscribed', mutate })}>
                 仅看已订阅
               </MenuItem>
-              <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
+              <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
                 仅看未订阅
               </MenuItem>
-              <Divider />
-              <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} onClick={() => handleShow('new')}>
+              <Divider borderColor={theme.border} />
+              <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('new')}>
                 仅显示新番
               </MenuItem>
-              <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} onClick={() => handleShow('old')}>
+              <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('old')}>
                 仅显示旧番
               </MenuItem>
             </MenuList>
@@ -162,10 +166,10 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           justifyContent="center"
           gap="1.5"
           rounded="full"
-          color={isDark ? 'whiteAlpha.920' : '#516274'}
-          bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.32)'}
+          color={colors.text}
+          bg={`${colors.surface}A8`}
           borderWidth="1px"
-          borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.82)'}
+          borderColor={theme.border}
           boxShadow={
             isDark
               ? '0 14px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
@@ -175,8 +179,8 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           fontSize={{ base: 'sm', lg: 'sm' }}
           fontWeight="semibold"
           _hover={{
-            bg: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.42)',
-            borderColor: isDark ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.92)',
+            bg: theme.soft,
+            borderColor: colors.accent,
           }}
         >
           筛选
@@ -205,7 +209,7 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             zIndex="0"
             align="center"
             justify="center"
-            color={isDark ? '#7dd3fc' : '#0369a1'}
+            color={colors.accent}
             pointerEvents="none"
             filter={isDark ? 'drop-shadow(0 0 10px rgba(125,211,252,0.62)) drop-shadow(0 0 18px rgba(56,189,248,0.28))' : 'drop-shadow(0 1px 4px rgba(255,255,255,0.72))'}
           >
@@ -219,8 +223,8 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             blur={0.42}
             style={{
               zIndex: 1,
-              background: isDark ? 'rgba(12,20,38,0.44)' : 'rgba(255,255,255,0.22)',
-              borderColor: isDark ? 'rgba(125,211,252,0.54)' : 'rgba(255,255,255,0.76)',
+              background: `${colors.surface}80`,
+              borderColor: theme.border,
               boxShadow: isDark
                 ? 'inset 0 1px 2px rgba(255,255,255,0.46), inset 0 -12px 22px rgba(125,211,252,0.10), 0 0 0 1px rgba(56,189,248,0.10), 0 10px 24px rgba(0,0,0,0.22)'
                 : 'inset 0 1px 2px rgba(255,255,255,0.76), inset 0 -12px 22px rgba(255,255,255,0.18), 0 10px 24px rgba(34,68,92,0.10)',
@@ -231,26 +235,28 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           <MenuList
             minW="36"
             zIndex={1600}
-            bg={isDark ? 'rgba(25,30,42,0.88)' : 'rgba(244,252,255,0.88)'}
-            borderColor={isDark ? 'whiteAlpha.160' : 'rgba(255,255,255,0.80)'}
+            bg={`${colors.surface}EB`}
+            color={colors.text}
+            borderColor={theme.border}
             boxShadow={
               isDark
                 ? '0 18px 44px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)'
                 : '0 18px 44px rgba(39,87,116,0.12), 0 6px 18px rgba(94,188,214,0.12), inset 0 1px 0 rgba(255,255,255,0.56)'
             }
             backdropFilter="blur(22px) saturate(170%)"
+            sx={{ WebkitBackdropFilter: 'blur(22px) saturate(170%)' }}
           >
-            <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} onClick={() => dispatch({ type: 'subscribed', mutate })}>
+            <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'subscribed', mutate })}>
               仅看已订阅
             </MenuItem>
-            <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
+            <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
               仅看未订阅
             </MenuItem>
-            <Divider />
-            <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} onClick={() => handleShow('new')}>
+            <Divider borderColor={theme.border} />
+            <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('new')}>
               仅显示新番
             </MenuItem>
-            <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} onClick={() => handleShow('old')}>
+            <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('old')}>
               仅显示旧番
             </MenuItem>
           </MenuList>
@@ -269,6 +275,7 @@ function SearchPanel({
   onKeywordChange: (value: string) => void;
 }) {
   const { colorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
   const isDark = colorMode === 'dark';
 
   return (
@@ -277,8 +284,8 @@ function SearchPanel({
       py="2"
       rounded="20px"
       borderWidth="1px"
-      borderColor={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.72)'}
-      bg={isDark ? 'rgba(18,24,36,0.58)' : 'rgba(236,248,252,0.54)'}
+      borderColor={theme.border}
+      bg={`${colors.surface}8F`}
       boxShadow={
         isDark
           ? '0 18px 36px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05)'
@@ -290,8 +297,8 @@ function SearchPanel({
         w="full"
         rounded="16px"
         borderWidth="1px"
-        borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.78)'}
-        bg={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.34)'}
+        borderColor={theme.border}
+        bg={`${colors.surface}70`}
         boxShadow={
           isDark
             ? '0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)'
@@ -304,9 +311,7 @@ function SearchPanel({
           inset: '1px',
           borderRadius: 'inherit',
           pointerEvents: 'none',
-          background: isDark
-            ? 'linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 38%, rgba(255,255,255,0) 100%)'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.48), rgba(255,255,255,0.14) 38%, rgba(255,255,255,0.02) 100%)',
+          background: `linear-gradient(180deg, ${colors.accent}18, transparent 58%)`,
         }}
         position="relative"
       >
@@ -316,7 +321,7 @@ function SearchPanel({
           top="50%"
           transform="translateY(-50%)"
           zIndex="2"
-          color={isDark ? 'whiteAlpha.700' : 'rgba(79,95,110,0.62)'}
+          color={colors.accent}
           display="flex"
           alignItems="center"
           justifyContent="center"
@@ -334,15 +339,13 @@ function SearchPanel({
           rounded="16px"
           border="none"
           bg="transparent"
-          color={isDark ? 'whiteAlpha.920' : '#516274'}
+          color={colors.text}
           fontSize={{ base: 'sm', md: 'md' }}
           fontWeight="500"
           lineHeight="1"
-          _placeholder={{ color: isDark ? 'whiteAlpha.500' : 'rgba(79,95,110,0.52)' }}
+          _placeholder={{ color: `${colors.text}88` }}
           _focusVisible={{
-            boxShadow: isDark
-              ? '0 0 0 1px rgba(191,219,254,0.42), 0 0 0 4px rgba(59,130,246,0.14), 0 14px 30px rgba(59,130,246,0.18)'
-              : '0 0 0 1px rgba(148,211,255,0.72), 0 0 0 4px rgba(94,188,214,0.14), 0 14px 30px rgba(94,188,214,0.18)',
+            boxShadow: `0 0 0 1px ${theme.border}, 0 0 0 4px ${theme.soft}, 0 14px 30px ${colors.accent}22`,
           }}
         />
       </Box>

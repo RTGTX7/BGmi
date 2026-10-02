@@ -1,4 +1,4 @@
-import { Box, Flex, Text, Image } from '@chakra-ui/react';
+import { Box, Flex, Icon, Text, Image } from '@chakra-ui/react';
 import type { BoxProps } from '@chakra-ui/react';
 
 import {
@@ -26,17 +26,12 @@ const LOGO = '/logo.png';
 
 export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () => void }) => {
   const { colorMode, toggleColorMode } = useColorMode();
-  const { colors, theme } = useAccentTheme();
+  const { colors, theme, glassStyle } = useAccentTheme();
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const currentPath = pathname.slice(1).toLowerCase();
   const navDragSelect = useLongPressDragSelect(value => {
-    if (value === '__theme') {
-      toggleColorMode();
-      return;
-    }
-
     navigate(value);
     onClose?.();
   });
@@ -53,14 +48,22 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
       borderRightWidth="1px"
       borderRightColor={theme.border}
       w={{ base: 'full', lg: '60' }}
-      bg="var(--bgmi-glass-sidebar)"
+      bg={colors.background}
+      backgroundImage={`linear-gradient(${colors.sidebar}${glassStyle === 'clear' ? '70' : glassStyle === 'frosted' ? 'DE' : 'A8'}, ${colors.sidebar}${glassStyle === 'clear' ? '70' : glassStyle === 'frosted' ? 'DE' : 'A8'})`}
       backdropFilter="blur(26px) saturate(178%) contrast(1.05)"
+      WebkitBackdropFilter="blur(26px) saturate(178%) contrast(1.05)"
       boxShadow={
         colorMode === 'dark'
           ? `18px 0 42px rgba(0,0,0,0.28), inset -1px 0 0 ${colors.accent}18, inset 1px 0 0 rgba(255,255,255,0.05)`
           : '16px 0 36px rgba(36,78,88,0.10), inset -1px 0 0 rgba(255,255,255,0.72), inset 1px 0 0 rgba(255,255,255,0.34)'
       }
-      _before={{ content: 'none' }}
+      _before={{
+        content: '""',
+        position: 'absolute',
+        inset: '0',
+        pointerEvents: 'none',
+        background: `linear-gradient(160deg, ${colors.accent}${colorMode === 'dark' ? '1C' : '12'} 0%, transparent 40%)`,
+      }}
       sx={{
         WebkitBackdropFilter: 'blur(26px) saturate(178%) contrast(1.05)',
       }}
@@ -212,10 +215,37 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
         </Link>
 
         <Box h="3" />
-        <ThemePanel />
-        <SidebarNavItem icon={colorMode === 'dark' ? BsSunFill : BsMoonFill} onClick={toggleColorMode} {...navDragSelect.getOptionProps('__theme')}>
-          Theme Toggle
-        </SidebarNavItem>
+        <Flex
+          mx={{ base: '2', lg: '2.5' }}
+          my="1"
+          h={{ base: '3.5rem', lg: '4rem' }}
+          rounded="1.15rem"
+          overflow="hidden"
+          borderWidth="1px"
+          borderColor={theme.border}
+          bg={colorMode === 'dark' ? `${colors.surface}8C` : colors.surface}
+          backdropFilter="blur(18px) saturate(175%)"
+          sx={{ WebkitBackdropFilter: 'blur(18px) saturate(175%)' }}
+        >
+          <ThemePanel iconOnly />
+          <Box w="1px" my="2" bg={theme.border} />
+          <Flex
+            as="button"
+            type="button"
+            aria-label={colorMode === 'dark' ? '切换亮色主题' : '切换暗色主题'}
+            title={colorMode === 'dark' ? '亮色主题' : '暗色主题'}
+            onClick={toggleColorMode}
+            flex="1"
+            minW="0"
+            align="center"
+            justify="center"
+            bg="transparent"
+            color={colors.text}
+            _hover={{ bg: theme.soft, color: colors.accent }}
+          >
+            <Icon as={colorMode === 'dark' ? BsSunFill : BsMoonFill} boxSize="5" />
+          </Flex>
+        </Flex>
       </Flex>
     </Box>
   );

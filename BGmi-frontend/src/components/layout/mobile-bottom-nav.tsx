@@ -1,5 +1,5 @@
 import { Box, Flex, Icon } from '@chakra-ui/react';
-import { BsCalendar2CheckFill, BsFillCollectionPlayFill, BsMoonFill, BsPlayBtnFill, BsSunFill } from 'react-icons/bs';
+import { BsCalendar2CheckFill, BsFillCollectionPlayFill, BsPlayBtnFill } from 'react-icons/bs';
 import type { IconType } from 'react-icons';
 import { FiMenu } from 'react-icons/fi';
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
@@ -9,6 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useAccentTheme } from '~/hooks/use-accent-theme';
 import MobileLiquidGlass from './mobile-liquid-glass';
+import ThemePanel from './theme-panel';
 
 interface NavItem {
   label: string;
@@ -153,8 +154,8 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
     if (!value) return;
 
     suppressClickRef.current = false;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    // Keep the browser click for a simple tap. touch-action on the rail still
+    // gives the drag gesture control without cancelling the click event.
     const railRect = navRailRef.current?.getBoundingClientRect();
     if (railRect) {
       const slotWidth = railRect.width / navItems.length;
@@ -187,6 +188,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
 
     event.preventDefault();
     const movedEnough = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4;
+    if (movedEnough && !drag.moved) event.currentTarget.setPointerCapture?.(event.pointerId);
     drag.moved = drag.moved || movedEnough;
     const value = getValueFromPoint(event.clientX, event.clientY) || drag.lastValue;
     if (movedEnough && value && value !== drag.lastValue) {
@@ -209,7 +211,9 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
     const drag = dragRef.current;
     if (!drag.active || drag.pointerId !== event.pointerId) return;
 
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (drag.lastValue === 'menu' && (drag.moved || drag.startValue !== 'menu')) {
       sidebarToggle();
     }
@@ -241,6 +245,11 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
         zIndex="210"
         align="center"
         gap={navGap}
+        style={{
+          transform: 'translateY(calc(var(--bgmi-page-transition, 0) * 18px)) scale(calc(1 - var(--bgmi-page-transition, 0) * 0.035))',
+          opacity: 'calc(1 - var(--bgmi-page-transition, 0) * 0.35)',
+          transformOrigin: 'center bottom',
+        }}
       >
         <Box
           ref={navRailRef}
@@ -301,7 +310,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   rotate: springTilt,
                   scaleX: springStretchX,
                   scaleY: springStretchY,
-                  zIndex: 2,
+                  zIndex: 3,
                   pointerEvents: 'none',
                   transformOrigin: 'center',
                 }}
@@ -310,34 +319,21 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   width={dropletWidth}
                   height={dropletHeight}
                   borderRadius={dropletHeight / 2}
-                  strength={34}
-                  blur={0}
+                  strength={26}
+                  blur={0.35}
                   style={{
-                    background: colorMode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255,255,255,0.28), rgba(112,190,255,0.18) 42%, rgba(57,125,205,0.13) 78%, rgba(255,255,255,0.08))'
-                      : 'linear-gradient(135deg, rgba(255,255,255,0.80), rgba(191,232,255,0.38) 42%, rgba(114,193,233,0.22) 78%, rgba(255,255,255,0.34))',
-                    borderColor: colorMode === 'dark' ? 'rgba(231,247,255,0.58)' : 'rgba(255,255,255,0.92)',
+                    background: theme.soft,
+                    borderColor: theme.border,
                     boxShadow: colorMode === 'dark'
-                      ? 'inset -7px -9px 14px rgba(26,85,160,0.28), inset 5px 6px 10px rgba(255,255,255,0.30), 0 5px 15px rgba(0,0,0,0.22)'
-                      : 'inset -7px -9px 14px rgba(55,145,205,0.22), inset 5px 6px 10px rgba(255,255,255,0.82), 0 5px 15px rgba(34,68,92,0.16)',
+                      ? 'inset 0 1px 2px rgba(255,255,255,0.52), inset 0 -12px 22px rgba(255,255,255,0.10), 0 10px 28px rgba(0,0,0,0.14)'
+                      : 'inset 0 1px 2px rgba(255,255,255,0.78), inset 0 -12px 22px rgba(255,255,255,0.20), 0 10px 28px rgba(34,68,92,0.10)',
                   }}
-                />
-                <Box
-                  position="absolute"
-                  top="10%"
-                  left="16%"
-                  w="38%"
-                  h="8%"
-                  rounded="full"
-                  bg="rgba(255,255,255,0.82)"
-                  filter="blur(1.5px)"
-                  transform="rotate(-27deg)"
                 />
               </motion.div>
             ) : null}
           </AnimatePresence>
 
-          <Flex align="stretch" justify="space-between" position="relative" zIndex="3" pointerEvents="none">
+          <Flex align="stretch" justify="space-between" position="relative" zIndex="2" pointerEvents="none">
             {navItems.map(item => {
               const value = item.href || item.action || '';
               const active = item.href ? pathname === item.href : dragState.active && dragRef.current.lastValue === item.action;
@@ -404,18 +400,6 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
             WebkitTapHighlightColor: 'transparent',
           }}
         >
-          <Flex
-            position="absolute"
-            inset="0"
-            zIndex="2"
-            align="center"
-            justify="center"
-            color={colors.accent}
-            pointerEvents="none"
-            transition="color 0.18s ease, transform 0.18s ease"
-          >
-            <Icon as={colorMode === 'dark' ? BsSunFill : BsMoonFill} boxSize={navIconSize} />
-          </Flex>
           {railSize.height > 0 ? (
             <MobileLiquidGlass
               width={railSize.height}
@@ -435,25 +419,15 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
             />
           ) : null}
           <Box
-            as="button"
-            type="button"
-            aria-label="Toggle day and night mode"
-            onClick={toggleColorMode}
             position="absolute"
             inset="0"
             zIndex="3"
             w="full"
             h="full"
             rounded="full"
-            bg="transparent"
-            borderWidth="0"
-            cursor="pointer"
-            _hover={{ bg: 'transparent' }}
-            _active={{ bg: 'transparent' }}
-            sx={{
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          />
+          >
+            <ThemePanel mobile onShortPress={toggleColorMode} />
+          </Box>
         </Box>
       </Flex>
     </Box>

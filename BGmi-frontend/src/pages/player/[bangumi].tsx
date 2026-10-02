@@ -1,4 +1,5 @@
 import { Box, Flex, Heading } from '@chakra-ui/react';
+import { FiArrowLeft } from 'react-icons/fi';
 import { Helmet } from 'react-helmet-async';
 import useSWR from 'swr';
 import { useEffect, useState } from 'react';
@@ -6,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import VideoPlayer from '~/components/video-player';
+import { useGlassPageTransition } from '~/components/layout/glass-page-transition';
 import { useWatchHistory } from '~/hooks/use-watch-history';
 import { FetchError, fetcherWithTimeout } from '~/lib/fetcher';
 
@@ -19,6 +21,7 @@ interface PlayerBangumiResponse {
 
 export default function Player() {
   const params = useParams();
+  const glassTransition = useGlassPageTransition();
   const [currentWatchHistory, setWatchHistory] = useWatchHistory();
   const bangumiName = params.bangumi ? decodeURIComponent(params.bangumi) : '';
   const [preferredGroup, setPreferredGroup] = useState(() =>
@@ -114,6 +117,28 @@ export default function Player() {
         <title>{`BGmi - ${bangumiData.bangumi_name}`}</title>
         <meta name="referrer" content="no-referrer" />
       </Helmet>
+
+      {glassTransition?.canClose ? (
+        <Box
+          as="button"
+          type="button"
+          aria-label="返回番剧列表"
+          title="返回番剧列表"
+          onClick={glassTransition.closeCard}
+          display="inline-flex"
+          alignItems="center"
+          justifyContent="center"
+          w="2.5rem"
+          h="2.5rem"
+          mb="2"
+          rounded="full"
+          bg="var(--bgmi-glass-background)"
+          border="1px solid var(--bgmi-accent-border)"
+          backdropFilter="blur(16px) saturate(160%)"
+        >
+          <FiArrowLeft aria-hidden="true" />
+        </Box>
+      ) : null}
 
       <Heading
         ml={{ base: '0', xl: '10' }}

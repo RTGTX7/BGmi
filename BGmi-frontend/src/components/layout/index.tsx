@@ -1,28 +1,39 @@
 import { Box } from '@chakra-ui/react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { memo, useEffect, useState, type CSSProperties } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import MobileBottomNav from './mobile-bottom-nav';
 import Sidebar from '../sidebar';
 
+const MotionBox = motion(Box);
+
 function Layout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const reduceMotion = useReducedMotion();
   const { theme: accentTheme, colors, glassStyle } = useAccentTheme();
   const { colorMode } = useColorMode();
   const glassBackground = glassStyle === 'clear' ? `${colors.surface}55` : glassStyle === 'frosted' ? `${colors.surface}D9` : `${colors.surface}A8`;
   const glassSidebar = colorMode === 'dark'
-    ? colors.sidebar
+    ? glassStyle === 'clear' ? `${colors.sidebar}80` : glassStyle === 'frosted' ? `${colors.sidebar}C7` : `${colors.sidebar}A3`
     : glassStyle === 'clear' ? `${colors.sidebar}88` : glassStyle === 'frosted' ? `${colors.sidebar}F2` : `${colors.sidebar}CC`;
   const glassBlur = glassStyle === 'clear' ? '5px' : glassStyle === 'frosted' ? '28px' : '18px';
   const glassShadow = glassStyle === 'clear' ? 'inset 0 1px 0 #ffffff55, 0 5px 18px #00000012' : glassStyle === 'frosted' ? '0 12px 28px #0000001c' : 'inset 0 1px 0 #ffffff66, 0 12px 28px #00000020';
 
   useEffect(() => {
     const root = document.documentElement.style;
+    const previousBodyBackground = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = colors.background;
     root.setProperty('--bgmi-glass-background', glassBackground);
     root.setProperty('--bgmi-glass-sidebar', glassSidebar);
     root.setProperty('--bgmi-glass-blur', glassBlur);
     root.setProperty('--bgmi-glass-shadow', glassShadow);
-  }, [glassBackground, glassSidebar, glassBlur, glassShadow]);
+    return () => {
+      document.body.style.backgroundColor = previousBodyBackground;
+    };
+  }, [colors.background, glassBackground, glassSidebar, glassBlur, glassShadow]);
 
   const handleToggle = () => setOpen(o => !o);
   return (
@@ -69,6 +80,12 @@ function Layout({ children }: { children: React.ReactNode }) {
         minW="0"
         position="relative"
         zIndex="1"
+        sx={{
+          transform: 'translateY(calc(var(--bgmi-page-transition, 0) * -4px)) scale(calc(1 - var(--bgmi-page-transition, 0) * 0.018))',
+          filter: 'blur(calc(var(--bgmi-page-transition, 0) * 2px))',
+          transformOrigin: 'center top',
+          willChange: 'transform, filter',
+        }}
         _before={{
           content: '""',
           position: 'absolute',
@@ -79,7 +96,15 @@ function Layout({ children }: { children: React.ReactNode }) {
           borderRadius: '24px',
         }}
       >
-        {children}
+        <MotionBox
+          key={location.key}
+          initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.985, filter: 'blur(4px)' }}
+          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          style={{ transformOrigin: 'center top' }}
+        >
+          {children}
+        </MotionBox>
       </Box>
     </Box>
   );

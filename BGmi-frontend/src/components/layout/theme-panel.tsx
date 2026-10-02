@@ -1,6 +1,7 @@
 import { Box, Button, Flex, Heading, IconButton, Input, Portal, SimpleGrid, Text, useDisclosure } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { FiCheck, FiDroplet, FiX } from 'react-icons/fi';
+import { BsMoonFill, BsSunFill } from 'react-icons/bs';
 
 import { palettePresets, type GlassStyle, type PaletteColors, type PaletteMode, useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
@@ -19,13 +20,19 @@ const glassOptions: { value: GlassStyle; label: string }[] = [
   { value: 'liquid', label: '液态玻璃' },
 ];
 
-export default function ThemePanel({ mobile = false, onOpen }: { mobile?: boolean; onOpen?: () => void }) {
+export default function ThemePanel({ mobile = false, iconOnly = false, onOpen, onShortPress }: { mobile?: boolean; iconOnly?: boolean; onOpen?: () => void; onShortPress?: () => void }) {
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
   const { isOpen, onOpen: openPanel, onClose } = useDisclosure();
   const { mode, colors, settings, getPalette, selectPreset, saveCustom, glassStyle, setGlassStyle, theme } = useAccentTheme();
   const [editMode, setEditMode] = useState<PaletteMode>(mode);
   const [draft, setDraft] = useState<PaletteColors>(getPalette(mode));
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+  const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+  }, []);
   useEffect(() => setDraft(getPalette(editMode)), [editMode, settings]);
   useEffect(() => {
     if (!isOpen) return;
@@ -43,10 +50,67 @@ export default function ThemePanel({ mobile = false, onOpen }: { mobile?: boolea
     openPanel();
   };
 
+  const startMobilePress = (event: PointerEvent<HTMLButtonElement>) => {
+    longPressedRef.current = false;
+    pressStartRef.current = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    longPressRef.current = setTimeout(() => {
+      longPressedRef.current = true;
+      open();
+    }, 460);
+  };
+  const endMobilePress = (event: PointerEvent<HTMLButtonElement>) => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = null;
+    pressStartRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
     <>
       {mobile ? (
-        <IconButton aria-label="打开主题设置" title="主题设置" icon={<FiDroplet size="20" />} onClick={open} w="full" h="full" rounded="full" bg="transparent" color={colors.accent} _hover={{ bg: theme.soft }} />
+        <IconButton
+          aria-label="切换主题，长按打开主题配色"
+          title="短按切换主题，长按打开主题配色"
+          icon={isOpen ? <FiDroplet size="20" /> : colorMode === 'dark' ? <BsSunFill size="20" /> : <BsMoonFill size="20" />}
+          onPointerDown={startMobilePress}
+          onPointerMove={event => {
+            const start = pressStartRef.current;
+            if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10 && longPressRef.current) {
+              clearTimeout(longPressRef.current);
+              longPressRef.current = null;
+            }
+          }}
+          onPointerUp={endMobilePress}
+          onPointerCancel={endMobilePress}
+          onClick={() => {
+            if (!longPressedRef.current) onShortPress?.();
+            longPressedRef.current = false;
+          }}
+          onContextMenu={event => event.preventDefault()}
+          w="full"
+          h="full"
+          rounded="full"
+          bg="transparent"
+          borderWidth="0"
+          color={colors.accent}
+          boxShadow="none"
+          _hover={{ bg: 'transparent' }}
+        />
+      ) : iconOnly ? (
+        <IconButton
+          aria-label="打开主题配色"
+          title="主题配色"
+          icon={<FiDroplet size="20" />}
+          onClick={open}
+          flex="1"
+          h="full"
+          minW="0"
+          rounded="none"
+          bg="transparent"
+          color={colors.text}
+          _hover={{ bg: theme.soft, color: colors.accent }}
+        />
       ) : (
         <SidebarNavItem as="button" icon={FiDroplet} onClick={open}>
           主题配色

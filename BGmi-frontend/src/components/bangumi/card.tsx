@@ -2,6 +2,7 @@ import { Badge, Box, Fade, Heading, Image, Text } from '@chakra-ui/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 
 import Link from '~/components/router-link';
+import { useGlassPageTransition } from '~/components/layout/glass-page-transition';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { normalizePath, resolveCoverSrc } from '~/lib/utils';
 
@@ -19,11 +20,14 @@ export default function BangumiCard({ bangumiData, variant = 'default' }: Bangum
   const collapsedHeight = variant === 'hero' ? '4.5rem' : '5.35rem';
   const [drawerMaxHeight, setDrawerMaxHeight] = useState(collapsedHeight);
   const drawerContentRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const glassTransition = useGlassPageTransition();
   const isDark = colorMode === 'dark';
   const posterBg = isDark ? 'gray.900' : 'rgba(255,255,255,0.72)';
   const borderColor = isDark ? 'whiteAlpha.180' : 'rgba(162,186,198,0.24)';
 
   const { bangumi_name: title, cover: coverUrl, episode, status } = bangumiData;
+  const playerPath = `/player/${normalizePath(title)}`;
   const statusText = episode > 0 ? `最新：第 ${episode} 集` : '暂无更新';
 
   useLayoutEffect(() => {
@@ -37,6 +41,8 @@ export default function BangumiCard({ bangumiData, variant = 'default' }: Bangum
 
   return (
     <Box
+      ref={cardRef}
+      data-bgmi-card={title}
       mx="auto"
       w="full"
       overflow="hidden"
@@ -68,7 +74,15 @@ export default function BangumiCard({ bangumiData, variant = 'default' }: Bangum
         zIndex: 3,
       }}
     >
-      <Link href={`/player/${normalizePath(title)}`} overflow="hidden">
+      <Link
+        href={playerPath}
+        overflow="hidden"
+        onClick={event => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !cardRef.current || !glassTransition) return;
+          event.preventDefault();
+          glassTransition.openCard(cardRef.current, title, resolveCoverSrc(coverUrl), playerPath);
+        }}
+      >
         <Box position="relative" bg={posterBg}>
           {status === 2 ? (
             <Badge

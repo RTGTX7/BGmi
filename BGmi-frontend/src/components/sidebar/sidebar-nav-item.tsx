@@ -31,7 +31,7 @@ export default function SidebarNavItem(props: NavItemProps) {
       py={{ base: '3.5', lg: '4' }}
       cursor="pointer"
       color={textColor}
-      bg={active ? theme.soft : colors.surface}
+      bg={active ? theme.soft : isDark ? `${colors.surface}8C` : colors.surface}
       fontWeight={active ? '800' : '700'}
       fontSize={{ base: 'sm', lg: 'md' }}
       onClick={onClick}
@@ -66,7 +66,7 @@ export default function SidebarNavItem(props: NavItemProps) {
         transform: 'translateX(2px) translateY(-1px)',
         color: active ? textColor : isDark ? 'rgba(241,245,249,0.92)' : '#0f172a',
         borderColor: theme.border,
-        bg: active ? theme.soft : colors.surface,
+        bg: active ? theme.soft : isDark ? `${colors.surface}B3` : colors.surface,
         boxShadow: active
           ? undefined
           : isDark

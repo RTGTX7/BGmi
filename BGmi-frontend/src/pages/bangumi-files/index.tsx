@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 
 import BangumiGroupSection from '~/components/bangumi/group-section';
 import { bangumiFilterAtom, useBangumi } from '~/hooks/use-bangumi';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { buildSeasonGroups, toBangumiWithSeason } from '~/lib/bangumi';
 import { normalizePath, resolveCoverSrc } from '~/lib/utils';
@@ -31,6 +32,7 @@ export default function BangumiFiles() {
   const bangumiShow = useAtomValue(bangumiFilterAtom);
   const navigate = useNavigate();
   const { colorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
   const isDark = colorMode === 'dark';
   const searchModal = useDisclosure();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -90,36 +92,20 @@ export default function BangumiFiles() {
       </Helmet>
 
       <Flex
-        display={{ base: 'flex', md: 'none' }}
         align="center"
         justify="space-between"
         px="0.5"
         pt="0.5"
       >
         <Stack spacing="0.5">
-          <Text fontSize="lg" fontWeight="700" color={isDark ? 'whiteAlpha.940' : '#24384d'}>
+          <Text fontSize="lg" fontWeight="700" color={colors.text}>
             Archive
           </Text>
-          <Text fontSize="xs" color={isDark ? 'whiteAlpha.700' : 'rgba(64,84,100,0.78)'}>
+          <Text fontSize="xs" color={colors.text} opacity={0.7}>
             Search past bangumi
           </Text>
         </Stack>
 
-        <IconButton
-          aria-label="Search archive"
-          icon={<FiSearch />}
-          onClick={searchModal.onOpen}
-          rounded="full"
-          size="md"
-          bg={isDark ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.82)'}
-          borderWidth="1px"
-          borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.92)'}
-          color={isDark ? 'whiteAlpha.900' : '#304254'}
-          boxShadow={isDark ? '0 12px 28px rgba(0,0,0,0.22)' : '0 12px 28px rgba(39,87,116,0.12)'}
-          backdropFilter="blur(18px) saturate(170%)"
-          _hover={{ transform: 'scale(1.03)' }}
-          _active={{ transform: 'scale(0.98)' }}
-        />
       </Flex>
 
       {seasonGroups.map(group => (
@@ -146,35 +132,35 @@ export default function BangumiFiles() {
         icon={<FiSearch />}
         onClick={searchModal.onOpen}
         position="fixed"
-        display={{ base: 'none', md: 'inline-flex' }}
         right={{ base: '1rem', md: '1.5rem' }}
-        bottom={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)', md: '1.5rem' }}
+        bottom={{ base: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)', lg: '1.5rem' }}
         zIndex={20}
         rounded="full"
         size="lg"
-        bg={isDark ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.78)'}
+        bg={`${colors.surface}D9`}
         borderWidth="1px"
-        borderColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.9)'}
-        color={isDark ? 'whiteAlpha.900' : '#304254'}
-        boxShadow={isDark ? '0 16px 36px rgba(0,0,0,0.24)' : '0 16px 36px rgba(39,87,116,0.16)'}
+        borderColor={theme.border}
+        color={colors.accent}
+        boxShadow={isDark ? '0 16px 36px rgba(0,0,0,0.24)' : `0 16px 36px ${colors.accent}29`}
         backdropFilter="blur(18px) saturate(170%)"
-        _hover={{ transform: 'scale(1.04)', boxShadow: isDark ? '0 18px 40px rgba(251,146,60,0.24)' : '0 18px 40px rgba(251,146,60,0.18)' }}
+        _hover={{ transform: 'scale(1.04)', bg: theme.soft, borderColor: colors.accent }}
         _active={{ transform: 'scale(0.98)' }}
       />
 
       <Modal isOpen={searchModal.isOpen} onClose={searchModal.onClose} initialFocusRef={searchInputRef} size="3xl" isCentered>
-        <ModalOverlay bg={isDark ? 'rgba(5,10,18,0.54)' : 'rgba(12,18,28,0.34)'} backdropFilter="blur(10px)" />
+        <ModalOverlay bg={isDark ? `${colors.background}B8` : `${colors.text}57`} backdropFilter="blur(10px)" />
         <ModalContent
           rounded="3xl"
-          bg={isDark ? 'rgba(17,23,35,0.84)' : 'rgba(245,251,253,0.92)'}
+          bg={`${colors.surface}${isDark ? 'EB' : 'F5'}`}
           borderWidth="1px"
-          borderColor={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.78)'}
-          boxShadow={isDark ? '0 28px 70px rgba(0,0,0,0.44)' : '0 28px 70px rgba(39,87,116,0.16)'}
+          borderColor={theme.border}
+          color={colors.text}
+          boxShadow={isDark ? '0 28px 70px rgba(0,0,0,0.44)' : `0 28px 70px ${colors.accent}29`}
           backdropFilter="blur(28px) saturate(180%)"
           overflow="hidden"
         >
-          <ModalHeader>Search archive</ModalHeader>
-          <ModalCloseButton />
+          <ModalHeader color={colors.text}>Search archive</ModalHeader>
+          <ModalCloseButton color={colors.text} _hover={{ bg: theme.soft }} />
           <ModalBody pb="5">
             <Stack spacing="4">
               <Input
@@ -184,20 +170,24 @@ export default function BangumiFiles() {
                 placeholder="Search title / season / year / Mikan ID"
                 rounded="2xl"
                 h="3rem"
-                bg={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.72)'}
-                borderColor={isDark ? 'rgba(255,255,255,0.12)' : 'rgba(132,169,235,0.22)'}
+                bg={`${colors.background}${isDark ? 'A8' : 'BF'}`}
+                color={colors.text}
+                borderColor={theme.border}
+                _placeholder={{ color: colors.text, opacity: 0.55 }}
+                _hover={{ borderColor: colors.accent }}
+                _focusVisible={{ borderColor: colors.accent, boxShadow: `0 0 0 2px ${theme.border}` }}
               />
 
               {!keyword.trim() ? (
-                <Text color={isDark ? 'whiteAlpha.700' : 'rgba(64,84,100,0.78)'} fontSize="sm">
+                <Text color={colors.text} opacity={0.7} fontSize="sm">
                   Search by title, original title, season, year, or Mikan keyword.
                 </Text>
               ) : null}
 
               <Stack spacing="3" maxH="65vh" overflowY="auto" pr="1">
                 {keyword.trim() && searchResults.length === 0 ? (
-                  <Box rounded="2xl" px="4" py="5" bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.62)'}>
-                    <Text color={isDark ? 'whiteAlpha.800' : '#304254'}>没有找到相关番剧</Text>
+                  <Box rounded="2xl" px="4" py="5" bg={theme.soft}>
+                    <Text color={colors.text}>没有找到相关番剧</Text>
                   </Box>
                 ) : null}
 
@@ -208,12 +198,12 @@ export default function BangumiFiles() {
                     rounded="2xl"
                     px="4"
                     py="3"
-                    bg={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.62)'}
+                    bg={`${colors.background}${isDark ? '70' : 'A8'}`}
                     borderWidth="1px"
-                    borderColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(132,169,235,0.18)'}
+                    borderColor={theme.border}
                     align="center"
                     cursor="pointer"
-                    _hover={{ transform: 'translateY(-1px)', borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(132,169,235,0.28)' }}
+                    _hover={{ transform: 'translateY(-1px)', borderColor: colors.accent, bg: theme.soft }}
                     onClick={() => {
                       searchModal.onClose();
                       navigate(`/player/${normalizePath(item.bangumi_name)}`);
@@ -221,14 +211,14 @@ export default function BangumiFiles() {
                   >
                     <Image src={resolveCoverSrc(item.cover)} alt={item.bangumi_name} w="4rem" h="5.4rem" rounded="xl" objectFit="cover" flexShrink={0} />
                     <Stack spacing="1" minW="0" flex="1">
-                      <Text fontWeight="700" color={isDark ? 'whiteAlpha.920' : '#24384d'} noOfLines={2}>
+                      <Text fontWeight="700" color={colors.text} noOfLines={2}>
                         {item.bangumi_name}
                       </Text>
-                      <Text fontSize="sm" color={isDark ? 'whiteAlpha.700' : 'rgba(64,84,100,0.78)'} noOfLines={1}>
+                      <Text fontSize="sm" color={colors.text} opacity={0.72} noOfLines={1}>
                         {item.seasonMeta?.label ?? 'Unknown season'} · 最新集数 {item.episode ?? 0}
                       </Text>
                       {item.keyword ? (
-                        <Text fontSize="xs" color={isDark ? 'whiteAlpha.600' : 'rgba(64,84,100,0.64)'} noOfLines={1}>
+                        <Text fontSize="xs" color={colors.text} opacity={0.62} noOfLines={1}>
                           Mikan ID: {item.keyword}
                         </Text>
                       ) : null}

@@ -1,11 +1,12 @@
 import type { BoxProps, TabListProps, TabsProps } from '@chakra-ui/react';
 import { Box, Flex, Icon, Tab, TabList, Tabs } from '@chakra-ui/react';
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, LayoutGroup, motion, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
 import type { TouchEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { IconType } from 'react-icons';
 
 import { useColorMode } from '~/hooks/use-color-mode';
+import { useAccentTheme } from '~/hooks/use-accent-theme';
 import { getLiquidGlassGroupStyles, getLiquidGlassStyles, useLongPressDragSelect } from '~/lib/liquid-glass';
 import MobileLiquidGlass from '../layout/mobile-liquid-glass';
 
@@ -64,9 +65,8 @@ const CONTENT_EASE = [0.22, 1, 0.36, 1] as const;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 const getRailItemWeight = (item: RailItem, type?: 'subscribe') => {
-  if (type !== 'subscribe') return 1;
-  if (item.kind === 'action') return 1.2;
-  if (item.key === 'unknown') return 1.55;
+  if (item.key === 'unknown') return type === 'subscribe' ? 1.55 : 1.42;
+  if (type === 'subscribe' && item.kind === 'action') return 1.2;
   return 1;
 };
 
@@ -173,6 +173,7 @@ export default function CalendarTab({
   ...props
 }: Props & Omit<TabsProps, 'children'>) {
   const { colorMode } = useColorMode();
+  const { colors, theme } = useAccentTheme();
   const chipStyles = getChipStyles(colorMode);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -189,10 +190,21 @@ export default function CalendarTab({
     startX: 0,
     startY: 0,
     lastIndex: 0,
+    lastX: 0,
+    lastTime: 0,
   });
   const mobileSuppressClickRef = useRef(false);
-  const mobileDropletRef = useRef<HTMLDivElement | null>(null);
   const mobileVisualRef = useRef({ index: 0, moving: false });
+  const dropletPosition = useMotionValue(0);
+  const dropletWidth = useMotionValue(0);
+  const dropletTilt = useMotionValue(0);
+  const dropletStretchX = useMotionValue(1);
+  const dropletStretchY = useMotionValue(1);
+  const springPosition = useSpring(dropletPosition, { stiffness: 400, damping: 22, mass: 0.65 });
+  const springWidth = useSpring(dropletWidth, { stiffness: 340, damping: 24, mass: 0.7 });
+  const springTilt = useSpring(dropletTilt, { stiffness: 260, damping: 12, mass: 0.55 });
+  const springStretchX = useSpring(dropletStretchX, { stiffness: 300, damping: 14, mass: 0.5 });
+  const springStretchY = useSpring(dropletStretchY, { stiffness: 300, damping: 14, mass: 0.5 });
   const mobileDragFrameRef = useRef<number | null>(null);
   const pendingMobilePositionRef = useRef<{ x: number; index: number } | null>(null);
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -203,7 +215,6 @@ export default function CalendarTab({
     index: 0,
     x: 0,
   });
-
   useEffect(() => () => {
     if (mobileDragFrameRef.current !== null) window.cancelAnimationFrame(mobileDragFrameRef.current);
   }, []);
@@ -293,7 +304,6 @@ export default function CalendarTab({
   const railDropletWidth = (activeDragBounds?.width ?? 0) * (type === 'subscribe' ? 0.98 : 1.12);
   const railDropletHeight = mobileRailSize.height * (type === 'subscribe' ? 0.96 : 1.04);
   const railDropletCenter = mobileDragState.x || activeDragBounds?.center || 0;
-  const railDropletX = railDropletCenter - railDropletWidth / 2;
   const railDropletY = (mobileRailSize.height - railDropletHeight) / 2;
   const railDropletCenterX = railDropletCenter;
 
@@ -427,10 +437,9 @@ export default function CalendarTab({
     const bounds = railItemBounds[index] ?? railItemBounds[0];
     const safeHalfWidth = Math.max(1, bounds.width / 2);
     const continuousCenter = clamp(clientX - rect.left, safeHalfWidth, rect.width - safeHalfWidth);
-    if (mobileDropletRef.current) {
-      const dropletWidth = bounds.width * (type === 'subscribe' ? 0.98 : 1.12);
-      mobileDropletRef.current.style.left = `${continuousCenter - dropletWidth / 2}px`;
-    }
+    const nextWidth = bounds.width * (type === 'subscribe' ? 0.98 : 1.12);
+    dropletPosition.set(continuousCenter - nextWidth / 2);
+    dropletWidth.set(nextWidth);
     if (!moving || mobileVisualRef.current.index !== index || !mobileVisualRef.current.moving) {
       mobileVisualRef.current = { index, moving };
       setMobileDragState({ active: true, moving, index, x: continuousCenter });
@@ -453,7 +462,19 @@ export default function CalendarTab({
       startX: event.clientX,
       startY: event.clientY,
       lastIndex: index,
+      lastX: event.clientX,
+      lastTime: event.timeStamp,
     };
+    const bounds = railItemBounds[index];
+    if (bounds) {
+      const width = bounds.width * (type === 'subscribe' ? 0.98 : 1.12);
+      const center = (rect ? event.clientX - rect.left : bounds.center);
+      dropletPosition.set(center - width / 2);
+      dropletWidth.set(width);
+    }
+    dropletTilt.set(0);
+    dropletStretchX.set(1);
+    dropletStretchY.set(1);
     updateMobileDroplet(event.clientX, index, false);
     selectRailItem(railItems[index]);
   };
@@ -471,6 +492,13 @@ export default function CalendarTab({
       drag.lastIndex = index;
       selectRailItem(railItems[index]);
     }
+    const elapsed = Math.max(8, event.timeStamp - drag.lastTime);
+    const velocity = (event.clientX - drag.lastX) / elapsed;
+    dropletTilt.set(clamp(velocity * 14, -18, 18));
+    dropletStretchX.set(1 + Math.min(Math.abs(velocity) * 0.18, 0.28));
+    dropletStretchY.set(1 - Math.min(Math.abs(velocity) * 0.1, 0.15));
+    drag.lastX = event.clientX;
+    drag.lastTime = event.timeStamp;
     pendingMobilePositionRef.current = { x: event.clientX, index };
     if (mobileDragFrameRef.current !== null) return;
     mobileDragFrameRef.current = window.requestAnimationFrame(() => {
@@ -485,7 +513,7 @@ export default function CalendarTab({
     const drag = mobileDragRef.current;
     if (!drag.active || drag.pointerId !== event.pointerId) return;
 
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (mobileDragFrameRef.current !== null) {
       window.cancelAnimationFrame(mobileDragFrameRef.current);
       mobileDragFrameRef.current = null;
@@ -498,6 +526,9 @@ export default function CalendarTab({
     }
     mobileSuppressClickRef.current = drag.moved;
     mobileVisualRef.current.moving = false;
+    dropletTilt.set(0);
+    dropletStretchX.set(1);
+    dropletStretchY.set(1);
     mobileDragRef.current = {
       active: false,
       moved: false,
@@ -505,6 +536,8 @@ export default function CalendarTab({
       startX: 0,
       startY: 0,
       lastIndex: 0,
+      lastX: 0,
+      lastTime: 0,
     };
     setMobileDragState(current => ({ ...current, active: false, moving: false }));
   };
@@ -646,8 +679,8 @@ export default function CalendarTab({
                 blur={0}
                 style={{
                   zIndex: 1,
-                  background: colorMode === 'dark' ? 'rgba(24,30,54,0.12)' : 'rgba(210,229,236,0.34)',
-                  borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.20)' : 'rgba(104,139,156,0.22)',
+                  background: 'var(--bgmi-glass-sidebar)',
+                  borderColor: theme.border,
                   boxShadow:
                     colorMode === 'dark'
                       ? 'inset 0 1px 1px rgba(255,255,255,0.30), inset 0 -10px 20px rgba(255,255,255,0.05), 0 12px 28px rgba(0,0,0,0.12)'
@@ -655,30 +688,46 @@ export default function CalendarTab({
                 }}
               />
             ) : null}
-            {mobileDragState.moving && mobileRailSize.width > 0 && mobileRailSize.height > 0 ? (
-              <MobileLiquidGlass
-                elementRef={mobileDropletRef}
-                width={railDropletWidth}
-                height={railDropletHeight}
-                borderRadius={railDropletHeight / 2}
-                x={railDropletX}
-                y={railDropletY}
-                strength={26}
-                blur={0}
-                opacity={0.95}
+            {mobileDragState.active && mobileRailSize.width > 0 && mobileRailSize.height > 0 ? (
+              <motion.div
+                initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.18 }}
+                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 410, damping: 21, mass: 0.52 }}
                 style={{
+                  position: 'absolute',
+                  top: railDropletY,
+                  width: springWidth,
+                  height: railDropletHeight,
+                  x: springPosition,
+                  rotate: springTilt,
+                  scaleX: springStretchX,
+                  scaleY: springStretchY,
                   zIndex: 3,
-                  background: colorMode === 'dark' ? 'rgba(30,42,70,0.12)' : 'rgba(226,240,246,0.26)',
-                  borderColor: colorMode === 'dark' ? 'rgba(255,255,255,0.34)' : 'rgba(255,255,255,0.58)',
-                  boxShadow:
-                    colorMode === 'dark'
-                      ? 'inset 0 1px 2px rgba(255,255,255,0.46), inset 0 -12px 22px rgba(255,255,255,0.08), 0 10px 24px rgba(0,0,0,0.12)'
-                      : 'inset 0 1px 2px rgba(255,255,255,0.74), inset 0 -12px 22px rgba(255,255,255,0.16), 0 10px 24px rgba(34,68,92,0.08)',
-                  transform: 'scale(1.04, 1.03)',
-                  transition:
-                    'left 90ms linear, width 150ms cubic-bezier(0.2, 0.9, 0.2, 1), transform 160ms cubic-bezier(0.2, 0.9, 0.2, 1)',
+                  transformOrigin: 'center',
+                  pointerEvents: 'none',
                 }}
-              />
+              >
+                <MobileLiquidGlass
+                  width={Math.max(1, railDropletWidth)}
+                  height={railDropletHeight}
+                  borderRadius={railDropletHeight / 2}
+                  strength={26}
+                  blur={0.35}
+                  opacity={0.95}
+                  style={{
+                    position: 'relative',
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    zIndex: 3,
+                    background: theme.soft,
+                    borderColor: theme.border,
+                    boxShadow: colorMode === 'dark'
+                      ? `inset 0 1px 2px rgba(255,255,255,0.52), inset 0 -12px 22px ${colors.accent}18, 0 10px 28px rgba(0,0,0,0.16)`
+                      : `inset 0 1px 2px rgba(255,255,255,0.78), inset 0 -12px 22px ${colors.accent}18, 0 10px 28px rgba(34,68,92,0.10)`,
+                  }}
+                />
+              </motion.div>
             ) : null}
             <Flex position="relative" zIndex="2" minH={{ base: type === 'subscribe' ? '2.65rem' : '2.85rem', md: '3rem', lg: '3.1rem' }} align="center" pointerEvents="none">
               {railItems.map((item, index) => {
@@ -694,8 +743,8 @@ export default function CalendarTab({
                     justify="center"
                     color={
                       isSelected
-                        ? colorMode === 'dark' ? '#7dd3fc' : '#006eb6'
-                        : colorMode === 'dark' ? 'whiteAlpha.760' : '#173149'
+                        ? colors.accent
+                        : colors.text
                     }
                     fontSize={{ base: `${(type === 'subscribe' ? 12 : 13) + (isSelected ? 1 : 0) + influence * 2}px`, md: `${14 + (isSelected ? 1 : 0) + influence * 2}px`, lg: `${15 + (isSelected ? 1 : 0) + influence * 2}px` }}
                     fontWeight={isSelected || influence > 0.35 ? '900' : '800'}
@@ -703,13 +752,7 @@ export default function CalendarTab({
                     whiteSpace="nowrap"
                     transform={influence ? `translateY(${-2 * influence}px) scale(${1 + influence * 0.11})` : 'translateY(0)'}
                     transition="color 0.18s ease, transform 0.18s ease, font-size 0.18s ease"
-                    textShadow={
-                      isSelected || influence
-                        ? colorMode === 'dark'
-                          ? `0 0 ${8 + influence * 7}px rgba(125,211,252,${0.52 + influence * 0.24}), 0 0 ${16 + influence * 8}px rgba(56,189,248,${0.22 + influence * 0.18})`
-                          : `0 1px ${3 + influence * 3}px rgba(255,255,255,${0.78 + influence * 0.18}), 0 0 ${10 + influence * 6}px rgba(14,165,233,${0.20 + influence * 0.18})`
-                        : 'none'
-                    }
+                    textShadow={isSelected || influence ? `0 0 ${8 + influence * 7}px ${colors.accent}55` : 'none'}
                   >
                     {item.kind === 'action' ? (
                       <Icon as={item.icon} boxSize={`${(type === 'subscribe' ? 17 : 18) + influence * 2}px`} transition="box-size 0.18s ease" />
@@ -886,8 +929,18 @@ export default function CalendarTab({
       </AnimatePresence>
 
       <Box mt={searchOpen ? 0 : type === 'subscribe' ? { base: 4, lg: 3 } : 3} {...boxProps} />
-      <Box onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} overflow="hidden">
-        {type === 'subscribe' || isMobile ? (
+      <Box onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} overflow="hidden" position="relative">
+        {isMobile ? (
+          <MotionBox
+            key={resolvedContentKey}
+            initial={reduceMotion ? false : { opacity: 0.45, x: direction * 22, y: 8, scale: 0.975, filter: 'blur(7px)' }}
+            animate={{ opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' }}
+            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 330, damping: 32, mass: 0.8 }}
+            style={{ transformOrigin: 'top center' }}
+          >
+            {standaloneContent ? standaloneContent : children}
+          </MotionBox>
+        ) : type === 'subscribe' ? (
           <Box>{standaloneContent ? standaloneContent : children}</Box>
         ) : (
           <AnimatePresence mode="wait" initial={false} custom={direction}>
