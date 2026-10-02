@@ -95,7 +95,7 @@ export default function BangumiFiles() {
       <Flex
         align="center"
         justify="space-between"
-        px="0.5"
+        px={{ base: '3.5', md: '4.5', xl: '5' }}
         pt="0.5"
       >
         <Stack spacing="0.5">
