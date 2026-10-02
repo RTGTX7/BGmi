@@ -38,7 +38,8 @@ COPY --from=frontend-builder /build/frontend/dist /opt/bgmi-frontend-dist
 COPY --from=frontend-builder /build/frontend/package.json /opt/bgmi-frontend-package.json
 COPY docker-entrypoint.sh /usr/local/bin/bgmi-entrypoint.sh
 
-RUN chmod +x /usr/local/bin/bgmi-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/bgmi-entrypoint.sh \
+    && chmod +x /usr/local/bin/bgmi-entrypoint.sh
 
 EXPOSE 8899
 
