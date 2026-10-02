@@ -33,9 +33,17 @@
 - [x] Recover ignored local backend files from the July 10 Docker image and establish the baseline: 23 focused backend tests and frontend build pass.
 - [x] Import official v5 core, preserve personal database columns and issue table, and add legacy frontend routes for the main library, subscription, player, and dashboard views.
 - [x] Build the integration Docker image and smoke-test a clean container (`/` and `/api/index` both return 200).
-- [ ] Implement database-safe v5 backend integration.
-- [ ] Port personal APIs and frontend.
-- [ ] Validate image and tests.
-- [ ] Prepare integration commit and review summary.
+- [x] Implement database-safe v5 backend integration.
+- [x] Port personal APIs and frontend.
+- [x] Validate image and tests.
+- [x] Prepare integration commit and review summary.
 
-Current gaps: dashboard repository rebuild, personal database edit CLI, full resource/feed behavior, and an end-to-end upgrade smoke test against a copy of an existing v4 database. Official MCP download-status test needs its downloader service to be available.
+Known test limitation: the official MCP download-status test needs its downloader service to be available; it is excluded from the local result below. The integration branch has not been pushed to `origin/main`.
+
+## Verification
+
+- 26 focused migration, custom API, and player tests passed.
+- 93 official/custom v5 tests passed when excluding the downloader-service-dependent MCP test.
+- Frontend `pnpm build` passed.
+- Docker image `bgmi:integration-v5` built successfully.
+- Clean container smoke test: `/` and `/api/index` returned HTTP 200.
