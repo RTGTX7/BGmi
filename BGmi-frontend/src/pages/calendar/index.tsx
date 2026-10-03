@@ -64,9 +64,9 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
     <ModalOverlay data-bgmi-window-backdrop="calendar" bg={windowOverlayValue(colorMode === 'dark' ? 'dark' : 'light', backgroundBrightness[colorMode === 'dark' ? 'dark' : 'light'])} backdropFilter="none" />
     <ModalContent data-bgmi-dim-target="calendar" zIndex={1402} mx="4" maxW="3xl" maxH="calc(100dvh - 2rem)" overflow="hidden" color={colors.text} borderWidth="1px" borderColor={`${colors.accent}44`} boxShadow="none" sx={{ '--bgmi-window-background': 'transparent', '--bgmi-window-shadow': 'none', backdropFilter: `blur(${windowGlassBlurValue(glassStyle)})`, WebkitBackdropFilter: `blur(${windowGlassBlurValue(glassStyle)})` }}>
       <WindowGlassRefraction />
-      <ModalBody p={{ base: '4', md: '6' }}>
+      <ModalBody p={{ base: '3', md: '5' }} display="flex" flexDirection="column" minH="0" overflow="hidden">
         <Flex direction="row" align="flex-start" gap={{ base: '3', md: '5' }}>
-          <Box w={{ base: '9rem', sm: '11rem', md: '18rem' }} minW={{ base: '9rem', sm: '11rem', md: '18rem' }} aspectRatio={3 / 4} rounded="2xl" overflow="hidden" bg="transparent" cursor="zoom-in" onClick={onPosterOpen}>
+          <Box w={{ base: '6rem', sm: '9rem', md: '14rem' }} minW={{ base: '6rem', sm: '9rem', md: '14rem' }} aspectRatio={3 / 4} rounded="2xl" overflow="hidden" bg="transparent" cursor="zoom-in" onClick={onPosterOpen}>
             <Image src={resolveCoverSrc(bangumi.cover)} alt={bangumi.name} w="full" h="full" objectFit="contain" display="block" />
           </Box>
           <Flex direction="column" minW="0" flex="1" gap="3">
@@ -84,7 +84,7 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
             </Flex>
             <Text fontSize="sm" fontWeight="700" mt="2">字幕组</Text>
             {groups.length ? (
-              <Flex wrap="wrap" gap="2">
+              <Flex wrap="wrap" gap="2" maxH={{ base: '120px', md: '200px' }} overflowY="auto">
                 {groups.map(group => {
                   const subscribed = followedSet.has(normalizeGroup(group.name));
                   return <Tag key={`group-${group.id}-${group.name}`} fontSize="xs" bg={subscribed ? `${colors.accent}2E` : `${colors.surface}66`} color={subscribed ? colors.accent : colors.text} borderWidth="1px" borderColor={subscribed ? `${colors.accent}88` : `${colors.text}28`}>{group.name}</Tag>;
@@ -93,9 +93,9 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
             ) : null}
           </Flex>
         </Flex>
-        <Box mt="5" pt="4" borderTopWidth="1px" borderColor={`${colors.text}20`}>
+        <Box mt="3" pt="3" borderTopWidth="1px" borderColor={`${colors.text}20`} display="flex" flexDirection="column" minH="0" flex="1">
           <Text fontSize="sm" fontWeight="700" mb="2">简介</Text>
-          <Text fontSize="sm" lineHeight="1.75" opacity={isDark ? 0.9 : 1}>{overview?.data?.synopsis || '暂无简介'}</Text>
+          <Text fontSize="sm" lineHeight="1.75" overflowY="auto" minH="0" sx={{ overscrollBehavior: 'contain' }} opacity={isDark ? 0.9 : 1}>{overview?.data?.synopsis || '暂无简介'}</Text>
         </Box>
       </ModalBody>
     </ModalContent>

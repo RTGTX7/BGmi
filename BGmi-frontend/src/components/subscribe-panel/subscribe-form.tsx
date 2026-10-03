@@ -141,7 +141,7 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
   };
 
   return (
-    <Modal onClose={onClose} isOpen={isOpen} closeOnOverlayClick>
+    <Modal onClose={onClose} isOpen={isOpen} closeOnOverlayClick isCentered scrollBehavior="inside">
       <ModalOverlay
         data-bgmi-window-backdrop="subscribe"
         bg={windowOverlayValue(colorMode === 'dark' ? 'dark' : 'light', backgroundBrightness[colorMode === 'dark' ? 'dark' : 'light'])}
@@ -152,7 +152,11 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
         data-bgmi-dim-target="subscribe"
         zIndex={1402}
         maxW={{ base: 'calc(100vw - 1rem)', sm: 'sm', md: 'xl' }}
-        overflow="visible"
+        maxH="calc(100dvh - 24px)"
+        my="3"
+        mx="3"
+        rounded="24px"
+        overflow="hidden"
         color={colors.text}
         borderColor={colorMode === 'dark' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.88)'}
         boxShadow="none"

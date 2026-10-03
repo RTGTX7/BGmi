@@ -10,6 +10,7 @@ import {
   Spinner,
   Stack,
   useToast,
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, Text,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { deleteCookie, setCookie } from 'cookies-next';
@@ -23,6 +24,8 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
   const [authToken, setAuthToken] = useState('');
   const [checkingCookie, setCheckingCookie] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
   const toast = useToast();
   const { tryAuth, hasAuth, cookieToken } = useAuth();
   const { colors, glassStyle } = useAccentTheme();
@@ -91,7 +94,19 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
 
   if (isAuthorized) return children;
 
-  const handleAuth = async (seconds: number) => {
+  const retainToken = (seconds: number) => {
+    if (!verifiedToken) return;
+    setCookie('authToken', verifiedToken, {
+      path: '/', sameSite: 'lax', secure: window.location.protocol === 'https:',
+      ...(seconds > 0 ? { maxAge: seconds } : {}),
+    });
+    setVerifiedToken(null);
+    setIsAuthorized(true);
+    navigate(to);
+  };
+
+  const handleAuth = async () => {
+    if (isVerifying || verifiedToken) return;
     if (authToken === '') {
       toast({
         title: '请输入 Token',
@@ -102,6 +117,7 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
       return;
     }
 
+    setIsVerifying(true);
     try {
       const { timeoutId, response } = await tryAuth(authToken);
       clearTimeout(timeoutId);
@@ -113,14 +129,7 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
         position: 'top-right',
       });
 
-      setCookie('authToken', authToken, {
-        path: '/',
-        sameSite: 'lax',
-        secure: window.location.protocol === 'https:',
-        expires: seconds > 0 ? new Date(Date.now() + seconds * 1000) : undefined,
-      });
-      setIsAuthorized(true);
-      navigate(to);
+      setVerifiedToken(authToken);
     } catch (error) {
       const authError = error as { status?: string; message?: string; detail?: string | Array<{ msg?: string }> };
       console.error(authError);
@@ -133,21 +142,23 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
         duration: 2000,
         position: 'top-right',
       });
+    } finally {
+      setIsVerifying(false);
     }
   };
 
   return (
-    <Card display="flex" justifyContent="center" mt="20" mx="auto" maxW="xl" overflow="visible" bg={`${colors.surface}${glassSurfaceAlpha(glassStyle)}`} color={colors.text} borderWidth="1px" borderColor={`${colors.accent}55`} boxShadow={colorMode === 'dark' ? '0 24px 60px rgba(0,0,0,0.28)' : '0 24px 60px rgba(35,52,77,0.12)'} backdropFilter={`blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`} sx={{ WebkitBackdropFilter: `blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})` }}>
+    <><Card display="flex" justifyContent="center" mt="20" mx="auto" maxW="xl" overflow="visible" bg={`${colors.surface}${glassSurfaceAlpha(glassStyle)}`} color={colors.text} borderWidth="1px" borderColor={`${colors.accent}55`} boxShadow={colorMode === 'dark' ? '0 24px 60px rgba(0,0,0,0.28)' : '0 24px 60px rgba(35,52,77,0.12)'} backdropFilter={`blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`} sx={{ WebkitBackdropFilter: `blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})` }}>
       <CardHeader>
         <Heading>验证 Token</Heading>
       </CardHeader>
       <CardBody overflow="visible">
         <InputGroup alignItems="stretch">
           <InputLeftAddon pointerEvents="none" bg={`${colors.surface}44`} color={colors.text} borderColor={`${colors.text}28`}>TOKEN</InputLeftAddon>
-          <Input onChange={event => setAuthToken(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void handleAuth(2629800); } }} type="password" placeholder="输入 Token" color={colors.text} bg={colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.72)'} borderColor={`${colors.text}28`} _placeholder={{ color: `${colors.text}70` }} />
-          <Button ml="3" h="10" px="6" rounded="full" bg={colors.accent} color={colorMode === 'dark' ? '#101827' : 'white'} _hover={{ bg: colors.accent, filter: 'brightness(1.08)', transform: 'translateY(-1px)' }} _active={{ transform: 'translateY(0)' }} onClick={() => void handleAuth(2629800)}>验证</Button>
+          <Input onChange={event => setAuthToken(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void handleAuth(); } }} type="password" placeholder="输入 Token" color={colors.text} bg={colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.72)'} borderColor={`${colors.text}28`} _placeholder={{ color: `${colors.text}70` }} />
+          <Button isLoading={isVerifying} ml="3" h="10" px="6" rounded="full" bg={colors.accent} color={colorMode === 'dark' ? '#101827' : 'white'} _hover={{ bg: colors.accent, filter: 'brightness(1.08)', transform: 'translateY(-1px)' }} _active={{ transform: 'translateY(0)' }} onClick={() => void handleAuth()}>验证</Button>
         </InputGroup>
       </CardBody>
-    </Card>
+    </Card><Modal isOpen={verifiedToken !== null} onClose={() => setVerifiedToken(null)} isCentered><ModalOverlay /><ModalContent mx="3" rounded="24px" bg={colors.surface} color={colors.text}><ModalHeader>保留登录多久？</ModalHeader><ModalBody pb="5"><Text fontSize="sm" mb="3">Token 已验证，选择登录状态的保留时间。</Text><Stack spacing="2">{[{ label: "仅本次浏览器会话", seconds: 0 }, { label: "1 天", seconds: 86400 }, { label: "7 天", seconds: 604800 }, { label: "30 天", seconds: 2592000 }].map(option => <Button key={option.seconds} onClick={() => retainToken(option.seconds)} color={colors.text} variant="outline">{option.label}</Button>)}</Stack></ModalBody></ModalContent></Modal></>
   );
 }

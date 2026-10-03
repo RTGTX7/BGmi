@@ -1,7 +1,8 @@
 import { getCookie, hasCookie } from 'cookies-next';
+import { useCallback } from 'react';
 
 export const useAuth = () => {
-  const tryAuth = async (authToken: string) => {
+  const tryAuth = useCallback(async (authToken: string) => {
     // request timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -20,7 +21,7 @@ export const useAuth = () => {
     } finally {
       clearTimeout(timeoutId);
     }
-  };
+  }, []);
 
   return {
     tryAuth,

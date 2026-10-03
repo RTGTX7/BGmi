@@ -20,6 +20,7 @@ import { useAtom } from 'jotai';
 import Auth from '~/components/auth';
 import CalendarTab from '~/components/calendar-tab';
 import MobileLiquidGlass from '~/components/layout/mobile-liquid-glass';
+import WindowGlassRefraction from '~/components/layout/window-glass-refraction';
 import SubscribePanel from '~/components/subscribe-panel';
 import { bangumiFilterAtom, type DataKind } from '~/hooks/use-bangumi';
 import { useCalendar } from '~/hooks/use-calendar';
@@ -83,7 +84,7 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
   return (
     <Box display="flex" alignItems="center" justifyContent="flex-end" h="full" w="auto" pl={{ base: 0, lg: 1 }}>
       <Box display={{ base: 'none', lg: 'flex' }} alignItems="center">
-        <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end">
+        <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end" gutter={10} isLazy>
           <MenuButton
             as={Button}
             leftIcon={<CiFilter size="17" />}
@@ -118,7 +119,7 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             筛选
           </MenuButton>
           <Portal>
-            <MenuList
+            <MenuList position="relative" rounded="20px" overflow="hidden"
               minW="36"
               zIndex={1600}
               bg={`${colors.surface}EB`}
@@ -132,17 +133,18 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
               backdropFilter="blur(22px) saturate(170%)"
               sx={{ WebkitBackdropFilter: 'blur(22px) saturate(170%)' }}
             >
-              <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'subscribed', mutate })}>
+            <WindowGlassRefraction />
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'subscribed', mutate })}>
                 仅看已订阅
               </MenuItem>
-              <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
                 仅看未订阅
               </MenuItem>
               <Divider borderColor={theme.border} />
-              <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('new')}>
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('new')}>
                 仅显示新番
               </MenuItem>
-              <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('old')}>
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('old')}>
                 仅显示旧番
               </MenuItem>
             </MenuList>
@@ -151,7 +153,7 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
       </Box>
 
       <Box display={{ base: 'flex', lg: 'none' }} alignItems="center">
-        <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end">
+        <Menu autoSelect={false} closeOnSelect={false} placement="bottom-end" gutter={10} isLazy>
         <MenuButton
           as={Button}
           leftIcon={<CiFilter size="17" />}
@@ -206,12 +208,11 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           <Flex
             position="absolute"
             inset="0"
-            zIndex="0"
+            zIndex="2"
             align="center"
             justify="center"
             color={colors.accent}
             pointerEvents="none"
-            filter={isDark ? 'drop-shadow(0 0 10px rgba(125,211,252,0.62)) drop-shadow(0 0 18px rgba(56,189,248,0.28))' : 'drop-shadow(0 1px 4px rgba(255,255,255,0.72))'}
           >
             <Icon as={CiFilter} boxSize="17px" strokeWidth="1.35" />
           </Flex>
@@ -232,7 +233,7 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
           />
         </MenuButton>
         <Portal>
-          <MenuList
+          <MenuList position="relative" rounded="20px" overflow="hidden"
             minW="36"
             zIndex={1600}
             bg={`${colors.surface}EB`}
@@ -246,17 +247,18 @@ function FilterOptionsMenu({ state, dispatch, mutate }: FilterOptionsMenuProps) 
             backdropFilter="blur(22px) saturate(170%)"
             sx={{ WebkitBackdropFilter: 'blur(22px) saturate(170%)' }}
           >
-            <MenuItem justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'subscribed', mutate })}>
+            <WindowGlassRefraction />
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={state.subscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'subscribed', mutate })}>
               仅看已订阅
             </MenuItem>
-            <MenuItem justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={state.unSubscribed ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => dispatch({ type: 'unSubscribed', mutate })}>
               仅看未订阅
             </MenuItem>
             <Divider borderColor={theme.border} />
-            <MenuItem justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('new')}>
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={bangumiShow === 'new' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('new')}>
               仅显示新番
             </MenuItem>
-            <MenuItem justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('old')}>
+            <MenuItem position="relative" zIndex={1} justifyContent="center" bg={bangumiShow === 'old' ? selectedBg : 'transparent'} _hover={{ bg: theme.soft }} _focus={{ bg: theme.soft }} onClick={() => handleShow('old')}>
               仅显示旧番
             </MenuItem>
           </MenuList>
