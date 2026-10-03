@@ -1,6 +1,6 @@
 import { Box, Button, Card, CardBody, Fade, Flex, HStack, Image, Input, Link, Modal, ModalBody, ModalContent, ModalOverlay, Tag, Text, useDisclosure } from '@chakra-ui/react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CiSearch } from 'react-icons/ci';
 
 import CalendarTab from '~/components/calendar-tab';
@@ -27,6 +27,28 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
   const isDark = colorMode === 'dark';
   const { handleFetchFilter } = useSubscribeAction();
   const { isOpen: isPosterOpen, onOpen: onPosterOpen, onClose: onPosterClose } = useDisclosure();
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const startDismissSwipe = (event: React.TouchEvent<HTMLElement>) => {
+    swipeStart.current = null;
+    if (!window.matchMedia('(max-width: 767px)').matches || isPosterOpen) return;
+    // Scrolling the synopsis or subtitle list remains independent of dismissal.
+    let target = event.target instanceof HTMLElement ? event.target : null;
+    while (target && target !== event.currentTarget) {
+      if (target.scrollHeight > target.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(target).overflowY)) return;
+      if (target.closest('button, a, input')) return;
+      target = target.parentElement;
+    }
+    const touch = event.touches[0];
+    if (touch) swipeStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+  const endDismissSwipe = (event: React.TouchEvent<HTMLElement>) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    const distance = start.y - touch.clientY;
+    if (distance >= 72 && distance > Math.abs(touch.clientX - start.x) * 1.5) onClose();
+  };
   const [followed, setFollowed] = useState<string[]>([]);
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const { data: overview } = useSWR<{ data?: { synopsis?: string } }>(bangumi && isOpen ? `/api/player/overview?bangumi=${encodeURIComponent(bangumi.name)}` : null, key => fetcherWithTimeout([key], {}, 30000), { revalidateOnFocus: false });
@@ -64,8 +86,9 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
   return <>
     <Modal isOpen={isOpen} onClose={onClose} isCentered scrollBehavior="inside">
     <ModalOverlay data-bgmi-window-backdrop="calendar" bg={windowOverlayValue(colorMode === 'dark' ? 'dark' : 'light', backgroundBrightness[colorMode === 'dark' ? 'dark' : 'light'])} backdropFilter="none" />
-    <ModalContent data-bgmi-dim-target="calendar" zIndex={1402} mx="4" maxW="3xl" maxH="calc(100dvh - 2rem)" overflow="hidden" color={colors.text} borderWidth="1px" borderColor={`${colors.accent}44`} boxShadow="none" sx={{ '--bgmi-window-background': 'transparent', '--bgmi-window-shadow': 'none', backdropFilter: `blur(${windowGlassBlurValue(glassStyle)})`, WebkitBackdropFilter: `blur(${windowGlassBlurValue(glassStyle)})` }}>
+    <ModalContent onTouchStart={startDismissSwipe} onTouchEnd={endDismissSwipe} onTouchCancel={() => { swipeStart.current = null; }} data-bgmi-dim-target="calendar" zIndex={1402} mx="4" maxW="3xl" maxH="calc(100dvh - 2rem)" overflow="hidden" color={colors.text} borderWidth="1px" borderColor={`${colors.accent}44`} boxShadow="none" sx={{ '--bgmi-window-background': 'transparent', '--bgmi-window-shadow': 'none', backdropFilter: `blur(${windowGlassBlurValue(glassStyle)})`, WebkitBackdropFilter: `blur(${windowGlassBlurValue(glassStyle)})` }}>
       <WindowGlassRefraction />
+      <Box display={{ base: "block", md: "none" }} w="9" h="1" rounded="full" bg={`${colors.text}38`} mx="auto" mt="2" flexShrink="0" aria-hidden="true" />
       <ModalBody p={{ base: '3', md: '5' }} display="flex" flexDirection="column" minH="0" overflow="hidden">
         <Flex direction="row" align="flex-start" gap={{ base: '3', md: '5' }}>
           <Box w={{ base: '6rem', sm: '9rem', md: '14rem' }} minW={{ base: '6rem', sm: '9rem', md: '14rem' }} aspectRatio={3 / 4} rounded="2xl" overflow="hidden" bg="transparent" cursor="zoom-in" onClick={onPosterOpen}>

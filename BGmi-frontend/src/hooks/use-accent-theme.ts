@@ -56,16 +56,16 @@ function readSettings(): PaletteSettings {
 }
 
 function readGlassStyle(): GlassStyle {
-  if (typeof window === 'undefined') return 10;
+  if (typeof window === 'undefined') return 25;
   try {
     const stored = window.localStorage.getItem(glassStorageKey);
     if (stored === 'clear' || stored === 'liquid') return 0;
-    if (stored === 'frosted') return 100;
+    if (stored === 'frosted') return 250;
     if (stored === null) return 25;
     const value = Number(stored);
-    return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 10;
+    return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 25;
   } catch {
-    return 10;
+    return 25;
   }
 }
 
