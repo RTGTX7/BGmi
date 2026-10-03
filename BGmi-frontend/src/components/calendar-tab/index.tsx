@@ -302,7 +302,7 @@ export default function CalendarTab({
   }, [mobileRailSize.width, railItems, type]);
   const activeDragBounds = railItemBounds[mobileDragState.index];
   const railDropletWidth = (activeDragBounds?.width ?? 0) * (type === 'subscribe' ? 0.98 : 1.12);
-  const railDropletHeight = mobileRailSize.height * (type === 'subscribe' ? 0.96 : 1.04);
+  const railDropletHeight = Math.max(1, mobileRailSize.height - 6);
   const railDropletCenter = mobileDragState.x || activeDragBounds?.center || 0;
   const railDropletY = (mobileRailSize.height - railDropletHeight) / 2;
   const railDropletCenterX = railDropletCenter;
@@ -672,6 +672,8 @@ export default function CalendarTab({
           >
             {mobileRailSize.width > 0 && mobileRailSize.height > 0 ? (
               <MobileLiquidGlass
+                edgeWidth={4}
+                rimOnly
                 width={mobileRailSize.width}
                 height={mobileRailSize.height}
                 borderRadius={mobileRailSize.height / 2}
@@ -696,22 +698,24 @@ export default function CalendarTab({
                 style={{
                   position: 'absolute',
                   top: railDropletY,
-                  width: springWidth,
+                  width: railDropletWidth,
                   height: railDropletHeight,
                   x: springPosition,
                   rotate: springTilt,
                   scaleX: springStretchX,
                   scaleY: springStretchY,
-                  zIndex: 3,
+                  zIndex: 2,
                   transformOrigin: 'center',
                   pointerEvents: 'none',
                 }}
               >
                 <MobileLiquidGlass
+                  edgeWidth={4}
+                  rimOnly
                   width={Math.max(1, railDropletWidth)}
                   height={railDropletHeight}
                   borderRadius={railDropletHeight / 2}
-                  strength={26}
+                  strength={12}
                   blur={0.35}
                   opacity={0.95}
                   style={{
@@ -729,7 +733,7 @@ export default function CalendarTab({
                 />
               </motion.div>
             ) : null}
-            <Flex position="relative" zIndex="2" minH={{ base: type === 'subscribe' ? '2.65rem' : '2.85rem', md: '3rem', lg: '3.1rem' }} align="center" pointerEvents="none">
+            <Flex position="relative" zIndex="3" minH={{ base: type === 'subscribe' ? '2.65rem' : '2.85rem', md: '3rem', lg: '3.1rem' }} align="center" pointerEvents="none">
               {railItems.map((item, index) => {
                 const isSelected = item.kind === 'action' ? item.active : item.key === activeTabKey;
                 const influence = getMobileItemInfluence(index);
@@ -977,3 +981,4 @@ export default function CalendarTab({
     </Tabs>
   );
 }
+
