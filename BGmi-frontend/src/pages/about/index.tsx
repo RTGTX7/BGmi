@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useBangumi } from '~/hooks/use-bangumi';
 import { useColorMode } from '~/hooks/use-color-mode';
 
-const CUSTOM_VERSION = '定制版 2.0.0';
+const CUSTOM_VERSION = '定制版 2.1.0';
 
 function FeatureTag({
   children,
