@@ -275,7 +275,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
           }}
         >
           {railSize.width > 0 && railSize.height > 0 ? (
-            <MobileLiquidGlass
+            <MobileLiquidGlass edgeWidth={5} rimOnly
               width={railSize.width}
               height={railSize.height}
               borderRadius={railSize.height / 2}
@@ -315,7 +315,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   transformOrigin: 'center',
                 }}
               >
-                <MobileLiquidGlass
+                <MobileLiquidGlass edgeWidth={5} rimOnly
                   width={dropletWidth}
                   height={dropletHeight}
                   borderRadius={dropletHeight / 2}
@@ -401,7 +401,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
           }}
         >
           {railSize.height > 0 ? (
-            <MobileLiquidGlass
+            <MobileLiquidGlass edgeWidth={5} rimOnly
               width={railSize.height}
               height={railSize.height}
               borderRadius={railSize.height / 2}

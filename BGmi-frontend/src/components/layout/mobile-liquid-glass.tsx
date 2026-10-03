@@ -123,6 +123,15 @@ export default function MobileLiquidGlass({
         const baseBend = inside * Math.max(edge, core) * strength * cornerAttenuation;
         let dx = (centeredX / halfWidth) * baseBend;
         let dy = (centeredY / halfHeight) * baseBend;
+        if (rimOnly) {
+          // Use the surface normal: every side has the same optical depth,
+          // independent of the bar's aspect ratio.
+          const nx = roundedRectSdf(centeredX + 0.5, centeredY, halfWidth, halfHeight, radius) - roundedRectSdf(centeredX - 0.5, centeredY, halfWidth, halfHeight, radius);
+          const ny = roundedRectSdf(centeredX, centeredY + 0.5, halfWidth, halfHeight, radius) - roundedRectSdf(centeredX, centeredY - 0.5, halfWidth, halfHeight, radius);
+          const length = Math.hypot(nx, ny) || 1;
+          dx = nx / length * baseBend;
+          dy = ny / length * baseBend;
+        }
 
         if (droplet?.active) {
           const localX = px - droplet.centerX * resolution;

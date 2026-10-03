@@ -49,16 +49,18 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
     return { id: String(item.id ?? item.name), name: item.name };
   });
   const normalizeGroup = (item: string) => item.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
-  const isOpaqueGroupId = (name: string) => /^[0-9a-f]{16,}$/i.test(name.trim()) || /^\d{8,}$/.test(name.trim());
-  const namedAvailableGroups = availableGroups.filter(name => name && !isOpaqueGroupId(name));
+  const isOpaqueGroupId = (name: string) => /^[0-9a-f]{16,}$/i.test(name.trim()) || /^\d+$/.test(name.trim());
+  const knownGroups = [...calendarGroups, ...(mikan?.data.groups ?? [])].filter(group => group.name && !isOpaqueGroupId(group.name));
+  const resolveGroupName = (value: string) => knownGroups.find(group => String(group.id) === value.trim())?.name || value;
+  const namedAvailableGroups = availableGroups.map(resolveGroupName).filter(name => name && !isOpaqueGroupId(name));
   const namedMikanGroups = (mikan?.data.groups ?? []).filter(item => item?.name && !isOpaqueGroupId(item.name));
   const groups = [
     ...calendarGroups.filter(item => item.name && !isOpaqueGroupId(item.name)),
     ...namedAvailableGroups.map(name => ({ id: name, name })),
     ...namedMikanGroups.map(item => ({ id: String(item.id ?? item.name), name: item.name })),
-    ...followed.filter(name => !isOpaqueGroupId(name)).map(name => ({ id: `followed-${name}`, name })),
+    ...followed.map(resolveGroupName).filter(name => !isOpaqueGroupId(name)).map(name => ({ id: `followed-${name}`, name })),
   ].filter(item => item?.name).filter((item, index, list) => list.findIndex(other => normalizeGroup(other.name) === normalizeGroup(item.name)) === index);
-  const followedSet = new Set(followed.map(normalizeGroup));
+  const followedSet = new Set(followed.map(resolveGroupName).map(normalizeGroup));
   return <>
     <Modal isOpen={isOpen} onClose={onClose} isCentered scrollBehavior="inside">
     <ModalOverlay data-bgmi-window-backdrop="calendar" bg={windowOverlayValue(colorMode === 'dark' ? 'dark' : 'light', backgroundBrightness[colorMode === 'dark' ? 'dark' : 'light'])} backdropFilter="none" />
