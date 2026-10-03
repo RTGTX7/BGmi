@@ -5,7 +5,8 @@ WORKDIR /build/frontend
 RUN corepack enable
 
 COPY BGmi-frontend/package.json BGmi-frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY BGmi-frontend/patches ./patches
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY BGmi-frontend/ ./
 RUN pnpm build

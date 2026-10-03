@@ -35,6 +35,10 @@ export const resolveCoverSrc = (cover: string) => {
   if (cover.startsWith('/bangumi/cover/')) return `.${cover.replace('/bangumi/cover/', '/bangumi/.cover/')}`;
 
   if (cover.startsWith('http://') || cover.startsWith('https://')) {
+    const url = new URL(cover);
+    if (url.protocol === 'https:' && ['bangumi.moe', 'mikanani.me', 'mikanime.tv', 'dummyimage.com', 'lain.bgm.tv'].includes(url.hostname)) {
+      return `./api/glass-cover?url=${encodeURIComponent(cover)}`;
+    }
     return cover;
   }
 

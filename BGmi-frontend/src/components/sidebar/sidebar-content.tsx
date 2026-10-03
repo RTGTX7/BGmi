@@ -20,6 +20,7 @@ import SidebarNavItem from './sidebar-nav-item';
 
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useAccentTheme } from '~/hooks/use-accent-theme';
+import { glassSurfaceAlpha } from '~/hooks/use-accent-theme';
 import { getLiquidGlassGroupStyles, useLongPressDragSelect } from '~/lib/liquid-glass';
 import ThemePanel from '../layout/theme-panel';
 const LOGO = '/logo.png';
@@ -48,8 +49,8 @@ export const SidebarContent = ({ onClose, ...props }: BoxProps & { onClose?: () 
       borderRightWidth="1px"
       borderRightColor={theme.border}
       w={{ base: 'full', lg: '60' }}
-      bg={colors.background}
-      backgroundImage={`linear-gradient(${colors.sidebar}${glassStyle === 'clear' ? '70' : glassStyle === 'frosted' ? 'DE' : 'A8'}, ${colors.sidebar}${glassStyle === 'clear' ? '70' : glassStyle === 'frosted' ? 'DE' : 'A8'})`}
+      bg={{ base: `${colors.sidebar}12`, lg: colors.background }}
+          backgroundImage={{ base: 'none', lg: `linear-gradient(${colors.sidebar}${glassSurfaceAlpha(glassStyle)}, ${colors.sidebar}${glassSurfaceAlpha(glassStyle)})` }}
       backdropFilter="blur(26px) saturate(178%) contrast(1.05)"
       WebkitBackdropFilter="blur(26px) saturate(178%) contrast(1.05)"
       boxShadow={

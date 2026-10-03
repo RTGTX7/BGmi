@@ -2,7 +2,7 @@ import { Box } from '@chakra-ui/react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { memo, useEffect, useState, type CSSProperties } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAccentTheme } from '~/hooks/use-accent-theme';
+import { glassBlurValue, glassSaturationValue, glassSurfaceAlpha, useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import MobileBottomNav from './mobile-bottom-nav';
 import Sidebar from '../sidebar';
@@ -15,12 +15,15 @@ function Layout({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();
   const { theme: accentTheme, colors, glassStyle } = useAccentTheme();
   const { colorMode } = useColorMode();
-  const glassBackground = glassStyle === 'clear' ? `${colors.surface}55` : glassStyle === 'frosted' ? `${colors.surface}D9` : `${colors.surface}A8`;
-  const glassSidebar = colorMode === 'dark'
-    ? glassStyle === 'clear' ? `${colors.sidebar}80` : glassStyle === 'frosted' ? `${colors.sidebar}C7` : `${colors.sidebar}A3`
-    : glassStyle === 'clear' ? `${colors.sidebar}88` : glassStyle === 'frosted' ? `${colors.sidebar}F2` : `${colors.sidebar}CC`;
-  const glassBlur = glassStyle === 'clear' ? '5px' : glassStyle === 'frosted' ? '28px' : '18px';
-  const glassShadow = glassStyle === 'clear' ? 'inset 0 1px 0 #ffffff55, 0 5px 18px #00000012' : glassStyle === 'frosted' ? '0 12px 28px #0000001c' : 'inset 0 1px 0 #ffffff66, 0 12px 28px #00000020';
+  // Keep light and dark glass tints separate. The light theme must not inherit
+  // the bright overlay values used to lift dark surfaces.
+  const glassBackground = colorMode === 'dark'
+    ? `${colors.surface}${glassSurfaceAlpha(glassStyle)}`
+    : `rgba(255,255,255,${0.06 + glassStyle / 1000})`;
+  const sidebarAlpha = Math.round(0x10 + (0x38 - 0x10) * (glassStyle / 100)).toString(16).padStart(2, '0');
+  const glassSidebar = `${colorMode === 'dark' ? colors.sidebar : colors.sidebar}${sidebarAlpha}`;
+  const glassBlur = glassBlurValue(glassStyle);
+  const glassShadow = '0 10px 28px rgba(15,23,42,0.16)';
 
   useEffect(() => {
     const root = document.documentElement.style;
@@ -30,10 +33,14 @@ function Layout({ children }: { children: React.ReactNode }) {
     root.setProperty('--bgmi-glass-sidebar', glassSidebar);
     root.setProperty('--bgmi-glass-blur', glassBlur);
     root.setProperty('--bgmi-glass-shadow', glassShadow);
+    root.setProperty('--bgmi-glass-saturation', glassSaturationValue(glassStyle));
+    root.setProperty('--bgmi-glass-style', String(glassStyle));
+    root.setProperty('--bgmi-glass-edge-opacity', String(1 - glassStyle / 130));
+    root.setProperty('--bgmi-glass-glow-opacity', String(0.82 - glassStyle / 210));
     return () => {
       document.body.style.backgroundColor = previousBodyBackground;
     };
-  }, [colors.background, glassBackground, glassSidebar, glassBlur, glassShadow]);
+  }, [colors.background, glassBackground, glassSidebar, glassBlur, glassShadow, glassStyle]);
 
   const handleToggle = () => setOpen(o => !o);
   return (
@@ -56,17 +63,25 @@ function Layout({ children }: { children: React.ReactNode }) {
         '--bgmi-glass-sidebar': glassSidebar,
         '--bgmi-glass-blur': glassBlur,
         '--bgmi-glass-shadow': glassShadow,
+        '--bgmi-glass-saturation': glassSaturationValue(glassStyle),
+        '--bgmi-glass-style': glassStyle,
+        '--bgmi-glass-edge-opacity': 1 - glassStyle / 130,
+        '--bgmi-glass-glow-opacity': 0.82 - glassStyle / 210,
       } as CSSProperties}
       sx={{
         '[data-bgmi-glass-panel]': {
+          position: 'relative',
           bg: 'var(--bgmi-glass-background)',
-          backdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(160%)',
-          WebkitBackdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(160%)',
+          backdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(var(--bgmi-glass-saturation))',
+          WebkitBackdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(var(--bgmi-glass-saturation))',
           boxShadow: 'var(--bgmi-glass-shadow)',
+
         },
       }}
       bg={colors.background}
     >
+      {/* WebGL glass runtime is disabled until per-window lifecycle support is
+          available; CSS glass remains active and keeps the UI responsive. */}
       <Sidebar isOpen={open} onClose={handleToggle} />
       <MobileBottomNav sidebarToggle={handleToggle} />
       <Box

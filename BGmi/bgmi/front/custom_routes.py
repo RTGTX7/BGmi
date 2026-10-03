@@ -13,6 +13,7 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 import fastapi
+import requests
 import sqlalchemy as sa
 from bs4 import BeautifulSoup
 from fastapi.responses import RedirectResponse
@@ -39,6 +40,36 @@ from bgmi.utils import normalize_path
 from bgmi.website.mikan import get_text, server_root
 
 router = fastapi.APIRouter()
+
+
+@lru_cache(maxsize=128)
+def _glass_cover(url: str) -> tuple[bytes, str]:
+    try:
+        with requests.get(url, timeout=12, allow_redirects=False, stream=True) as response:
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").split(";")[0]
+            if content_type not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+                raise ValueError("Unsupported image")
+            content = bytearray()
+            for chunk in response.iter_content(65536):
+                content.extend(chunk)
+                if len(content) > 8 * 1024 * 1024:
+                    raise ValueError("Image too large")
+            return bytes(content), content_type
+    except (requests.RequestException, ValueError) as exc:
+        raise fastapi.HTTPException(502, "Cover unavailable") from exc
+
+
+@router.get("/glass-cover")
+def glass_cover(url: str) -> fastapi.Response:
+    parsed = urlparse(url)
+    if (parsed.scheme != "https" or parsed.hostname not in {
+        "bangumi.moe", "mikanani.me", "mikanime.tv", "dummyimage.com", "lain.bgm.tv",
+    } or parsed.port not in {None, 443} or parsed.username or parsed.password):
+        raise fastapi.HTTPException(400, "Unsupported cover source")
+    content, content_type = _glass_cover(url)
+    return fastapi.Response(content, media_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
+
 ISSUE_MISSING_EPISODES = "missing_episodes"
 ISSUE_MISSING_PLAYABLE_SOURCE = "missing_playable_source"
 

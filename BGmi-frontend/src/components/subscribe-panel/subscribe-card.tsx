@@ -20,7 +20,7 @@ import type { TouchEvent } from 'react';
 import { useRef, useState } from 'react';
 import useSWR from 'swr';
 
-import { useAccentTheme } from '~/hooks/use-accent-theme';
+import { glassBlurValue, glassSaturationValue, useAccentTheme } from '~/hooks/use-accent-theme';
 import { useColorMode } from '~/hooks/use-color-mode';
 import { useSubscribeAction } from '~/hooks/use-subscribe-action';
 import { fetcherWithTimeout } from '~/lib/fetcher';
@@ -43,8 +43,11 @@ export interface SyncData {
 
 export default function SubscribeCard({ bangumi }: Props) {
   const { colorMode } = useColorMode();
-  const { theme: accentTheme } = useAccentTheme();
+  const { theme: accentTheme, colors, glassStyle } = useAccentTheme();
   const isDark = colorMode === 'dark';
+  const detailGlassBackground = isDark
+    ? `linear-gradient(135deg, rgba(255,255,255,0.12), rgba(15,23,42,0.28) 42%, rgba(15,23,42,0.38)), linear-gradient(145deg, ${colors.accent}18, transparent 66%)`
+    : `linear-gradient(135deg, rgba(255,255,255,0.62), rgba(255,255,255,0.24) 42%, rgba(255,255,255,0.34)), linear-gradient(145deg, ${colors.accent}18, transparent 66%)`;
   const primaryText = isDark ? '#10212F' : '#FFFFFF';
   const [imageLoaded, setImageLoaded] = useState(false);
   const { isOpen, onClose, onOpen } = useDisclosure();
@@ -57,7 +60,7 @@ export default function SubscribeCard({ bangumi }: Props) {
   const isMobile = useBreakpointValue({ base: true, md: false }) ?? false;
   const previewTouchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const { handleFetchFilter, handleSubscribe } = useSubscribeAction();
+  const { handleFetchFilter } = useSubscribeAction();
   const [syncData, setSyncData] = useState<SyncData>({
     status: !!bangumi.status,
     episode: bangumi.episode,
@@ -65,10 +68,24 @@ export default function SubscribeCard({ bangumi }: Props) {
   const followedSubtitleGroups = initialData?.follwedSubtitleGroups ?? [];
   const bangumiPlanUrl = `https://bgm.tv/subject_search/${encodeURIComponent(bangumi.name)}`;
   const { data: mikanGroups } = useSWR<MikanSubtitleGroupResponse>(
-    isPreviewOpen && bangumi.subtitle_group?.length ? `/api/mikan/subtitle-groups?bangumi=${encodeURIComponent(bangumi.name)}` : null,
+    isPreviewOpen && bangumi.name ? `/api/mikan/subtitle-groups?bangumi=${encodeURIComponent(bangumi.name)}` : null,
     (key: string) => fetcherWithTimeout([key], {}, 60000),
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
+  const availableSubtitleGroups = (bangumi.subtitle_group ?? [])
+    .map((item, index) => {
+      const raw = item as typeof item & { title?: string; group?: string };
+      const name = String(raw?.name || raw?.title || raw?.group || '').trim();
+      return { id: String(raw?.id || `available-${index}`), name };
+    })
+    .filter(item => item.name);
+  const mikanAvailableGroups = (mikanGroups?.data.groups ?? [])
+    .filter(group => group && typeof group.name === 'string' && group.name.trim())
+    .map(group => ({ id: String(group.id || group.name), name: group.name.trim() }));
+  const displayAvailableGroups = availableSubtitleGroups.length ? availableSubtitleGroups : mikanAvailableGroups;
+  const normalizeGroupName = (name: string) => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  const subscribedKeys = new Set(followedSubtitleGroups.map(normalizeGroupName));
+  const subscribedOnlyGroups = followedSubtitleGroups.filter(name => !displayAvailableGroups.some(item => normalizeGroupName(item.name) === normalizeGroupName(name)));
 
   const loadFilterData = async (name: string, ep: number) => {
     const data = await handleFetchFilter(name);
@@ -88,26 +105,13 @@ export default function SubscribeCard({ bangumi }: Props) {
     return data;
   };
 
-  const handleOpen = async (status: boolean, name: string, ep: number) => {
+  const handleOpen = async (name: string, ep: number) => {
     onOpen();
-
-    if (!status) {
-      await handleSubscribe(name, 0);
-      setSyncData(current => ({
-        ...current,
-        status: true,
-      }));
-    }
-
     await loadFilterData(name, ep);
   };
 
   const handleCardClick = () => {
-    if (!isMobile) return;
-    onPreviewOpen();
-    if (syncData.status) {
-      void loadFilterData(bangumi.name, bangumi.episode ?? 0);
-    }
+    void handleOpen(bangumi.name, bangumi.episode ?? 0);
   };
 
   const handlePreviewTouchStart = (event: TouchEvent<HTMLDivElement>) => {
@@ -135,22 +139,21 @@ export default function SubscribeCard({ bangumi }: Props) {
     <>
       <Box
         role="group"
-        data-bgmi-glass-panel
         w="full"
         minW="0"
-        cursor={isMobile ? 'pointer' : 'default'}
+        cursor="pointer"
         onClick={handleCardClick}
         position="relative"
         rounded="24px"
         overflow="hidden"
         borderWidth="1px"
-        borderColor={isDark ? 'whiteAlpha.120' : 'rgba(255,255,255,0.54)'}
-        bg={isDark ? 'rgba(14,20,38,0.22)' : 'rgba(255,255,255,0.22)'}
-        boxShadow={isDark ? '0 18px 42px rgba(0,0,0,0.24)' : '0 18px 42px rgba(15,23,42,0.12)'}
+        borderColor={isDark ? `${colors.text}22` : `${colors.text}24`}
+        bg={`${colors.surface}${isDark ? '66' : '9C'}`}
+        boxShadow={isDark ? `0 18px 42px rgba(0,0,0,0.24), inset 0 1px 0 ${colors.text}12` : `0 18px 42px rgba(15,23,42,0.12), inset 0 1px 0 ${colors.text}20`}
         transition="transform 240ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms ease"
         _hover={{
           transform: 'translateY(-3px) scale(1.008)',
-          boxShadow: isDark ? '0 24px 54px rgba(0,0,0,0.30)' : '0 24px 54px rgba(15,23,42,0.16)',
+          boxShadow: isDark ? `0 24px 54px rgba(0,0,0,0.30), inset 0 1px 0 ${colors.text}18` : `0 24px 54px rgba(15,23,42,0.16), inset 0 1px 0 ${colors.text}28`,
         }}
       >
         <Box position="relative" aspectRatio={3 / 4} w="full" overflow="hidden" bg={isDark ? 'gray.900' : 'gray.100'}>
@@ -207,6 +210,11 @@ export default function SubscribeCard({ bangumi }: Props) {
             minH={{ base: '3.9rem', md: '5rem' }}
             h={{ base: '3.9rem', md: '5rem' }}
             overflow="hidden"
+            cursor="pointer"
+            onClick={event => {
+              event.stopPropagation();
+              void handleOpen(bangumi.name, bangumi.episode ?? 0);
+            }}
             transition="transform 240ms cubic-bezier(0.22, 1, 0.36, 1), height 240ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms ease, filter 240ms ease"
             _groupHover={{
               transform: 'translateY(-2px)',
@@ -264,25 +272,6 @@ export default function SubscribeCard({ bangumi }: Props) {
                 </Text>
               </Flex>
 
-              <Flex align="center" justify="flex-end" minH="36px" flexShrink={0}>
-                <Button
-                  onClick={event => {
-                    event.stopPropagation();
-                    void handleOpen(syncData.status, bangumi.name, bangumi.episode ?? 0);
-                  }}
-                  h={{ base: '30px', md: '40px' }}
-                  minW={{ base: '54px', md: '98px' }}
-                  px={{ base: '3', md: '5' }}
-                  fontSize={{ base: '11px', md: 'sm' }}
-                  fontWeight="700"
-                  color={primaryText}
-                  bg={accentTheme.primary}
-                  boxShadow="0 10px 22px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.36)"
-                  _hover={{ opacity: 0.96, transform: 'translateY(-1px)' }}
-                >
-                  {syncData.status ? '查看' : '订阅'}
-                </Button>
-              </Flex>
             </Flex>
           </Box>
         </Box>
@@ -299,14 +288,27 @@ export default function SubscribeCard({ bangumi }: Props) {
       <Modal isOpen={isMobile && isPreviewOpen} onClose={onPreviewClose} isCentered motionPreset="slideInBottom">
         <ModalOverlay bg="rgba(2,6,23,0.72)" backdropFilter="blur(10px)" />
         <ModalContent
+          data-bgmi-glass-panel
           mx="4"
           rounded="28px"
           overflow="hidden"
-          bg={isDark ? 'rgba(15,20,31,0.78)' : 'rgba(244,250,252,0.82)'}
+          position="relative"
+          bg={`${colors.surface}${isDark ? 'A6' : 'B8'}`}
           borderWidth="1px"
-          borderColor={isDark ? 'whiteAlpha.140' : 'rgba(255,255,255,0.72)'}
-          boxShadow={isDark ? '0 28px 64px rgba(0,0,0,0.42)' : '0 28px 64px rgba(15,23,42,0.22)'}
-          backdropFilter="blur(24px) saturate(180%)"
+          borderColor={`${colors.text}${isDark ? '28' : '22'}`}
+          boxShadow={isDark ? `0 28px 64px rgba(0,0,0,0.42), inset 0 1px 0 ${colors.text}18` : `0 28px 64px rgba(15,23,42,0.22), inset 0 1px 0 ${colors.text}24`}
+          backdropFilter={`blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`}
+          sx={{ WebkitBackdropFilter: `blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`,
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background: isDark
+                ? `linear-gradient(135deg, rgba(255,255,255,0.13), transparent 32%, rgba(255,255,255,0.025) 72%), linear-gradient(145deg, ${colors.accent}09, transparent 58%)`
+                : `linear-gradient(135deg, rgba(255,255,255,0.72), transparent 34%, rgba(255,255,255,0.18) 74%), linear-gradient(145deg, ${colors.accent}08, transparent 58%)`,
+            },
+          }}
         >
           <ModalCloseButton
             top="3"
@@ -349,14 +351,18 @@ export default function SubscribeCard({ bangumi }: Props) {
                 mt="4"
                 rounded="24px"
                 borderWidth="1px"
-                borderColor={isDark ? 'whiteAlpha.120' : 'rgba(255,255,255,0.72)'}
-                bg={isDark ? 'rgba(19,24,36,0.46)' : 'rgba(255,255,255,0.50)'}
+                borderColor={`${colors.accent}${isDark ? '55' : '42'}`}
+                bg="transparent"
                 boxShadow={
                   isDark
                     ? '0 18px 36px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
                     : '0 18px 36px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.52)'
                 }
-                backdropFilter="blur(18px) saturate(175%)"
+                backdropFilter={`blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`}
+                sx={{
+                  background: detailGlassBackground,
+                  WebkitBackdropFilter: `blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`,
+                }}
                 px="4"
                 py="4"
               >
@@ -365,29 +371,28 @@ export default function SubscribeCard({ bangumi }: Props) {
                 </Text>
 
                 <Flex mt="3" gap="2" flexWrap="wrap">
-                  <Tag rounded="full" bg={isDark ? 'whiteAlpha.100' : 'rgba(255,255,255,0.78)'}>
+                  <Tag rounded="full" bg={`${colors.surface}${isDark ? '28' : '52'}`} borderWidth="1px" borderColor={`${colors.text}${isDark ? '20' : '16'}`}>
                     {bangumi.episode ? `最新：第 ${bangumi.episode} 集` : '暂无剧集信息'}
                   </Tag>
-                  <Tag rounded="full" bg={isDark ? 'whiteAlpha.100' : 'rgba(255,255,255,0.78)'}>
+                  <Tag rounded="full" bg={`${colors.surface}${isDark ? '28' : '52'}`} borderWidth="1px" borderColor={`${colors.text}${isDark ? '20' : '16'}`}>
                     更新：{bangumi.update_time || '未知'}
-                  </Tag>
-                  <Tag rounded="full" bg={syncData.status ? 'rgba(34,197,94,0.18)' : isDark ? 'whiteAlpha.100' : 'rgba(255,255,255,0.78)'}>
-                    {syncData.status ? '已订阅' : '未订阅'}
                   </Tag>
                 </Flex>
 
-                {bangumi.subtitle_group?.length ? (
+                {displayAvailableGroups.length || followedSubtitleGroups.length ? (
                   <Box mt="3">
-                    <Text mb="2" color={isDark ? 'whiteAlpha.760' : '#526274'} fontSize="sm" lineHeight="1.6">
-                      字幕组
-                    </Text>
-                    <Wrap spacing="2">
-                      {bangumi.subtitle_group.map(item => {
-                        const isSelected = followedSubtitleGroups.includes(item.name);
-                        const url = findMikanSubtitleLink(mikanGroups?.data.groups, item.name, item.id);
-                        return (
-                          <WrapItem key={item.id}>
-                            <Link href={url} target={url ? '_blank' : undefined} rel={url ? 'noopener noreferrer' : undefined} display="block">
+                    {displayAvailableGroups.length ? (
+                      <Box>
+                        <Text mb="2" color={isDark ? 'whiteAlpha.760' : '#526274'} fontSize="sm" lineHeight="1.6">
+                          可用字幕组
+                        </Text>
+                        <Wrap spacing="2">
+                          {displayAvailableGroups.map(item => {
+                            const isSubscribed = subscribedKeys.has(normalizeGroupName(item.name));
+                            const url = findMikanSubtitleLink(mikanGroups?.data.groups, item.name, item.id);
+                            return (
+                              <WrapItem key={`available-${item.id}-${item.name}`}>
+                                <Link href={url} target={url ? '_blank' : undefined} rel={url ? 'noopener noreferrer' : undefined} display="block">
                             <Tag
                               rounded="lg"
                               px="3"
@@ -395,51 +400,62 @@ export default function SubscribeCard({ bangumi }: Props) {
                               fontSize="xs"
                               whiteSpace="normal"
                               overflowWrap="anywhere"
-                              color={
-                                isSelected
-                                  ? isDark
-                                    ? 'green.100'
-                                    : 'green.700'
-                                  : isDark
-                                  ? 'whiteAlpha.860'
-                                  : '#526274'
-                              }
-                              bg={
-                                isSelected
-                                  ? isDark
-                                    ? 'rgba(34,197,94,0.18)'
-                                    : 'rgba(220,252,231,0.92)'
-                                  : isDark
-                                  ? 'whiteAlpha.100'
-                                  : 'rgba(255,255,255,0.72)'
-                              }
+                              color={isDark ? 'whiteAlpha.900' : '#64748B'}
+                              bg={isSubscribed
+                                ? (isDark ? 'rgba(96,165,250,0.26)' : 'rgba(219,234,254,0.90)')
+                                : `${colors.accent}${isDark ? '18' : '12'}`}
                               borderWidth="1px"
-                              borderColor={
-                                isSelected
-                                  ? isDark
-                                    ? 'rgba(74,222,128,0.30)'
-                                    : 'rgba(134,239,172,0.92)'
-                                  : isDark
-                                  ? 'whiteAlpha.120'
-                                  : 'rgba(255,255,255,0.78)'
-                              }
-                              boxShadow={
-                                isSelected
-                                  ? isDark
-                                    ? '0 0 0 1px rgba(74,222,128,0.10), 0 10px 20px rgba(34,197,94,0.12)'
-                                    : '0 10px 20px rgba(34,197,94,0.10)'
-                                  : 'none'
-                              }
+                              borderColor={isSubscribed
+                                ? (isDark ? 'rgba(147,197,253,0.62)' : 'rgba(96,165,250,0.62)')
+                                : `${colors.accent}${isDark ? '55' : '42'}`}
+                              boxShadow={isSubscribed ? '0 5px 16px rgba(37,99,235,0.16), inset 0 1px 0 rgba(255,255,255,0.28)' : 'inset 0 1px 0 rgba(255,255,255,0.18)'}
                               backdropFilter="blur(12px) saturate(165%)"
-                              _hover={url ? { borderColor: accentTheme.primary, color: accentTheme.primary } : undefined}
+                              _hover={url ? { borderColor: isDark ? 'whiteAlpha.300' : 'rgba(148,163,184,0.72)' } : undefined}
                             >
-                              {item.name}{url ? ' ↗' : ''}
+                              {item.name}
                             </Tag>
-                            </Link>
-                          </WrapItem>
-                        );
-                      })}
-                    </Wrap>
+                                </Link>
+                              </WrapItem>
+                            );
+                          })}
+                        </Wrap>
+                      </Box>
+                    ) : null}
+                    {subscribedOnlyGroups.length ? (
+                      <Box mt={displayAvailableGroups.length ? '3' : '0'}>
+                        <Text mb="2" color={isDark ? 'whiteAlpha.760' : '#526274'} fontSize="sm" lineHeight="1.6">
+                          已订阅字幕组
+                        </Text>
+                        <Wrap spacing="2">
+                          {subscribedOnlyGroups.map(name => {
+                            const matched = displayAvailableGroups.find(item => item.name === name);
+                            const url = findMikanSubtitleLink(mikanGroups?.data.groups, name, matched?.id);
+                            return (
+                              <WrapItem key={`followed-${name}`}>
+                                <Link href={url} target={url ? '_blank' : undefined} rel={url ? 'noopener noreferrer' : undefined} display="block">
+                                  <Tag
+                                    rounded="lg"
+                                    px="3"
+                                    py="1.5"
+                                    fontSize="xs"
+                                    whiteSpace="normal"
+                                    overflowWrap="anywhere"
+                                    color={isDark ? 'whiteAlpha.860' : '#64748B'}
+                                    bg={isDark ? 'whiteAlpha.140' : 'rgba(226,232,240,0.82)'}
+                                    borderWidth="1px"
+                                    borderColor={isDark ? 'whiteAlpha.220' : 'rgba(148,163,184,0.52)'}
+                                    backdropFilter="blur(12px) saturate(165%)"
+                                    _hover={url ? { borderColor: isDark ? 'whiteAlpha.360' : 'rgba(100,116,139,0.78)' } : undefined}
+                                  >
+                                    {name}
+                                  </Tag>
+                                </Link>
+                              </WrapItem>
+                            );
+                          })}
+                        </Wrap>
+                      </Box>
+                    ) : null}
                   </Box>
                 ) : null}
 
@@ -454,30 +470,18 @@ export default function SubscribeCard({ bangumi }: Props) {
                     px="4"
                     fontSize="sm"
                     fontWeight="700"
-                    color={accentTheme.primary}
-                    bg={accentTheme.soft}
+                    color="#be185d"
+                    bg="rgba(251,207,232,0.92)"
                     borderWidth="1px"
-                    borderColor={accentTheme.border}
+                    borderColor="rgba(236,72,153,0.48)"
                     boxShadow={
                       isDark
                         ? '0 10px 22px rgba(190,24,93,0.16), inset 0 1px 0 rgba(255,255,255,0.06)'
                         : '0 10px 22px rgba(236,72,153,0.12), inset 0 1px 0 rgba(255,255,255,0.42)'
                     }
+                    _hover={{ bg: 'rgba(249,168,212,0.96)', borderColor: '#ec4899' }}
                   >
                     番剧计划
-                  </Button>
-                  <Button
-                    onClick={() => void handleOpen(syncData.status, bangumi.name, bangumi.episode ?? 0)}
-                    h="2.5rem"
-                    minW="5.75rem"
-                    px="4"
-                    fontSize="sm"
-                    fontWeight="700"
-                    color={primaryText}
-                    bg={accentTheme.primary}
-                    boxShadow="0 10px 22px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.36)"
-                  >
-                    {syncData.status ? '查看' : '订阅'}
                   </Button>
                 </Flex>
               </Box>

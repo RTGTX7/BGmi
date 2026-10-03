@@ -1,5 +1,6 @@
 import { useToast } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
+import { useCallback } from 'react';
 
 import useSWRMutation from 'swr/mutation';
 import { fetcherWithMutation } from '~/lib/fetcher';
@@ -89,11 +90,13 @@ export function useSubscribeAction() {
     }
   );
 
+  const handleFetchFilter = useCallback((name: string) => fetchFilter({ name }) as Promise<FetchFilterResp | undefined>, [fetchFilter]);
+
   return {
     handleSubscribe: (name: string, episode: number) => subscribe({ name, episode }),
     handleUnSubscribe: (name: string) => unSubscribe({ name }),
     // TODO fix `Promise<unknown>` type
-    handleFetchFilter: (name: string) => fetchFilter({ name }) as Promise<FetchFilterResp | undefined>,
+    handleFetchFilter,
     handleSaveFilter: { isMutating: saveFilterMutating, trigger: (body: SaveFilterBody) => saveFilter(body) },
     handleSaveMark: {
       isMutating: saveMarkMutating,

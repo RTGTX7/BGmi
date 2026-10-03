@@ -907,6 +907,7 @@ export default function CalendarTab({
               <IconButton
                 key={action.key}
                 aria-label={action.ariaLabel}
+                data-bgmi-search-lens
                 icon={<Icon as={action.icon} boxSize="5" />}
                 onClick={action.onSelect}
                 rounded="full"

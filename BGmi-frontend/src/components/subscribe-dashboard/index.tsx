@@ -1140,6 +1140,7 @@ export default function SubscribeDashboard() {
       <AlertDialog isOpen={confirmDialog.isOpen} leastDestructiveRef={cancelRef} onClose={closeConfirm} isCentered>
         <AlertDialogOverlay backdropFilter='blur(10px)'>
           <AlertDialogContent
+            data-bgmi-glass-panel
             rounded='3xl'
             bg={isDark ? 'rgba(22,28,40,0.92)' : 'rgba(245,251,253,0.96)'}
             borderWidth='1px'

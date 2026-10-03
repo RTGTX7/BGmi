@@ -1631,8 +1631,8 @@ export default function VideoPlayer({
                       rounded="full"
                       aria-pressed={isSelected}
                       onClick={() => onGroupSelect?.(version.group)}
-                      bg={isSelected ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBg}
-                      color={isSelected ? 'white' : undefined}
+                      bg={isSelected ? 'var(--bgmi-accent, #3b82f6)' : colorMode === 'light' ? 'rgba(248,250,252,0.82)' : toolButtonBg}
+                      color={isSelected ? 'white' : colorMode === 'light' ? '#172033' : 'rgba(248,250,252,0.94)'}
                       borderWidth="1px"
                       borderColor={isSelected ? 'var(--bgmi-accent, #3b82f6)' : toolButtonBorder}
                       fontWeight={isSelected ? '800' : '500'}
@@ -1683,9 +1683,10 @@ export default function VideoPlayer({
                     maxW="min(90vw, 32rem)"
                     maxH="18rem"
                     overflowY="auto"
-                    bg={colorMode === 'dark' ? '#202033' : 'white'}
+                    bg={colorMode === 'dark' ? 'rgba(24,31,48,0.96)' : 'rgba(248,250,252,0.96)'}
                     borderColor={toolButtonBorder}
-                    color={colorMode === 'dark' ? 'whiteAlpha.900' : '#334155'}
+                    color={colorMode === 'dark' ? 'rgba(248,250,252,0.96)' : '#172033'}
+                    sx={{ background: colorMode === 'dark' ? 'rgba(24,31,48,0.96) !important' : 'rgba(248,250,252,0.96) !important' }}
                     zIndex={30}
                   >
                     {fileVersions.map(version => (
@@ -1694,6 +1695,7 @@ export default function VideoPlayer({
                         onClick={() => onGroupSelect?.(version.group)}
                         bg={version.group === activeGroup ? colorMode === 'dark' ? 'whiteAlpha.100' : 'blackAlpha.100' : undefined}
                         fontWeight={version.group === activeGroup ? '600' : '400'}
+                        color={colorMode === 'dark' ? 'rgba(248,250,252,0.96)' : '#172033'}
                         fontSize="xs"
                         whiteSpace="normal"
                         wordBreak="break-all"
@@ -1738,7 +1740,7 @@ export default function VideoPlayer({
 
       <AlertDialog isOpen={missingEpisodesDialogOpen} leastDestructiveRef={missingEpisodesCancelRef} onClose={() => setMissingEpisodesDialogOpen(false)} isCentered>
         <AlertDialogOverlay backdropFilter="blur(10px)">
-          <AlertDialogContent rounded="3xl">
+          <AlertDialogContent data-bgmi-glass-panel rounded="3xl">
             <AlertDialogHeader>{hasMissingEpisodes ? 'Clear missing-episodes mark?' : 'Mark missing episodes?'}</AlertDialogHeader>
             <AlertDialogBody>
               {hasMissingEpisodes

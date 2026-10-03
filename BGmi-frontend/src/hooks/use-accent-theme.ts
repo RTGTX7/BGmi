@@ -1,8 +1,10 @@
 import { atom, useAtom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 import { useColorMode } from './use-color-mode';
 
 export type PaletteMode = 'light' | 'dark';
-export type GlassStyle = 'clear' | 'frosted' | 'liquid';
+/** 0 = liquid transparent glass, 100 = frosted glass. */
+export type GlassStyle = number;
 export type PaletteColors = { accent: string; background: string; sidebar: string; surface: string; text: string };
 export type PalettePresetName = 'ocean' | 'teal' | 'sand' | 'slate' | 'violet' | 'rose';
 type ModeSelection = { preset: PalettePresetName | 'custom'; custom: PaletteColors };
@@ -26,6 +28,9 @@ const defaultSettings: PaletteSettings = {
 };
 const settingsAtom = atom<PaletteSettings>(readSettings());
 const glassStyleAtom = atom<GlassStyle>(readGlassStyle());
+const windowTransparencyAtom = atomWithStorage('bgmi-window-transparency', 100);
+const backgroundBrightnessAtom = atomWithStorage<Record<PaletteMode, number>>('bgmi-background-brightness', { light: 0, dark: 0 });
+export const opticalSettingsAtom = atomWithStorage('bgmi-glass-optics', { refraction: 0.69, chromAberration: 0.025, zRadius: 32 });
 
 function isHexColor(value: unknown): value is string {
   return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
@@ -51,14 +56,39 @@ function readSettings(): PaletteSettings {
 }
 
 function readGlassStyle(): GlassStyle {
-  if (typeof window === 'undefined') return 'liquid';
+  if (typeof window === 'undefined') return 10;
   try {
     const stored = window.localStorage.getItem(glassStorageKey);
-    return stored === 'clear' || stored === 'frosted' || stored === 'liquid' ? stored : 'liquid';
+    if (stored === 'clear' || stored === 'liquid') return 0;
+    if (stored === 'frosted') return 100;
+    if (stored === null) return 10;
+    const value = Number(stored);
+    return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 10;
   } catch {
-    return 'liquid';
+    return 10;
   }
 }
+
+export const glassSurfaceAlpha = (style: GlassStyle) => `${Math.round(0x18 + (0xe8 - 0x18) * (style / 100)).toString(16).padStart(2, '0')}`;
+export const glassBlurValue = (style: GlassStyle) => `${2 + style * 0.34}px`;
+export const glassSaturationValue = (style: GlassStyle) => `${112 - style * 0.04}%`;
+export const windowGlassBlurValue = (style: GlassStyle) => `${34 * Math.pow(style / 100, 2)}px`;
+export const windowGlassSurfaceValue = (transparency: number, mode: PaletteMode = 'light', surface = '#FFFFFF') => {
+  const alpha = ((100 - transparency) / 100).toFixed(3);
+  const match = surface.match(/^#([0-9a-f]{6})$/i);
+  if (match) {
+    const hex = match[1];
+    return `rgba(${parseInt(hex.slice(0, 2), 16)},${parseInt(hex.slice(2, 4), 16)},${parseInt(hex.slice(4, 6), 16)},${alpha})`;
+  }
+  return mode === 'dark' ? `rgba(10,20,34,${alpha})` : `rgba(255,255,255,${alpha})`;
+};
+export const windowOverlayValue = (_mode: PaletteMode, brightness: number) => {
+  const amount = Math.max(-30, Math.min(30, brightness));
+  // Keep zero neutral, then scale the selected adjustment clearly enough to
+  // see through the transparent glass while remaining subtle at the ends.
+  const alpha = (Math.abs(amount) / 100).toFixed(3);
+  return amount > 0 ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
+};
 
 function resolvePalette(settings: PaletteSettings, mode: PaletteMode): PaletteColors {
   const selection = settings[mode];
@@ -70,6 +100,8 @@ function resolvePalette(settings: PaletteSettings, mode: PaletteMode): PaletteCo
 export function useAccentTheme() {
   const [settings, setSettings] = useAtom(settingsAtom);
   const [glassStyle, setGlassStyle] = useAtom(glassStyleAtom);
+  const [windowTransparency, setWindowTransparency] = useAtom(windowTransparencyAtom);
+  const [backgroundBrightness, setBackgroundBrightness] = useAtom(backgroundBrightnessAtom);
   const { colorMode } = useColorMode();
   const mode: PaletteMode = colorMode === 'light' ? 'light' : 'dark';
 
@@ -93,10 +125,17 @@ export function useAccentTheme() {
     getPalette: (targetMode: PaletteMode) => resolvePalette(settings, targetMode),
     selectPreset,
     saveCustom,
+    backgroundBrightness,
+    setBackgroundBrightness: (targetMode: PaletteMode, value: number) => {
+      setBackgroundBrightness(previous => ({ ...previous, [targetMode]: Math.max(-30, Math.min(30, value)) }));
+    },
     glassStyle,
+    windowTransparency,
+    setWindowTransparency: (value: number) => setWindowTransparency(Math.max(0, Math.min(100, value))),
     setGlassStyle: (style: GlassStyle) => {
-      setGlassStyle(style);
-      window.localStorage.setItem(glassStorageKey, style);
+      const value = Math.max(0, Math.min(100, style));
+      setGlassStyle(value);
+      window.localStorage.setItem(glassStorageKey, String(value));
     },
     theme: {
       name: settings[mode].preset,

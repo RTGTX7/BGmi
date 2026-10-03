@@ -154,6 +154,7 @@ export default function BangumiFiles() {
       <Modal isOpen={searchModal.isOpen} onClose={searchModal.onClose} initialFocusRef={searchInputRef} size="3xl" isCentered>
         <ModalOverlay bg={isDark ? `${colors.background}B8` : `${colors.text}57`} backdropFilter="blur(10px)" />
         <ModalContent
+          data-bgmi-glass-panel
           rounded="3xl"
           bg={`${colors.surface}${isDark ? 'EB' : 'F5'}`}
           borderWidth="1px"

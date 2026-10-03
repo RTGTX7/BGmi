@@ -280,6 +280,7 @@ function SearchPanel({
 
   return (
     <Box
+      data-bgmi-glass-panel
       px="2"
       py="2"
       rounded="20px"

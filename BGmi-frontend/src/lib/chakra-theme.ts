@@ -42,6 +42,45 @@ export const theme = extendTheme({
         button: {
           transition: 'transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
         },
+        '[data-bgmi-window-glass] ~ *': {
+          position: 'relative',
+          zIndex: 1,
+        },
+        '[data-bgmi-dim-target]': {
+          color: 'var(--bgmi-window-text)',
+        },
+        '[data-bgmi-window-backdrop]': {
+          maskImage: 'linear-gradient(transparent, transparent)',
+          WebkitMaskImage: 'linear-gradient(transparent, transparent)',
+        },
+        '[data-bgmi-dim-target] .chakra-input': {
+          color: 'var(--bgmi-window-text)',
+          background: 'var(--bgmi-window-control)',
+          borderColor: 'var(--bgmi-window-control-border)',
+        },
+        '[data-bgmi-dim-target] .chakra-form__label': {
+          color: 'var(--bgmi-window-text)',
+        },
+        '[data-bgmi-dim-target] button:hover': {
+          backgroundColor: 'var(--bgmi-window-hover)',
+        },
+        // Keep window content above the live glass layer.
+        '[data-bgmi-optical-target]': {
+          background: 'var(--bgmi-window-background, var(--bgmi-glass-background)) !important',
+          backdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(var(--bgmi-glass-saturation))',
+          WebkitBackdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(var(--bgmi-glass-saturation))',
+        },
+        // Portal based Chakra surfaces need a global optical-glass treatment.
+        '.chakra-modal__content, .chakra-alertdialog__content, .chakra-drawer__content, .chakra-menu__menu-list, .chakra-toast__inner': {
+          position: 'relative',
+          background: 'var(--bgmi-window-background, var(--bgmi-glass-background)) !important',
+          backdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(var(--bgmi-glass-saturation))',
+          WebkitBackdropFilter: 'blur(var(--bgmi-glass-blur)) saturate(var(--bgmi-glass-saturation))',
+          boxShadow: 'var(--bgmi-window-shadow, var(--bgmi-glass-shadow))',
+          isolation: 'isolate',
+          overflow: 'hidden',
+        },
+
       };
     },
   },

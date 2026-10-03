@@ -128,6 +128,7 @@ export default function ExternalPlayer({ url, downloadUrl }: Props) {
           backdropFilter="blur(10px) saturate(130%)"
         />
         <ModalContent
+          data-bgmi-glass-panel
           maxW={{ base: 'calc(100vw - 1.25rem)', md: '38rem' }}
           rounded="2xl"
           bg={colorMode === 'light' ? 'rgba(226,239,246,0.60)' : 'rgba(17,23,35,0.72)'}

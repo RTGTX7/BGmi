@@ -52,27 +52,6 @@ export default function BangumiCard({ bangumiData, variant = 'default' }: Bangum
       bg={posterBg}
       boxShadow={isDark ? '0 18px 40px rgba(0,0,0,0.28)' : '0 18px 40px rgba(15,23,42,0.10)'}
       position="relative"
-      _before={{
-        content: '""',
-        position: 'absolute',
-        inset: '0',
-        pointerEvents: 'none',
-        borderRadius: 'inherit',
-        background: isDark
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 18%, rgba(255,255,255,0) 42%)'
-          : 'linear-gradient(135deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.08) 18%, rgba(255,255,255,0) 42%)',
-        zIndex: 3,
-      }}
-      _after={{
-        content: '""',
-        position: 'absolute',
-        inset: '1px',
-        pointerEvents: 'none',
-        borderRadius: 'inherit',
-        border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.08)',
-        boxShadow: isDark ? 'inset 0 0 0 1px rgba(255,255,255,0.02)' : 'none',
-        zIndex: 3,
-      }}
     >
       <Link
         href={playerPath}

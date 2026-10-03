@@ -7,21 +7,17 @@ import {
   Input,
   InputGroup,
   InputLeftAddon,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuList,
-  Portal,
   Spinner,
   Stack,
   useToast,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { deleteCookie, setCookie } from 'cookies-next';
-import { BsChevronDown } from 'react-icons/bs';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '~/hooks/use-auth';
+import { glassBlurValue, glassSaturationValue, glassSurfaceAlpha, useAccentTheme } from '~/hooks/use-accent-theme';
+import { useColorMode } from '~/hooks/use-color-mode';
 
 export default function Auth({ children, to }: { children: React.ReactElement; to: string }) {
   const [authToken, setAuthToken] = useState('');
@@ -29,6 +25,8 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
   const [isAuthorized, setIsAuthorized] = useState(false);
   const toast = useToast();
   const { tryAuth, hasAuth, cookieToken } = useAuth();
+  const { colors, glassStyle } = useAccentTheme();
+  const { colorMode } = useColorMode();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -106,9 +104,8 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
 
     try {
       const { timeoutId, response } = await tryAuth(authToken);
-      if (!response.ok) throw await response.json();
-
       clearTimeout(timeoutId);
+      if (!response.ok) throw await response.json();
       toast({
         title: '验证成功',
         status: 'success',
@@ -117,6 +114,9 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
       });
 
       setCookie('authToken', authToken, {
+        path: '/',
+        sameSite: 'lax',
+        secure: window.location.protocol === 'https:',
         expires: seconds > 0 ? new Date(Date.now() + seconds * 1000) : undefined,
       });
       setIsAuthorized(true);
@@ -137,28 +137,15 @@ export default function Auth({ children, to }: { children: React.ReactElement; t
   };
 
   return (
-    <Card display="flex" justifyContent="center" mt="20" mx="auto" maxW="xl" overflow="visible">
+    <Card display="flex" justifyContent="center" mt="20" mx="auto" maxW="xl" overflow="visible" bg={`${colors.surface}${glassSurfaceAlpha(glassStyle)}`} color={colors.text} borderWidth="1px" borderColor={`${colors.accent}55`} boxShadow={colorMode === 'dark' ? '0 24px 60px rgba(0,0,0,0.28)' : '0 24px 60px rgba(35,52,77,0.12)'} backdropFilter={`blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})`} sx={{ WebkitBackdropFilter: `blur(${glassBlurValue(glassStyle)}) saturate(${glassSaturationValue(glassStyle)})` }}>
       <CardHeader>
         <Heading>验证 Token</Heading>
       </CardHeader>
       <CardBody overflow="visible">
         <InputGroup alignItems="stretch">
-          <InputLeftAddon pointerEvents="none">TOKEN</InputLeftAddon>
-          <Input onChange={event => setAuthToken(event.currentTarget.value)} type="password" placeholder="..." />
-          <Menu autoSelect={false} placement="bottom-end" gutter={4}>
-            <MenuButton as={Button} ml="2" minW="24" rightIcon={<BsChevronDown size="12" />} h="10">
-              验证
-            </MenuButton>
-            <Portal>
-              <MenuList minW="40" zIndex={1600}>
-                <MenuItem onClick={() => void handleAuth(0)}>不记住</MenuItem>
-                <MenuItem onClick={() => void handleAuth(131557600)}>记住一年</MenuItem>
-                <MenuItem onClick={() => void handleAuth(2629800)}>记住一个月</MenuItem>
-                <MenuItem onClick={() => void handleAuth(86400)}>记住一天</MenuItem>
-                <MenuItem onClick={() => void handleAuth(3600)}>记住一小时</MenuItem>
-              </MenuList>
-            </Portal>
-          </Menu>
+          <InputLeftAddon pointerEvents="none" bg={`${colors.surface}44`} color={colors.text} borderColor={`${colors.text}28`}>TOKEN</InputLeftAddon>
+          <Input onChange={event => setAuthToken(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void handleAuth(2629800); } }} type="password" placeholder="输入 Token" color={colors.text} bg={colorMode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.72)'} borderColor={`${colors.text}28`} _placeholder={{ color: `${colors.text}70` }} />
+          <Button ml="3" h="10" px="6" rounded="full" bg={colors.accent} color={colorMode === 'dark' ? '#101827' : 'white'} _hover={{ bg: colors.accent, filter: 'brightness(1.08)', transform: 'translateY(-1px)' }} _active={{ transform: 'translateY(0)' }} onClick={() => void handleAuth(2629800)}>验证</Button>
         </InputGroup>
       </CardBody>
     </Card>
