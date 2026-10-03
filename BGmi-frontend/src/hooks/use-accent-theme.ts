@@ -28,9 +28,9 @@ const defaultSettings: PaletteSettings = {
 };
 const settingsAtom = atom<PaletteSettings>(readSettings());
 const glassStyleAtom = atom<GlassStyle>(readGlassStyle());
-const windowTransparencyAtom = atomWithStorage('bgmi-window-transparency', 100);
+const windowTransparencyAtom = atomWithStorage('bgmi-window-transparency', 35);
 const backgroundBrightnessAtom = atomWithStorage<Record<PaletteMode, number>>('bgmi-background-brightness', { light: 0, dark: 0 });
-export const opticalSettingsAtom = atomWithStorage('bgmi-glass-optics', { refraction: 0.69, chromAberration: 0.025, zRadius: 32 });
+export const opticalSettingsAtom = atomWithStorage('bgmi-glass-optics', { refraction: 0.2, chromAberration: 0.08, zRadius: 10 });
 
 function isHexColor(value: unknown): value is string {
   return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
@@ -61,7 +61,7 @@ function readGlassStyle(): GlassStyle {
     const stored = window.localStorage.getItem(glassStorageKey);
     if (stored === 'clear' || stored === 'liquid') return 0;
     if (stored === 'frosted') return 100;
-    if (stored === null) return 10;
+    if (stored === null) return 25;
     const value = Number(stored);
     return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 10;
   } catch {
