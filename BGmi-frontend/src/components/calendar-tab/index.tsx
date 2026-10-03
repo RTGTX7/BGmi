@@ -906,7 +906,7 @@ export default function CalendarTab({
       </Flex>
 
       <AnimatePresence initial={false}>
-        {type === 'subscribe' && searchOpen && searchPanel ? (
+        {searchOpen && searchPanel ? (
           <MotionBox
             key="search-panel"
             mt={{ base: '3', lg: '4' }}
