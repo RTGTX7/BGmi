@@ -78,7 +78,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
   const toggleButtonSize = railSize.height ? `${railSize.height}px` : isPlayerPage ? '3.65rem' : '3.9rem';
   const itemWidth = railSize.width / navItems.length;
   const dropletWidth = itemWidth * 1.08;
-  const dropletHeight = railSize.height * 1.02;
+  const dropletHeight = Math.max(1, railSize.height - 6);
   const dropletX = dragState.x + (itemWidth - dropletWidth) / 2;
   const dropletY = (railSize.height - dropletHeight) / 2;
   const dropletCenterX = dragState.x + itemWidth / 2;
@@ -275,7 +275,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
           }}
         >
           {railSize.width > 0 && railSize.height > 0 ? (
-            <MobileLiquidGlass edgeWidth={5} rimOnly
+            <MobileLiquidGlass
               width={railSize.width}
               height={railSize.height}
               borderRadius={railSize.height / 2}
@@ -310,12 +310,12 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   rotate: springTilt,
                   scaleX: springStretchX,
                   scaleY: springStretchY,
-                  zIndex: 3,
+                  zIndex: 2,
                   pointerEvents: 'none',
                   transformOrigin: 'center',
                 }}
               >
-                <MobileLiquidGlass edgeWidth={5} rimOnly
+                <MobileLiquidGlass
                   width={dropletWidth}
                   height={dropletHeight}
                   borderRadius={dropletHeight / 2}
@@ -333,7 +333,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
             ) : null}
           </AnimatePresence>
 
-          <Flex align="stretch" justify="space-between" position="relative" zIndex="2" pointerEvents="none">
+          <Flex align="stretch" justify="space-between" position="relative" zIndex="3" pointerEvents="none">
             {navItems.map(item => {
               const value = item.href || item.action || '';
               const active = item.href ? pathname === item.href : dragState.active && dragRef.current.lastValue === item.action;
@@ -382,6 +382,10 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
                   data-mobile-nav-value={value}
                   bg="transparent"
                   color="transparent"
+                  rounded="full"
+                  outline="none"
+                  _focus={{ outline: 'none', boxShadow: 'none' }}
+                  _focusVisible={{ outline: `2px solid ${colors.accent}`, outlineOffset: '-4px', borderRadius: '999px' }}
                   onClick={() => activateValue(value, true)}
                 />
               );
@@ -401,7 +405,7 @@ export default function MobileBottomNav({ sidebarToggle }: { sidebarToggle: () =
           }}
         >
           {railSize.height > 0 ? (
-            <MobileLiquidGlass edgeWidth={5} rimOnly
+            <MobileLiquidGlass
               width={railSize.height}
               height={railSize.height}
               borderRadius={railSize.height / 2}

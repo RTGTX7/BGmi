@@ -672,8 +672,6 @@ export default function CalendarTab({
           >
             {mobileRailSize.width > 0 && mobileRailSize.height > 0 ? (
               <MobileLiquidGlass
-                edgeWidth={4}
-                rimOnly
                 width={mobileRailSize.width}
                 height={mobileRailSize.height}
                 borderRadius={mobileRailSize.height / 2}
@@ -710,12 +708,10 @@ export default function CalendarTab({
                 }}
               >
                 <MobileLiquidGlass
-                  edgeWidth={4}
-                  rimOnly
                   width={Math.max(1, railDropletWidth)}
                   height={railDropletHeight}
                   borderRadius={railDropletHeight / 2}
-                  strength={12}
+                  strength={26}
                   blur={0.35}
                   opacity={0.95}
                   style={{
