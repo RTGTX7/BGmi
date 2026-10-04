@@ -68,6 +68,18 @@ class LegacyFilterTests(unittest.TestCase):
             self.assertEqual(routes.legacy_filter({"name": "Test show"})["data"]["followed"], ["Mikan group"])
         self.mikan_patch.start()
 
+    def test_plain_text_mikan_group_header(self):
+        html = '<div class="subgroup-text" id="202">Raw / unknown<a href="/RSS/Bangumi?bangumiId=4116&amp;subgroupid=202">RSS</a><span>Subscribed</span></div>'
+        routes.mikan_subtitle_group_links.cache_clear()
+        try:
+            with patch.object(routes, "get_text", return_value=html):
+                groups = routes.mikan_subtitle_group_links("4116")
+            self.assertEqual(groups[0]["id"], "202")
+            self.assertEqual(groups[0]["name"], "Raw / unknown")
+            self.assertTrue(groups[0]["url"].endswith("4116#202"))
+        finally:
+            routes.mikan_subtitle_group_links.cache_clear()
+
     def test_missing_bangumi_still_fails(self):
         with self.assertRaises(fastapi.HTTPException) as caught:
             routes.legacy_filter({"name": "Missing show"})

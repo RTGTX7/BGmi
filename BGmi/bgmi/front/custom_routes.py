@@ -391,7 +391,13 @@ def mikan_subtitle_group_links(mikan_id: str) -> list[dict[str, str]]:
     for section in soup.select(".subgroup-text"):
         group_link = section.select_one('a[href^="/Home/PublishGroup/"]')
         rss_link = section.select_one('a[href^="/RSS/Bangumi?"]')
-        if not group_link or not rss_link:
+        if not rss_link:
+            continue
+        # Mikan's raw/unknown group has a plain text heading, no publisher link.
+        group_name = group_link.get_text(" ", strip=True) if group_link else " ".join(
+            str(text).strip() for text in section.find_all(string=True, recursive=False) if str(text).strip()
+        )
+        if not group_name:
             continue
         subgroup_id = parse_qs(urlparse(str(rss_link.get("href") or "")).query).get("subgroupid", [""])[0]
         if not subgroup_id.isdigit() or subgroup_id in seen:
@@ -399,7 +405,7 @@ def mikan_subtitle_group_links(mikan_id: str) -> list[dict[str, str]]:
         seen.add(subgroup_id)
         groups.append({
             "id": subgroup_id,
-            "name": group_link.get_text(" ", strip=True),
+            "name": group_name,
             "url": f"{server_root}Home/Bangumi/{mikan_id}#{subgroup_id}",
         })
     return groups
