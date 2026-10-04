@@ -544,6 +544,21 @@ def legacy_filter(payload: dict[str, Any]) -> dict[str, Any]:
         if followed and followed.status == Followed.STATUS_DELETED:
             followed = None
         available = {item.name: item.id for item in session.scalars(sa.select(Subtitle)).all() if item.id in bangumi.subtitle_group}
+        # Official 5.0.2 resolves names from the local Subtitle table. Custom
+        # Mikan calendar entries can have a valid Mikan id but no local rows yet;
+        # merge those groups into the same mapping so both screens use one source.
+        mikan_id = linked_mikan_id(bangumi)
+        if re.fullmatch(r"\d+", mikan_id):
+            for group in mikan_subtitle_group_links(mikan_id):
+                group_id = str(group.get("id") or "").strip()
+                group_name = str(group.get("name") or "").strip()
+                if not group_id or not group_name:
+                    continue
+                available.setdefault(group_name, group_id)
+                if group_id not in bangumi.subtitle_group:
+                    bangumi.subtitle_group = [*bangumi.subtitle_group, group_id]
+                if not session.get(Subtitle, group_id):
+                    session.add(Subtitle(id=group_id, name=group_name))
         writing = any(field in payload for field in ("subtitle", "include", "exclude", "regex"))
         if writing and not followed:
             raise fastapi.HTTPException(404, "bangumi not followed")
