@@ -539,10 +539,15 @@ def legacy_filter(payload: dict[str, Any]) -> dict[str, Any]:
     with Session.begin() as session:
         followed = session.get(Followed, name)
         bangumi = session.scalar(sa.select(Bangumi).where(Bangumi.name == name))
-        if not followed or not bangumi:
-            raise fastapi.HTTPException(404, "bangumi not followed")
+        if not bangumi:
+            raise fastapi.HTTPException(404, "bangumi not found")
+        if followed and followed.status == Followed.STATUS_DELETED:
+            followed = None
         available = {item.name: item.id for item in session.scalars(sa.select(Subtitle)).all() if item.id in bangumi.subtitle_group}
-        if any(field in payload for field in ("subtitle", "include", "exclude", "regex")):
+        writing = any(field in payload for field in ("subtitle", "include", "exclude", "regex"))
+        if writing and not followed:
+            raise fastapi.HTTPException(404, "bangumi not followed")
+        if writing:
             for key in ("include", "exclude"):
                 if key in payload:
                     setattr(followed, key, [part.strip() for part in (payload[key] or "").split(",") if part.strip()])
@@ -554,10 +559,10 @@ def legacy_filter(payload: dict[str, Any]) -> dict[str, Any]:
         data = {
             "name": name,
             "subtitle_group": list(available),
-            "followed": [title for title, identifier in available.items() if identifier in followed.subtitle],
-            "include": ",".join(followed.include),
-            "exclude": ",".join(followed.exclude),
-            "regex": followed.regex,
+            "followed": [title for title, identifier in available.items() if followed and identifier in followed.subtitle],
+            "include": ",".join(followed.include) if followed else "",
+            "exclude": ",".join(followed.exclude) if followed else "",
+            "regex": followed.regex if followed else "",
         }
     return envelope(data)
 

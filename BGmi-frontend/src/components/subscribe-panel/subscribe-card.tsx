@@ -107,7 +107,12 @@ export default function SubscribeCard({ bangumi }: Props) {
 
   const handleOpen = async (name: string, ep: number) => {
     onOpen();
-    await loadFilterData(name, ep);
+    try {
+      await loadFilterData(name, ep);
+    } catch {
+      // The action hook already displays the request failure.
+      onClose();
+    }
   };
 
   const handleCardClick = () => {
