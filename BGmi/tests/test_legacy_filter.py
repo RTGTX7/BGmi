@@ -17,12 +17,15 @@ class LegacyFilterTests(unittest.TestCase):
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)
         self.patch = patch.object(routes, "Session", self.sessions)
         self.patch.start()
+        self.mikan_patch = patch.object(routes, "linked_mikan_id", return_value="")
+        self.mikan_patch.start()
         with self.sessions.begin() as session:
             session.add(Bangumi(id="show", name="Test show", subtitle_group=["group"]))
             session.add(Subtitle(id="group", name="Test group"))
 
     def tearDown(self):
         self.patch.stop()
+        self.mikan_patch.stop()
         self.engine.dispose()
 
     def test_unsubscribed_read_returns_defaults_without_creating_subscription(self):
@@ -51,6 +54,19 @@ class LegacyFilterTests(unittest.TestCase):
         with self.sessions.begin() as session:
             session.add(Followed(bangumi_name="Test show", status=Followed.STATUS_DELETED, subtitle=["group"]))
         self.assertEqual(routes.legacy_filter({"name": "Test show"})["data"]["followed"], [])
+
+    def test_mikan_groups_are_available_and_saveable(self):
+        with self.sessions.begin() as session:
+            session.add(Followed(bangumi_name="Test show"))
+        self.mikan_patch.stop()
+        with patch.object(routes, "linked_mikan_id", return_value="123"), patch.object(
+            routes, "mikan_subtitle_group_links", return_value=[{"id": "456", "name": "Mikan group"}]
+        ):
+            result = routes.legacy_filter({"name": "Test show"})["data"]
+            self.assertIn("Mikan group", result["subtitle_group"])
+            routes.legacy_filter({"name": "Test show", "subtitle": "Mikan group"})
+            self.assertEqual(routes.legacy_filter({"name": "Test show"})["data"]["followed"], ["Mikan group"])
+        self.mikan_patch.start()
 
     def test_missing_bangumi_still_fails(self):
         with self.assertRaises(fastapi.HTTPException) as caught:
