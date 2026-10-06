@@ -49,6 +49,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       ml={{ lg: '60' }}
       position="relative"
       overflowX="hidden"
+      transition="background-color 2500ms ease, color 2500ms ease"
       data-accent={accentTheme.name}
       data-glass-style={glassStyle}
       style={{

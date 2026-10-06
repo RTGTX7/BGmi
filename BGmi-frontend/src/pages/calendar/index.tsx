@@ -1,4 +1,4 @@
-import { Box, Button, Card, CardBody, Fade, Flex, HStack, Image, Input, Link, Modal, ModalBody, ModalContent, ModalOverlay, Tag, Text, useDisclosure } from '@chakra-ui/react';
+import { Box, Button, Card, CardBody, CloseButton, Fade, Flex, HStack, Image, Input, Link, Modal, ModalBody, ModalContent, ModalOverlay, Tag, Text, useDisclosure } from '@chakra-ui/react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getCookie } from 'cookies-next';
@@ -30,6 +30,9 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
   const authToken = getCookie('authToken') as string | undefined;
   const { isOpen: isPosterOpen, onOpen: onPosterOpen, onClose: onPosterClose } = useDisclosure();
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const posterSwipeStart = useRef<{ x: number; y: number } | null>(null);
+  const posterTouchStart = (event: React.TouchEvent<HTMLElement>) => { const t = event.touches[0]; if (t) posterSwipeStart.current = { x: t.clientX, y: t.clientY }; };
+  const posterTouchEnd = (event: React.TouchEvent<HTMLElement>, close: () => void) => { const s = posterSwipeStart.current; posterSwipeStart.current = null; const t = event.changedTouches[0]; if (s && t && s.y - t.clientY > 64 && s.y - t.clientY > Math.abs(t.clientX - s.x) * 1.3) close(); };
   const startDismissSwipe = (event: React.TouchEvent<HTMLElement>) => {
     swipeStart.current = null;
     if (!window.matchMedia('(max-width: 767px)').matches || isPosterOpen) return;
@@ -89,8 +92,9 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
   return <>
     <Modal isOpen={isOpen} onClose={onClose} isCentered scrollBehavior="inside">
     <ModalOverlay data-bgmi-window-backdrop="calendar" bg={windowOverlayValue(colorMode === 'dark' ? 'dark' : 'light', backgroundBrightness[colorMode === 'dark' ? 'dark' : 'light'])} backdropFilter="none" />
-    <ModalContent onTouchStart={startDismissSwipe} onTouchEnd={endDismissSwipe} onTouchCancel={() => { swipeStart.current = null; }} data-bgmi-dim-target="calendar" zIndex={1402} mx="4" maxW="3xl" maxH="calc(100dvh - 2rem)" overflow="hidden" color={colors.text} borderWidth="1px" borderColor={`${colors.accent}44`} boxShadow="none" sx={{ '--bgmi-window-background': 'transparent', '--bgmi-window-shadow': 'none', backdropFilter: `blur(${windowGlassBlurValue(glassStyle)})`, WebkitBackdropFilter: `blur(${windowGlassBlurValue(glassStyle)})` }}>
+    <MotionBox as={ModalContent} initial={{ opacity: 0, y: 28, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.24, ease: ITEM_EASE }} onTouchStart={startDismissSwipe} onTouchEnd={endDismissSwipe} onTouchCancel={() => { swipeStart.current = null; }} data-bgmi-dim-target="calendar" zIndex={1402} w="100vw" h="100dvh" m="0" maxW="100vw" maxH="100dvh" rounded="0" overflow="hidden" color={colors.text} borderWidth="1px" borderColor={`${colors.accent}44`} boxShadow="none" sx={{ '--bgmi-window-background': 'transparent', '--bgmi-window-shadow': 'none', backdropFilter: `blur(${windowGlassBlurValue(glassStyle)})`, WebkitBackdropFilter: `blur(${windowGlassBlurValue(glassStyle)})` }}>
       <WindowGlassRefraction />
+      <CloseButton aria-label="关闭详情" position="absolute" top={{ base: '2', md: '4' }} right={{ base: '2', md: '5' }} zIndex="3" size="lg" color={colors.text} bg={`${colors.surface}88`} _hover={{ bg: `${colors.surface}CC` }} onClick={onClose} />
       <Box display={{ base: "block", md: "none" }} w="9" h="1" rounded="full" bg={`${colors.text}38`} mx="auto" mt="2" flexShrink="0" aria-hidden="true" />
       <ModalBody p={{ base: '3', md: '5' }} display="flex" flexDirection="column" minH="0" overflow="hidden">
         <Flex direction="row" align="flex-start" gap={{ base: '3', md: '5' }}>
@@ -126,11 +130,11 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
           <Text fontSize="sm" lineHeight="1.75" overflowY="auto" minH="0" sx={{ overscrollBehavior: 'contain' }} opacity={isDark ? 0.9 : 1}>{overview?.data?.synopsis || '暂无简介'}</Text>
         </Box>
       </ModalBody>
-    </ModalContent>
+    </MotionBox>
     </Modal>
     <Modal isOpen={isPosterOpen} onClose={onPosterClose} isCentered size="full">
       <ModalOverlay bg="rgba(2,6,23,0.84)" backdropFilter="blur(10px)" />
-      <ModalContent bg="transparent" boxShadow="none" alignItems="center" justifyContent="center" onClick={onPosterClose}>
+      <ModalContent bg="transparent" boxShadow="none" alignItems="center" justifyContent="center" onClick={onPosterClose} onTouchStart={posterTouchStart} onTouchEnd={event => posterTouchEnd(event, onPosterClose)}>
         <MotionBox
           as={Image}
           src={resolveCoverSrc(bangumi?.cover)}
@@ -149,7 +153,7 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
   </>;
 }
 
-function CalendarPanel({ bangumi, onOpen }: { bangumi: WeekCalendar; onOpen: (bangumi: WeekCalendar) => void }) {
+function CalendarPanel({ bangumi, onOpen, onPosterOpen }: { bangumi: WeekCalendar; onOpen: (bangumi: WeekCalendar) => void; onPosterOpen: (bangumi: WeekCalendar) => void }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const { data: overview } = useSWR<{ data?: { synopsis?: string } }>(`/api/player/overview?bangumi=${encodeURIComponent(bangumi.name)}`, key => fetcherWithTimeout([key], {}, 30000), { revalidateOnFocus: false });
   const { colorMode } = useColorMode();
@@ -234,6 +238,7 @@ function CalendarPanel({ bangumi, onOpen }: { bangumi: WeekCalendar; onOpen: (ba
             maxW={{ base: '5.6rem', md: '180px' }}
             minH={{ base: '9rem', md: '250px' }}
             maxH={{ base: '9rem', md: '250px' }}
+            onClick={event => { event.stopPropagation(); onPosterOpen(bangumi); }}
             bg={isDark ? 'gray.900' : 'gray.100'}
             rounded="xl"
             overflow="hidden"
@@ -353,6 +358,10 @@ export default function Calendar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [detailBangumi, setDetailBangumi] = useState<WeekCalendar>();
+  const [posterBangumi, setPosterBangumi] = useState<WeekCalendar>();
+  const posterSwipeStart = useRef<{ x: number; y: number } | null>(null);
+  const posterTouchStart = (event: React.TouchEvent<HTMLElement>) => { const t = event.touches[0]; if (t) posterSwipeStart.current = { x: t.clientX, y: t.clientY }; };
+  const posterTouchEnd = (event: React.TouchEvent<HTMLElement>) => { const s = posterSwipeStart.current; posterSwipeStart.current = null; const t = event.changedTouches[0]; if (s && t && s.y - t.clientY > 64 && s.y - t.clientY > Math.abs(t.clientX - s.x) * 1.3) setPosterBangumi(undefined); };
 
   const tabListItems = useMemo(() => Object.keys(data?.data ?? []) as CalendarDataKey[], [data]);
 
@@ -392,7 +401,7 @@ export default function Calendar() {
       gap={{ base: 3, md: 4, lg: 5 }}
     >
       {activeBangumis?.length ? (
-        activeBangumis.map(bangumi => <CalendarPanel key={bangumi.id} bangumi={bangumi} onOpen={setDetailBangumi} />)
+        activeBangumis.map(bangumi => <CalendarPanel key={bangumi.id} bangumi={bangumi} onOpen={setDetailBangumi} onPosterOpen={setPosterBangumi} />)
       ) : (
         <MotionBox
           minH={{ base: '11rem', md: '13rem' }}
@@ -459,6 +468,13 @@ export default function Calendar() {
       }]}
     />
     <CalendarDetailModal bangumi={detailBangumi} isOpen={Boolean(detailBangumi)} onClose={() => setDetailBangumi(undefined)} />
+    <Modal isOpen={Boolean(posterBangumi)} onClose={() => setPosterBangumi(undefined)} isCentered size="full">
+      <ModalOverlay bg="rgba(2,6,23,0.84)" backdropFilter="blur(10px)" />
+      <ModalContent bg="transparent" boxShadow="none" alignItems="center" justifyContent="center" onClick={() => setPosterBangumi(undefined)} onTouchStart={posterTouchStart} onTouchEnd={posterTouchEnd}>
+        <CloseButton aria-label="关闭海报" position="absolute" top="4" right="5" zIndex="2" size="lg" color="white" bg="blackAlpha.400" _hover={{ bg: 'blackAlpha.600' }} onClick={() => setPosterBangumi(undefined)} />
+        <MotionBox as={Image} src={posterBangumi ? resolveCoverSrc(posterBangumi.cover) : undefined} alt={posterBangumi?.name} maxH="90vh" maxW="90vw" objectFit="contain" initial={{ opacity: 0, scale: 0.72, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.28, ease: ITEM_EASE }} onClick={event => event.stopPropagation()} />
+      </ModalContent>
+    </Modal>
     </>
   );
 }

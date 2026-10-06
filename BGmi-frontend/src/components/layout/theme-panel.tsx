@@ -138,6 +138,7 @@ export default function ThemePanel({ mobile = false, iconOnly = false, onOpen, o
             zIndex={1400}
             bg={windowOverlayValue(mode, backgroundBrightness?.[mode] || 0)}
             onClick={onClose}
+            onPointerDown={onClose}
           />
           <Box
             role="dialog"

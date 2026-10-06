@@ -85,6 +85,8 @@ function GlassSurface({ card, progress, opacity }: { card: GlassCard; progress: 
           position: 'absolute', left: titleLeft, top: titleTop, right: 14,
           color: titleColor, fontWeight: 750, fontSize: titleSize, lineHeight: 1.25,
           textShadow: '0 2px 12px rgba(0,0,0,0.2)',
+          letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          transformOrigin: 'left center', willChange: 'left, top, font-size, color',
         }}
       >
         {card.title}
