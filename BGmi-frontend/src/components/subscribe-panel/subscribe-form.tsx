@@ -141,7 +141,7 @@ export default function SubscribeForm({ isOpen, onClose, initialData, setSyncDat
   };
 
   return (
-    <Modal onClose={onClose} isOpen={isOpen} closeOnOverlayClick isCentered scrollBehavior="inside">
+    <Modal onClose={onClose} isOpen={isOpen} closeOnOverlayClick autoFocus={false} isCentered scrollBehavior="inside">
       <ModalOverlay
         data-bgmi-window-backdrop="subscribe"
         bg={windowOverlayValue(colorMode === 'dark' ? 'dark' : 'light', backgroundBrightness[colorMode === 'dark' ? 'dark' : 'light'])}

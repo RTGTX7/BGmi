@@ -290,7 +290,7 @@ export default function SubscribeCard({ bangumi }: Props) {
         syncData={syncData}
       />
 
-      <Modal isOpen={isMobile && isPreviewOpen} onClose={onPreviewClose} isCentered motionPreset="slideInBottom">
+      <Modal isOpen={isMobile && isPreviewOpen} onClose={onPreviewClose} autoFocus={false} isCentered motionPreset="slideInBottom">
         <ModalOverlay bg="rgba(2,6,23,0.72)" backdropFilter="blur(10px)" />
         <ModalContent
           data-bgmi-glass-panel
