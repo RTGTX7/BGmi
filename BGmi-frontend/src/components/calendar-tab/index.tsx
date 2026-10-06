@@ -562,7 +562,7 @@ export default function CalendarTab({
 
     return Boolean(
       element.closest(
-        'button, a, input, textarea, select, [role="button"], [data-swipe-ignore="true"], .chakra-menu__menu-list'
+        'input, textarea, select, [data-swipe-ignore="true"], .chakra-menu__menu-list'
       )
     );
   };

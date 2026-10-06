@@ -128,7 +128,19 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
     <Modal isOpen={isPosterOpen} onClose={onPosterClose} isCentered size="full">
       <ModalOverlay bg="rgba(2,6,23,0.84)" backdropFilter="blur(10px)" />
       <ModalContent bg="transparent" boxShadow="none" alignItems="center" justifyContent="center" onClick={onPosterClose}>
-        <Image src={resolveCoverSrc(bangumi?.cover)} alt={bangumi?.name} maxH="90vh" maxW="90vw" objectFit="contain" cursor="zoom-out" onClick={event => event.stopPropagation()} />
+        <MotionBox
+          as={Image}
+          src={resolveCoverSrc(bangumi?.cover)}
+          alt={bangumi?.name}
+          maxH="90vh"
+          maxW="90vw"
+          objectFit="contain"
+          cursor="zoom-out"
+          initial={{ opacity: 0, scale: 0.72, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.28, ease: ITEM_EASE }}
+          onClick={event => event.stopPropagation()}
+        />
       </ModalContent>
     </Modal>
   </>;

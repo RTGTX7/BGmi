@@ -29,6 +29,7 @@ export default function ThemePanel({ mobile = false, iconOnly = false, onOpen, o
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => () => {
     if (longPressRef.current) clearTimeout(longPressRef.current);
   }, []);
@@ -63,6 +64,18 @@ export default function ThemePanel({ mobile = false, iconOnly = false, onOpen, o
     longPressRef.current = null;
     pressStartRef.current = null;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const handlePanelTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (touch) swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+  const handlePanelTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    const dy = start.y - touch.clientY;
+    if (dy > 72 && dy > Math.abs(touch.clientX - start.x) * 1.35) onClose();
   };
 
   return (
@@ -150,6 +163,9 @@ export default function ThemePanel({ mobile = false, iconOnly = false, onOpen, o
             backdropFilter={`blur(${windowGlassBlurValue(glassStyle)})`}
             sx={{ WebkitBackdropFilter: `blur(${windowGlassBlurValue(glassStyle)})` }}
             onClick={event => event.stopPropagation()}
+            onTouchStart={handlePanelTouchStart}
+            onTouchEnd={handlePanelTouchEnd}
+            onTouchCancel={() => { swipeStartRef.current = null; }}
           >
             <WindowGlassRefraction />
             <Flex align="center" justify="space-between" px="4" py="3" borderBottomWidth="1px" borderColor={theme.border}>
