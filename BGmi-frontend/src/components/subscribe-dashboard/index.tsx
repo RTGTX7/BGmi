@@ -228,6 +228,7 @@ export default function SubscribeDashboard() {
   const [localMediaOriginInput, setLocalMediaOriginInput] = useState('');
   const [localMediaRoutingReady, setLocalMediaRoutingReady] = useState(false);
   const [localMediaRoutingSaveError, setLocalMediaRoutingSaveError] = useState(false);
+  const [advancedHlsQualities, setAdvancedHlsQualities] = useState(false);
   const savedLocalMediaRouting = useRef('');
   const localMediaRoutingSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
@@ -300,6 +301,12 @@ export default function SubscribeDashboard() {
     [string, string | undefined],
     { enabled: boolean; localEntryHosts: string[]; localMediaOrigin: string }
   >(['/api/dashboard-player-local-media-routing', authToken], fetcherWithMutation);
+  const { trigger: saveQualitySettings, isMutating: qualitySettingsMutating } = useSWRMutation<
+    DashboardActionResponse,
+    Error,
+    [string, string | undefined],
+    { advancedHlsQualities: boolean }
+  >(['/api/dashboard-player-quality-settings', authToken], fetcherWithMutation);
 
   const showError = (title: string, err: unknown) => {
     console.error(err);
@@ -311,6 +318,11 @@ export default function SubscribeDashboard() {
   };
 
   const localMediaRouting = data?.data?.playerSettings?.localMediaRouting;
+  const savedAdvancedHlsQualities = data?.data?.playerSettings?.advancedHlsQualities;
+
+  useEffect(() => {
+    if (typeof savedAdvancedHlsQualities === 'boolean') setAdvancedHlsQualities(savedAdvancedHlsQualities);
+  }, [savedAdvancedHlsQualities]);
 
   useEffect(() => {
     if (!localMediaRouting || localMediaRoutingReady) return;
@@ -829,6 +841,24 @@ export default function SubscribeDashboard() {
               sx={{ '.chakra-switch__track[data-checked]': { background: accentTheme.primary }, '.chakra-switch__track[data-checked]:hover': { background: accentTheme.primary } }}
             />
           </Flex>
+        </Flex>
+        <Flex align='center' justify='space-between' gap='2' mb='3' pt='3' borderTopWidth='1px' borderColor={getPanelBorder(isDark)}>
+          <Box minW='0'>
+            <Text fontSize='sm' fontWeight='700' color={theme.textPrimary}>高级 HLS 画质</Text>
+            <Text mt='1' fontSize='11px' color={theme.textSecondary}>开启后播放器显示 1080p 和 720p，只有手动选择才会转码。</Text>
+          </Box>
+          <Switch
+            aria-label='启用高级 HLS 画质'
+            isChecked={advancedHlsQualities}
+            isDisabled={qualitySettingsMutating}
+            onChange={async event => {
+              const enabled = event.target.checked;
+              setAdvancedHlsQualities(enabled);
+              try { await saveQualitySettings({ advancedHlsQualities: enabled }); }
+              catch { setAdvancedHlsQualities(!enabled); showError('保存高级 HLS 画质设置失败', new Error('request failed')); }
+            }}
+            sx={{ '.chakra-switch__track[data-checked]': { background: accentTheme.primary }, '.chakra-switch__track[data-checked]:hover': { background: accentTheme.primary } }}
+          />
         </Flex>
 
         <Stack spacing='3' minW='0'>

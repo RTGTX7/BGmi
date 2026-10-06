@@ -437,15 +437,18 @@ export default function VideoPlayer({
     ];
   }, [directUrl]);
   const baseQualityOptions = qualityOptions.length > 0 ? qualityOptions : fallbackQualityOptions;
+  const visibleQualityOptions = playerAsset?.advancedHlsQualities
+    ? baseQualityOptions
+    : baseQualityOptions.filter(option => !['1080p', '720p'].includes(option.profile));
   const displayedQualityOptions = useMemo(() => {
-    const source = baseQualityOptions.find(option => option.profile === 'source');
-    if (!source || baseQualityOptions.some(option => option.profile === 'range')) return baseQualityOptions;
+    const source = visibleQualityOptions.find(option => option.profile === 'source');
+    if (!source || visibleQualityOptions.some(option => option.profile === 'range')) return visibleQualityOptions;
     return [
       source,
       { ...source, name: 'HTTP Range', profile: 'range', displayName: 'HRR', type: 'range' },
-      ...baseQualityOptions.filter(option => option.profile !== 'source'),
+      ...visibleQualityOptions.filter(option => option.profile !== 'source'),
     ];
-  }, [baseQualityOptions]);
+  }, [visibleQualityOptions]);
   const qualityByProfile = useMemo(
     () => new Map(displayedQualityOptions.map(option => [option.profile, option])),
     [displayedQualityOptions]

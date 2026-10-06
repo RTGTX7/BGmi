@@ -25,6 +25,7 @@ export interface DashboardAnomalyItem {
 export interface DashboardOverview {
   stats: DashboardStats;
   playerSettings?: {
+    advancedHlsQualities?: boolean;
     localMediaRouting?: {
       enabled: boolean;
       localEntryHosts: string[];

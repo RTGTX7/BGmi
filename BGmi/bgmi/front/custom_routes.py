@@ -467,6 +467,7 @@ def legacy_player_assets(request: fastapi.Request, bangumi: str, episode: str, p
     except Exception as error:
         raise fastapi.HTTPException(500, str(error)) from error
     data["mediaOrigin"] = local_video_origin_candidate()
+    data["advancedHlsQualities"] = bool((cfg.player or {}).get("advanced_hls_qualities", False))
     return envelope(data)
 
 
@@ -685,7 +686,10 @@ def dashboard() -> dict[str, Any]:
                 "savePathStatus": "ok" if cfg.save_path.is_dir() else "missing",
             },
             "anomalies": report,
-            "playerSettings": {"localMediaRouting": local_media_routing_state()},
+            "playerSettings": {
+                "localMediaRouting": local_media_routing_state(),
+                "advancedHlsQualities": bool((cfg.player or {}).get("advanced_hls_qualities", False)),
+            },
         }
     )
 
@@ -781,6 +785,14 @@ def dashboard_media_routing(payload: dict[str, Any]) -> dict[str, Any]:
     cfg.player = {**cfg.player, "local_media_routing": {"enabled": enabled, "local_entry_hosts": hosts, "local_media_origin": origin}}
     cfg.save()
     return envelope(local_media_routing_state())
+
+
+@router.post("/dashboard-player-quality-settings", dependencies=[fastapi.Depends(require_token)])
+def dashboard_quality_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    enabled = bool(payload.get("advancedHlsQualities"))
+    cfg.player = {**cfg.player, "advanced_hls_qualities": enabled}
+    cfg.save()
+    return envelope({"advancedHlsQualities": enabled})
 
 
 @router.post("/dashboard-sync", dependencies=[fastapi.Depends(require_token)])

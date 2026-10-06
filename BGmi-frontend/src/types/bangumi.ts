@@ -86,6 +86,7 @@ export interface PlayerAsset {
   subtitle?: SubtitleAsset;
   subtitles?: SubtitleAsset[];
   qualities?: QualityAsset[];
+  advancedHlsQualities?: boolean;
 }
 
 export interface PlayerAssetResponse {
