@@ -426,6 +426,10 @@ def _hls_config() -> dict[str, Any]:
     hls_config = player_config.get("hls", {})
     result = dict(hls_config) if isinstance(hls_config, dict) else {}
     result.setdefault("1080p_TS", {"mode": "copy"})
+    # User-selectable transcode profiles. They are exposed in the player but
+    # are only started after an explicit click; automatic mode never uses them.
+    result.setdefault("1080p", {"video_bitrate": "5M", "maxrate": "6M", "bufsize": "10M"})
+    result.setdefault("720p", {"video_bitrate": "2.5M", "maxrate": "3M", "bufsize": "5M"})
     return result
 
 
