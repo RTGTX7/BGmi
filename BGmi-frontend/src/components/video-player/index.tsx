@@ -245,7 +245,9 @@ function extractQualityProfile(item: QualityAsset) {
 function formatQualityLabel(profile: string, fallback: string) {
   switch (profile) {
     case 'source':
-      return '原画';
+      return '源';
+    case 'range':
+      return 'HRR';
     case '720p':
       return '720p';
     case '1080p':
@@ -261,12 +263,14 @@ function qualityOrder(profile: string) {
   switch (profile) {
     case 'source':
       return 0;
-    case '1080p_TS':
+    case 'range':
       return 1;
-    case '1080p':
+    case '1080p_TS':
       return 2;
-    case '720p':
+    case '1080p':
       return 3;
+    case '720p':
+      return 4;
     default:
       return 99;
   }
@@ -432,7 +436,16 @@ export default function VideoPlayer({
       },
     ];
   }, [directUrl]);
-  const displayedQualityOptions = qualityOptions.length > 0 ? qualityOptions : fallbackQualityOptions;
+  const baseQualityOptions = qualityOptions.length > 0 ? qualityOptions : fallbackQualityOptions;
+  const displayedQualityOptions = useMemo(() => {
+    const source = baseQualityOptions.find(option => option.profile === 'source');
+    if (!source || baseQualityOptions.some(option => option.profile === 'range')) return baseQualityOptions;
+    return [
+      source,
+      { ...source, name: 'HTTP Range', profile: 'range', displayName: 'HRR', type: 'range' },
+      ...baseQualityOptions.filter(option => option.profile !== 'source'),
+    ];
+  }, [baseQualityOptions]);
   const qualityByProfile = useMemo(
     () => new Map(displayedQualityOptions.map(option => [option.profile, option])),
     [displayedQualityOptions]
@@ -1532,7 +1545,7 @@ export default function VideoPlayer({
                 aria-live="polite"
               >
                 {autoProtocolActive
-                  ? `自动 · ${currentSourceType === 'customHls' ? 'HLS 原画' : currentSourceType === 'auto' ? '源' : 'HTTP Range 原画'}`
+                  ? `自动 · ${currentSourceType === 'customHls' ? 'HLS' : currentSourceType === 'auto' ? '源' : 'HRR'}`
                   : `手动 · ${formatQualityLabel(selectedProfile, selectedProfile)}`}
               </Text>
               {displayedQualityOptions.map(option => {
