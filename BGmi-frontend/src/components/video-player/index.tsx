@@ -1532,7 +1532,7 @@ export default function VideoPlayer({
                 aria-live="polite"
               >
                 {autoProtocolActive
-                  ? `自动 · ${currentSourceType === 'customHls' ? 'HLS 原画' : 'HTTP Range 原画'}`
+                  ? `自动 · ${currentSourceType === 'customHls' ? 'HLS 原画' : currentSourceType === 'auto' ? '源' : 'HTTP Range 原画'}`
                   : `手动 · ${formatQualityLabel(selectedProfile, selectedProfile)}`}
               </Text>
               {displayedQualityOptions.map(option => {
