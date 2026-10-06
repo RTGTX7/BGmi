@@ -149,7 +149,8 @@ export default function Player() {
         noOfLines={{ base: 2, xl: 1 }}
         lineHeight={{ base: '1.28', xl: '1.25' }}
       >
-        {bangumiData.bangumi_name} {`- 第 ${episode} 集`}
+        <span data-bgmi-player-title-name="true">{bangumiData.bangumi_name}</span>{' '}
+        <span style={{ opacity: 0.72, fontWeight: 600 }}>{`- 第 ${episode} 集`}</span>
       </Heading>
 
       <Flex
