@@ -317,6 +317,7 @@ export default function VideoPlayer({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [showLongPressIndicator, setShowLongPressIndicator] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState('source');
+  const [autoProtocolActive, setAutoProtocolActive] = useState(true);
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number>(0);
   const [currentSourceUrl, setCurrentSourceUrl] = useState('');
   const [currentSourceType, setCurrentSourceType] = useState('auto');
@@ -440,7 +441,10 @@ export default function VideoPlayer({
     const option = qualityByProfile.get(profile);
     if (option) void handleQualitySelect(option);
   });
-  const iosPreferredHlsOption = undefined;
+  const iosPreferredHlsOption = useMemo(
+    () => (shouldPreferHlsOnIOS ? displayedQualityOptions.find(item => item.profile === '1080p_TS') : undefined),
+    [displayedQualityOptions, shouldPreferHlsOnIOS]
+  );
   const defaultSubtitleIndex = useMemo(() => {
     const index = subtitleTracks.findIndex(track => track.default);
     return index >= 0 ? index : 0;
@@ -508,6 +512,7 @@ export default function VideoPlayer({
 
   useEffect(() => {
     setSelectedProfile('source');
+    setAutoProtocolActive(true);
     setHlsProgress({
       active: false,
       profile: '',
@@ -602,7 +607,8 @@ export default function VideoPlayer({
     }, 1000);
   };
 
-  const handleQualitySelect = async (option: QualityOption) => {
+  const handleQualitySelect = async (option: QualityOption, automatic = false) => {
+    setAutoProtocolActive(automatic);
     setSelectedProfile(option.profile);
 
     if (!option.isHls) {
@@ -667,8 +673,16 @@ export default function VideoPlayer({
     }
   };
 
-  // Automatic playback never starts a transcoded 1080p/720p profile. Apple
-  // devices can still choose HLS manually when the original is incompatible.
+  useEffect(() => {
+    if (!shouldPreferHlsOnIOS || !iosPreferredHlsOption) {
+      autoHlsKeyRef.current = '';
+      return;
+    }
+    const autoKey = `${bangumiData.bangumi_name}:${episode}:hls-original`;
+    if (autoHlsKeyRef.current === autoKey) return;
+    autoHlsKeyRef.current = autoKey;
+    void handleQualitySelect(iosPreferredHlsOption, true);
+  }, [bangumiData.bangumi_name, episode, iosPreferredHlsOption, shouldPreferHlsOnIOS]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleMissingEpisodes = async () => {
     if (!authToken) {
@@ -1517,7 +1531,7 @@ export default function VideoPlayer({
                 whiteSpace="nowrap"
                 aria-live="polite"
               >
-                {selectedProfile === 'source'
+                {autoProtocolActive
                   ? `自动 · ${currentSourceType === 'customHls' ? 'HLS 原画' : 'HTTP Range 原画'}`
                   : `手动 · ${formatQualityLabel(selectedProfile, selectedProfile)}`}
               </Text>
