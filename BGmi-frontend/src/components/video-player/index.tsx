@@ -404,7 +404,10 @@ export default function VideoPlayer({
     [playerAsset]
   );
   const iosLike = isIOSLike();
-  const shouldPreferHlsOnIOS = iosLike && subtitleTracks.length > 0;
+  // Safari/iOS has unreliable direct Range playback for several container and
+  // codec combinations, so automatic mode prefers original HLS on Apple
+  // devices regardless of whether subtitles are present.
+  const shouldPreferHlsOnIOS = iosLike;
   const qualityOptions = useMemo<QualityOption[]>(
     () =>
       (playerAsset?.qualities ?? [])
