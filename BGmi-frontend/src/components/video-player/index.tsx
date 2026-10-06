@@ -440,10 +440,7 @@ export default function VideoPlayer({
     const option = qualityByProfile.get(profile);
     if (option) void handleQualitySelect(option);
   });
-  const iosPreferredHlsOption = useMemo(
-    () => (shouldPreferHlsOnIOS ? displayedQualityOptions.find(item => item.isHls) : undefined),
-    [displayedQualityOptions, shouldPreferHlsOnIOS]
-  );
+  const iosPreferredHlsOption = undefined;
   const defaultSubtitleIndex = useMemo(() => {
     const index = subtitleTracks.findIndex(track => track.default);
     return index >= 0 ? index : 0;
@@ -670,19 +667,8 @@ export default function VideoPlayer({
     }
   };
 
-  useEffect(() => {
-    if (!shouldPreferHlsOnIOS) {
-      autoHlsKeyRef.current = '';
-      return;
-    }
-
-    if (!iosPreferredHlsOption) return;
-
-    const autoKey = `${bangumiData.bangumi_name}:${episode}:${iosPreferredHlsOption.profile}`;
-    if (autoHlsKeyRef.current === autoKey) return;
-    autoHlsKeyRef.current = autoKey;
-    void handleQualitySelect(iosPreferredHlsOption);
-  }, [bangumiData.bangumi_name, episode, iosPreferredHlsOption, shouldPreferHlsOnIOS]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Automatic playback never starts a transcoded 1080p/720p profile. Apple
+  // devices can still choose HLS manually when the original is incompatible.
 
   const handleToggleMissingEpisodes = async () => {
     if (!authToken) {
@@ -1524,6 +1510,17 @@ export default function VideoPlayer({
                 bg: qualityDragSelect.dragging ? `${colors.accent}18` : undefined,
               }}
             >
+              <Text
+                fontSize="0.62rem"
+                px="1.5"
+                opacity={0.82}
+                whiteSpace="nowrap"
+                aria-live="polite"
+              >
+                {selectedProfile === 'source'
+                  ? `自动 · ${currentSourceType === 'customHls' ? 'HLS 原画' : 'HTTP Range 原画'}`
+                  : `手动 · ${formatQualityLabel(selectedProfile, selectedProfile)}`}
+              </Text>
               {displayedQualityOptions.map(option => {
                 const isActive = selectedProfile === option.profile;
                 const isProcessing = hlsProgress.active && hlsProgress.profile === option.profile;

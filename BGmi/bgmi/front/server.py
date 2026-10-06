@@ -1,11 +1,14 @@
 import click
+import mimetypes
+import re
+from pathlib import Path
 import uvicorn
 from xml.etree import ElementTree as ET
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, Response
+from starlette.responses import HTMLResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -62,6 +65,53 @@ def index_need_config(_: Request) -> HTMLResponse:
     )
 
 
+async def ranged_media(request: Request) -> Response:
+    root = Path(cfg.save_path).resolve()
+    target = (root / request.path_params.get("path", "")).resolve()
+    if root not in target.parents or not target.is_file():
+        return Response("Not Found", status_code=404)
+    size = target.stat().st_size
+    start, end = 0, size - 1
+    status = 200
+    raw_range = request.headers.get("range")
+    if raw_range:
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", raw_range.strip())
+        if not match:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+        if match.group(1):
+            start = int(match.group(1))
+            end = int(match.group(2)) if match.group(2) else min(size - 1, start + 8 * 1024 * 1024 - 1)
+        elif match.group(2):
+            start = max(0, size - int(match.group(2)))
+        if start >= size or end < start:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+        end = min(end, size - 1)
+        status = 206
+    length = max(0, end - start + 1)
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(length),
+        "Content-Type": mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+    }
+    if status == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    if request.method == "HEAD":
+        return Response(status_code=status, headers=headers)
+
+    def stream():
+        with target.open("rb") as handle:
+            handle.seek(start)
+            remaining = length
+            while remaining:
+                chunk = handle.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(stream(), status_code=status, headers=headers)
+
+
 def download_feed(_: Request) -> Response:
     root = ET.Element("rss", version="2.0")
     channel = ET.SubElement(root, "channel")
@@ -90,6 +140,7 @@ def make_app(debug: bool = False) -> Starlette:
         print("will handle static files")
         routes.extend(
             [
+                Route("/bangumi/{path:path}", ranged_media, methods=["GET", "HEAD"]),
                 Mount(
                     "/bangumi",
                     app=CORSMiddleware(
