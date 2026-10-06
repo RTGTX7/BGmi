@@ -424,7 +424,9 @@ def _profile_target_height(profile_name: str) -> Optional[int]:
 def _hls_config() -> dict[str, Any]:
     player_config = cfg.player if isinstance(cfg.player, dict) else {}
     hls_config = player_config.get("hls", {})
-    return hls_config if isinstance(hls_config, dict) else {}
+    result = dict(hls_config) if isinstance(hls_config, dict) else {}
+    result.setdefault("1080p_TS", {"mode": "copy"})
+    return result
 
 
 def _hls_cache_ttl_hours() -> int:
@@ -441,6 +443,11 @@ def _hls_profiles() -> list[tuple[str, dict[str, Any]]]:
         if name == "cache_ttl_hours" or not isinstance(profile, dict):
             continue
         profiles.append((name, profile))
+    # Always expose a source-resolution HLS option for Apple/Safari. The
+    # ``_TS`` suffix keeps the original video stream and avoids quality
+    # transcoding; 720p/1080p profiles remain opt-in through user config.
+    if not any(name == "1080p_TS" for name, _ in profiles):
+        profiles.insert(0, ("1080p_TS", {"mode": "copy"}))
     return profiles
 
 
