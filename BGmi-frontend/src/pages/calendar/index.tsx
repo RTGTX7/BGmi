@@ -1,6 +1,7 @@
 import { Box, Button, Card, CardBody, Fade, Flex, HStack, Image, Input, Link, Modal, ModalBody, ModalContent, ModalOverlay, Tag, Text, useDisclosure } from '@chakra-ui/react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getCookie } from 'cookies-next';
 import { CiSearch } from 'react-icons/ci';
 
 import CalendarTab from '~/components/calendar-tab';
@@ -26,6 +27,7 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
   const { handleFetchFilter } = useSubscribeAction();
+  const authToken = getCookie('authToken') as string | undefined;
   const { isOpen: isPosterOpen, onOpen: onPosterOpen, onClose: onPosterClose } = useDisclosure();
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const startDismissSwipe = (event: React.TouchEvent<HTMLElement>) => {
@@ -58,13 +60,14 @@ function CalendarDetailModal({ bangumi, isOpen, onClose }: { bangumi: WeekCalend
     let active = true;
     setFollowed([]);
     setAvailableGroups([]);
+    if (!authToken) return () => { active = false; };
     void handleFetchFilter(bangumi.name).then(data => {
       if (!active) return;
       setFollowed(data?.data.followed ?? []);
       setAvailableGroups(data?.data.subtitle_group ?? []);
     }).catch(() => {});
     return () => { active = false; };
-  }, [bangumi, handleFetchFilter, isOpen]);
+  }, [authToken, bangumi, handleFetchFilter, isOpen]);
   if (!bangumi) return null;
   const calendarGroups = (bangumi.subtitle_group ?? []).map(item => {
     if (typeof item === 'string') return { id: item, name: item };
