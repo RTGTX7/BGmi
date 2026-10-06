@@ -134,7 +134,9 @@ export function GlassPageTransitionProvider({ children }: { children: ReactNode 
       scrollY: window.scrollY,
       viewport: { width: viewportWidth, height: window.innerHeight, left: sidebarWidth },
       titleTarget: {
-        left: sidebarWidth + mainInset + (viewportWidth >= 1280 ? 40 : 2),
+        // Match the actual player heading: desktop content starts after the
+        // sidebar plus `ml=10` (40px); mobile headings start at the viewport edge.
+        left: sidebarWidth + (desktop ? 40 : 0),
         top: (desktop ? 24 : 12) + 48,
         fontSize: desktop ? 24 : viewportWidth >= 480 ? 18 : 14,
       },

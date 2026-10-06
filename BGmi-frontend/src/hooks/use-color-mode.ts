@@ -70,11 +70,15 @@ export const useColorMode = () => {
       veil.style.backgroundAttachment = bodyStyle.backgroundAttachment;
       veil.style.backgroundSize = bodyStyle.backgroundSize;
       veil.style.opacity = '1';
-      veil.style.transition = 'opacity 2500ms cubic-bezier(0.22, 1, 0.36, 1)';
+      veil.style.transition = 'background-color 2500ms cubic-bezier(0.22, 1, 0.36, 1), background-image 2500ms cubic-bezier(0.22, 1, 0.36, 1)';
       document.body.appendChild(veil);
       void veil.offsetWidth;
       apply();
-      requestAnimationFrame(() => requestAnimationFrame(() => { veil.style.opacity = '0'; }));
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const nextStyle = getComputedStyle(document.body);
+        veil.style.backgroundColor = nextStyle.backgroundColor;
+        veil.style.backgroundImage = nextStyle.backgroundImage;
+      }));
       window.setTimeout(() => veil.remove(), 2600);
     } else apply();
   }, [colorMode, setColorMode, toggleColorMode]);
