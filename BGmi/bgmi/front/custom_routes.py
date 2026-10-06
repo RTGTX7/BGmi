@@ -87,7 +87,7 @@ def envelope(data: Any = None, *, status: str = "success", message: str = "") ->
     return {
         "version": __version__,
         "latest_version": None,
-        "frontend_version": "2.1.3",
+        "frontend_version": "2.1.5",
         "status": status,
         "lang": cfg.lang,
         "danmaku_api": cfg.http.danmaku_api_url,

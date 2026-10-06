@@ -1,55 +1,55 @@
-# Changelog
+﻿# Changelog`r`n`r`n## 2026-10-06 — RTGTX7 定制版 2.1.5`r`n`r`n- 优化 Calendar 全屏详情、海报悬浮预览与移动端关闭手势。`r`n- 增强系统/日落主题自动切换及亮暗主题过渡动画。`r`n- 改进播放器展开时番剧标题的对齐和缩放动画。
 
-## 2026-10-03 — RTGTX7 定制版 2.1.0
+## 2026-10-03 â€” RTGTX7 å®šåˆ¶ç‰ˆ 2.1.0
 
-### 玻璃与主题
+### çŽ»ç’ƒä¸Žä¸»é¢˜
 
-- 手机底部导航和 Calendar、Subscribe 日期栏恢复 `0b745b2` 的折射与水滴边缘，结合新版拖动跟随、拉伸和弹簧回弹动态。
-- 移除导航拖动时的文字发光，日期栏和导航配色跟随全局主题。
-- 手机明暗按钮支持短按切换明暗、长按打开配色设置。
-- 精简全局主题设置，完整展示玻璃参数；默认磨砂度 25%、窗口透明度 35%、折射 0.2、色差 0.08、厚度 10。
-- 优化窗口玻璃渲染、关闭清理和主题基底，调整订阅筛选弹窗的材质与位置。
+- æ‰‹æœºåº•éƒ¨å¯¼èˆªå’Œ Calendarã€Subscribe æ—¥æœŸæ æ¢å¤ `0b745b2` çš„æŠ˜å°„ä¸Žæ°´æ»´è¾¹ç¼˜ï¼Œç»“åˆæ–°ç‰ˆæ‹–åŠ¨è·Ÿéšã€æ‹‰ä¼¸å’Œå¼¹ç°§å›žå¼¹åŠ¨æ€ã€‚
+- ç§»é™¤å¯¼èˆªæ‹–åŠ¨æ—¶çš„æ–‡å­—å‘å…‰ï¼Œæ—¥æœŸæ å’Œå¯¼èˆªé…è‰²è·Ÿéšå…¨å±€ä¸»é¢˜ã€‚
+- æ‰‹æœºæ˜Žæš—æŒ‰é’®æ”¯æŒçŸ­æŒ‰åˆ‡æ¢æ˜Žæš—ã€é•¿æŒ‰æ‰“å¼€é…è‰²è®¾ç½®ã€‚
+- ç²¾ç®€å…¨å±€ä¸»é¢˜è®¾ç½®ï¼Œå®Œæ•´å±•ç¤ºçŽ»ç’ƒå‚æ•°ï¼›é»˜è®¤ç£¨ç ‚åº¦ 25%ã€çª—å£é€æ˜Žåº¦ 35%ã€æŠ˜å°„ 0.2ã€è‰²å·® 0.08ã€åŽšåº¦ 10ã€‚
+- ä¼˜åŒ–çª—å£çŽ»ç’ƒæ¸²æŸ“ã€å…³é—­æ¸…ç†å’Œä¸»é¢˜åŸºåº•ï¼Œè°ƒæ•´è®¢é˜…ç­›é€‰å¼¹çª—çš„æè´¨ä¸Žä½ç½®ã€‚
 
-### 订阅与登录
+### è®¢é˜…ä¸Žç™»å½•
 
-- 修复 Calendar 搜索按钮点击后未显示输入框的问题，输入番剧名称即可搜索。
-- 手机 Calendar 详情支持从非滚动区域向上滑动关闭，保留简介和字幕组独立滚动。
-- 统一磨砂度默认及异常回退值为 25%，保留用户已保存的设置。
-- 优化订阅管理和番剧详情在手机、电脑上的尺寸与滚动布局。
-- 修复详情字幕组名称显示为数字标识的问题。
-- Token 验证成功后询问“保留登录多久？”，支持本次浏览器会话、1 天、7 天、30 天、90 天、180 天。
+- ä¿®å¤ Calendar æœç´¢æŒ‰é’®ç‚¹å‡»åŽæœªæ˜¾ç¤ºè¾“å…¥æ¡†çš„é—®é¢˜ï¼Œè¾“å…¥ç•ªå‰§åç§°å³å¯æœç´¢ã€‚
+- æ‰‹æœº Calendar è¯¦æƒ…æ”¯æŒä»Žéžæ»šåŠ¨åŒºåŸŸå‘ä¸Šæ»‘åŠ¨å…³é—­ï¼Œä¿ç•™ç®€ä»‹å’Œå­—å¹•ç»„ç‹¬ç«‹æ»šåŠ¨ã€‚
+- ç»Ÿä¸€ç£¨ç ‚åº¦é»˜è®¤åŠå¼‚å¸¸å›žé€€å€¼ä¸º 25%ï¼Œä¿ç•™ç”¨æˆ·å·²ä¿å­˜çš„è®¾ç½®ã€‚
+- ä¼˜åŒ–è®¢é˜…ç®¡ç†å’Œç•ªå‰§è¯¦æƒ…åœ¨æ‰‹æœºã€ç”µè„‘ä¸Šçš„å°ºå¯¸ä¸Žæ»šåŠ¨å¸ƒå±€ã€‚
+- ä¿®å¤è¯¦æƒ…å­—å¹•ç»„åç§°æ˜¾ç¤ºä¸ºæ•°å­—æ ‡è¯†çš„é—®é¢˜ã€‚
+- Token éªŒè¯æˆåŠŸåŽè¯¢é—®â€œä¿ç•™ç™»å½•å¤šä¹…ï¼Ÿâ€ï¼Œæ”¯æŒæœ¬æ¬¡æµè§ˆå™¨ä¼šè¯ã€1 å¤©ã€7 å¤©ã€30 å¤©ã€90 å¤©ã€180 å¤©ã€‚
 
-### 验证
+### éªŒè¯
 
-- 前端 TypeScript 检查与生产构建通过，模拟器同步更新。
-- `2.1.0` 为定制发行版号，上游组件保留各自版本号。
+- å‰ç«¯ TypeScript æ£€æŸ¥ä¸Žç”Ÿäº§æž„å»ºé€šè¿‡ï¼Œæ¨¡æ‹Ÿå™¨åŒæ­¥æ›´æ–°ã€‚
+- `2.1.0` ä¸ºå®šåˆ¶å‘è¡Œç‰ˆå·ï¼Œä¸Šæ¸¸ç»„ä»¶ä¿ç•™å„è‡ªç‰ˆæœ¬å·ã€‚
 
-## 2026-10-02 — RTGTX7 定制版 2.0.0
+## 2026-10-02 â€” RTGTX7 å®šåˆ¶ç‰ˆ 2.0.0
 
-### 上游与数据
+### ä¸Šæ¸¸ä¸Žæ•°æ®
 
-- 基于官方 BGmi 5.0.2，保留个人分支的订阅、下载、视频库与播放功能。
-- 改进数据库维护和仓库重建流程，增加模拟器与调试接口，方便在隔离环境验证视频功能。
-- 为 Mikan 番剧补充简介与字幕组链接，改善订阅与资源查询体验。
+- åŸºäºŽå®˜æ–¹ BGmi 5.0.2ï¼Œä¿ç•™ä¸ªäººåˆ†æ”¯çš„è®¢é˜…ã€ä¸‹è½½ã€è§†é¢‘åº“ä¸Žæ’­æ”¾åŠŸèƒ½ã€‚
+- æ”¹è¿›æ•°æ®åº“ç»´æŠ¤å’Œä»“åº“é‡å»ºæµç¨‹ï¼Œå¢žåŠ æ¨¡æ‹Ÿå™¨ä¸Žè°ƒè¯•æŽ¥å£ï¼Œæ–¹ä¾¿åœ¨éš”ç¦»çŽ¯å¢ƒéªŒè¯è§†é¢‘åŠŸèƒ½ã€‚
+- ä¸º Mikan ç•ªå‰§è¡¥å……ç®€ä»‹ä¸Žå­—å¹•ç»„é“¾æŽ¥ï¼Œæ”¹å–„è®¢é˜…ä¸Žèµ„æºæŸ¥è¯¢ä½“éªŒã€‚
 
-### 播放器
+### æ’­æ”¾å™¨
 
-- 支持同一集选择不同字幕组视频，并自动记住每部番剧的偏好；播放结束后续播同一字幕组的下一集。
-- 完善 iPhone/iPad 播放、内置前进与后退 5 秒、HLS 画质切换和本地视频服务器连接提示。
-- 视频、字幕和 HLS 可使用检测成功的本地媒体地址。
-- FFmpeg 转码输入改为任务独立的临时文件，完成或失败后立即释放；定期清理超过 24 小时的遗留输入缓存。
+- æ”¯æŒåŒä¸€é›†é€‰æ‹©ä¸åŒå­—å¹•ç»„è§†é¢‘ï¼Œå¹¶è‡ªåŠ¨è®°ä½æ¯éƒ¨ç•ªå‰§çš„åå¥½ï¼›æ’­æ”¾ç»“æŸåŽç»­æ’­åŒä¸€å­—å¹•ç»„çš„ä¸‹ä¸€é›†ã€‚
+- å®Œå–„ iPhone/iPad æ’­æ”¾ã€å†…ç½®å‰è¿›ä¸ŽåŽé€€ 5 ç§’ã€HLS ç”»è´¨åˆ‡æ¢å’Œæœ¬åœ°è§†é¢‘æœåŠ¡å™¨è¿žæŽ¥æç¤ºã€‚
+- è§†é¢‘ã€å­—å¹•å’Œ HLS å¯ä½¿ç”¨æ£€æµ‹æˆåŠŸçš„æœ¬åœ°åª’ä½“åœ°å€ã€‚
+- FFmpeg è½¬ç è¾“å…¥æ”¹ä¸ºä»»åŠ¡ç‹¬ç«‹çš„ä¸´æ—¶æ–‡ä»¶ï¼Œå®Œæˆæˆ–å¤±è´¥åŽç«‹å³é‡Šæ”¾ï¼›å®šæœŸæ¸…ç†è¶…è¿‡ 24 å°æ—¶çš„é—ç•™è¾“å…¥ç¼“å­˜ã€‚
 
-### 界面
+### ç•Œé¢
 
-- 重做 Dashboard、手机端导航和番剧卡片排版，优化 Calendar 与 Subscribe 日期拖动性能。
-- 加入全站亮色和暗色配色方案、自定义调色及玻璃效果，菜单栏颜色与主题同步。
-- 将手机底部栏的配色入口收进菜单，保留日夜模式切换。
+- é‡åš Dashboardã€æ‰‹æœºç«¯å¯¼èˆªå’Œç•ªå‰§å¡ç‰‡æŽ’ç‰ˆï¼Œä¼˜åŒ– Calendar ä¸Ž Subscribe æ—¥æœŸæ‹–åŠ¨æ€§èƒ½ã€‚
+- åŠ å…¥å…¨ç«™äº®è‰²å’Œæš—è‰²é…è‰²æ–¹æ¡ˆã€è‡ªå®šä¹‰è°ƒè‰²åŠçŽ»ç’ƒæ•ˆæžœï¼Œèœå•æ é¢œè‰²ä¸Žä¸»é¢˜åŒæ­¥ã€‚
+- å°†æ‰‹æœºåº•éƒ¨æ çš„é…è‰²å…¥å£æ”¶è¿›èœå•ï¼Œä¿ç•™æ—¥å¤œæ¨¡å¼åˆ‡æ¢ã€‚
 
-### 版本说明
+### ç‰ˆæœ¬è¯´æ˜Ž
 
-- `2.0.0` 是 RTGTX7 定制发行版号；Python 后端与前端包保留各自的上游组件版本号。
+- `2.0.0` æ˜¯ RTGTX7 å®šåˆ¶å‘è¡Œç‰ˆå·ï¼›Python åŽç«¯ä¸Žå‰ç«¯åŒ…ä¿ç•™å„è‡ªçš„ä¸Šæ¸¸ç»„ä»¶ç‰ˆæœ¬å·ã€‚
 
-## 2026-04-20 — RTGTX7 定制版 1.1.5
+## 2026-04-20 â€” RTGTX7 å®šåˆ¶ç‰ˆ 1.1.5
 
 ### Bangumi / Archive
 
@@ -93,21 +93,21 @@
 ### Dev / Preview
 
 - Enabled Vite dev/preview LAN access for mobile-device testing.
-- Bumped the custom release line to **RTGTX7 定制版 1.1.0**.
+- Bumped the custom release line to **RTGTX7 å®šåˆ¶ç‰ˆ 1.1.0**.
 
 ## 2026-04-09
 
 ### Subtitle Rendering
 
-- Replaced JASSUB (libass WASM) with **ass.js** for ASS subtitle rendering — uses DOM-based rendering so CJK font fallback is handled natively by the browser, eliminating tofu boxes.
-- Replaced native `<track>` WebVTT rendering with a **client-side SRT/VTT parser** + DOM overlay — fixes font size/position inconsistencies across screen sizes and fullscreen modes.
+- Replaced JASSUB (libass WASM) with **ass.js** for ASS subtitle rendering â€” uses DOM-based rendering so CJK font fallback is handled natively by the browser, eliminating tofu boxes.
+- Replaced native `<track>` WebVTT rendering with a **client-side SRT/VTT parser** + DOM overlay â€” fixes font size/position inconsistencies across screen sizes and fullscreen modes.
 - Added support for both `HH:MM:SS.mmm` and short `MM:SS.mmm` timestamp formats (ffmpeg-extracted VTT files often omit hours).
 - Added `paint-order: stroke fill` to subtitle text stroke to prevent glyph intersection artifacts on characters like "t".
 - Removed ~64MB bundled CJK font files that were previously needed for JASSUB.
 
 ### Subtitle Selector
 
-- Replaced `chakra-react-select` dropdown with Chakra UI native `<Select>` for the subtitle track picker — fixes "Maximum update depth exceeded" infinite re-render loop caused by `@floating-ui` `autoUpdate`.
+- Replaced `chakra-react-select` dropdown with Chakra UI native `<Select>` for the subtitle track picker â€” fixes "Maximum update depth exceeded" infinite re-render loop caused by `@floating-ui` `autoUpdate`.
 
 ### Docker
 
@@ -184,3 +184,4 @@
 - Converted the previously nested `BGmi` gitlink into real source files inside this repository.
 - Added the frontend source as real files instead of leaving it as a nested repository pointer.
 - Updated `.gitignore` to exclude local-only directories such as `_refs`, `BGmi/.bgmi`, `BGmi-frontend/node_modules`, and `BGmi-frontend/dist`.
+
