@@ -542,13 +542,19 @@ export default function VideoPlayer({
 
   useEffect(() => {
     if (selectedProfile !== 'source') return;
-    const directOption = displayedQualityOptions.find(item => item.profile === 'source');
+    const preferredProfile = shouldPreferHlsOnIOS
+      ? '1080p_TS'
+      : localVideoStatus === 'connected'
+        ? 'source'
+        : 'range';
+    const directOption = displayedQualityOptions.find(item => item.profile === preferredProfile)
+      ?? displayedQualityOptions.find(item => item.profile === 'source');
     const nextUrl = directOption?.playUrl || directUrl;
     const nextType = directOption?.type || 'auto';
 
     setCurrentSourceUrl(nextUrl);
     setCurrentSourceType(nextType);
-  }, [directUrl, displayedQualityOptions, selectedProfile]);
+  }, [directUrl, displayedQualityOptions, localVideoStatus, selectedProfile, shouldPreferHlsOnIOS]);
 
   useEffect(() => {
     if (selectedProfile === 'source' || currentSourceType !== 'customHls') return;
@@ -1169,6 +1175,15 @@ export default function VideoPlayer({
     resizeObserver.observe(container);
     art.on('fullscreen', applyResponsiveSubtitleStyle);
     art.on('fullscreenWeb', applyResponsiveSubtitleStyle);
+    art.on('video:loaderror', () => {
+      if (!autoProtocolActive) return;
+      const fallbackProfile = currentSourceType === 'auto' ? 'range' : currentSourceType === 'range' ? '1080p_TS' : 'source';
+      const fallback = displayedQualityOptions.find(option => option.profile === fallbackProfile);
+      if (fallback && fallback.playUrl !== currentSourceUrl) {
+        setCurrentSourceUrl(fallback.playUrl);
+        setCurrentSourceType(fallback.type);
+      }
+    });
 
     return () => {
       art.off('fullscreen', applyResponsiveSubtitleStyle);
@@ -1540,20 +1555,10 @@ export default function VideoPlayer({
                 bg: qualityDragSelect.dragging ? `${colors.accent}18` : undefined,
               }}
             >
-              <Text
-                fontSize="0.62rem"
-                px="1.5"
-                opacity={0.82}
-                whiteSpace="nowrap"
-                aria-live="polite"
-              >
-                {autoProtocolActive
-                  ? `自动 · ${currentSourceType === 'customHls' ? 'HLS' : currentSourceType === 'auto' ? '源' : 'HRR'}`
-                  : `手动 · ${formatQualityLabel(selectedProfile, selectedProfile)}`}
-              </Text>
               {displayedQualityOptions.map(option => {
                 const isActive = selectedProfile === option.profile;
                 const isProcessing = hlsProgress.active && hlsProgress.profile === option.profile;
+                const autoName = currentSourceType === 'customHls' ? 'HLS' : currentSourceType === 'auto' ? '源' : 'HRR';
                 return (
                   <Button
                     key={option.profile}
@@ -1587,7 +1592,7 @@ export default function VideoPlayer({
                     leftIcon={isProcessing ? <Spinner size="xs" /> : undefined}
                     {...qualityDragSelect.getOptionProps(option.profile)}
                   >
-                    {isProcessing ? `${hlsProgress.progress.toFixed(0)}%` : option.displayName}
+                    {isProcessing ? `${hlsProgress.progress.toFixed(0)}%` : autoProtocolActive && option.profile === selectedProfile ? `自动:${autoName}` : option.displayName}
                   </Button>
                 );
               })}
