@@ -141,6 +141,7 @@ export default function Player() {
       ) : null}
 
       <Heading
+        data-bgmi-player-title="true"
         ml={{ base: '0', xl: '10' }}
         mb={{ base: '2.5', lg: '6' }}
         px={{ base: '0.15rem', xl: '0' }}

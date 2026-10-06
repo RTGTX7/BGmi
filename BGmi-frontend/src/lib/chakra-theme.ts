@@ -29,15 +29,11 @@ export const theme = extendTheme({
           bg: `${palette.pageGlow}, ${palette.page}`,
           backgroundAttachment: 'fixed',
           letterSpacing: '-0.01em',
-          transition: 'color 2500ms ease, background-color 2500ms ease, background 2500ms ease',
         },
         'html, #root': {
-          transition: 'color 2500ms ease, background-color 2500ms ease',
         },
-        '::view-transition-old(root), ::view-transition-new(root)': {
-          animationDuration: '700ms',
-          animationTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-          mixBlendMode: 'normal',
+        'html.bgmi-theme-transition body [data-bgmi-glass-panel], html.bgmi-theme-transition body [data-bgmi-window-glass], html.bgmi-theme-transition body button, html.bgmi-theme-transition body a, html.bgmi-theme-transition body input, html.bgmi-theme-transition body textarea, html.bgmi-theme-transition body select': {
+          transition: 'color 1000ms ease, background-color 1000ms ease, background 1000ms ease, border-color 1000ms ease, box-shadow 1000ms ease !important',
         },
         '*': {
           borderColor: palette.border,

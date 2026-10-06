@@ -33,7 +33,14 @@ export const useColorMode = () => {
     };
     setColorMode((stored || systemMode()) as Theme);
     if (stored) return;
-    const handleChange = () => setColorMode(systemMode());
+    const applyAutomaticMode = () => {
+      const next = systemMode();
+      if (next === colorMode) return;
+      document.documentElement.classList.add('bgmi-theme-transition');
+      setColorMode(next);
+      window.setTimeout(() => document.documentElement.classList.remove('bgmi-theme-transition'), 1050);
+    };
+    const handleChange = () => applyAutomaticMode();
     media.addEventListener?.('change', handleChange);
     lightMedia.addEventListener?.('change', handleChange);
     if (!stored && navigator.geolocation) {
@@ -47,43 +54,25 @@ export const useColorMode = () => {
         setColorMode(systemMode());
       }, () => undefined, { maximumAge: 86400000, timeout: 3000 });
     }
-    const timer = window.setInterval(() => { if (!stored) setColorMode(systemMode()); }, 60000);
+    const timer = window.setInterval(() => { if (!stored) applyAutomaticMode(); }, 60000);
     return () => { media.removeEventListener?.('change', handleChange); lightMedia.removeEventListener?.('change', handleChange); window.clearInterval(timer); };
   }, [color, setColorMode]);
 
   const toggle = useCallback(() => {
     const next = (colorMode === 'dark' ? 'light' : 'dark') as Exclude<Theme, ''>;
+    const transitionClass = 'bgmi-theme-transition';
     const apply = () => {
       setColorMode(next);
       if (isBrowser) localStorage.setItem('chakra-ui-color-mode', next);
       toggleColorMode();
     };
-    if (isBrowser && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const bodyStyle = getComputedStyle(document.body);
-      const makeVeil = (opacity: string) => {
-        const veil = document.createElement('div');
-        veil.style.position = 'fixed'; veil.style.inset = '0'; veil.style.zIndex = '2147483647'; veil.style.pointerEvents = 'none';
-        veil.style.backgroundColor = bodyStyle.backgroundColor; veil.style.backgroundImage = bodyStyle.backgroundImage;
-        veil.style.backgroundAttachment = bodyStyle.backgroundAttachment; veil.style.backgroundSize = bodyStyle.backgroundSize;
-        veil.style.opacity = opacity;
-        return veil;
-      };
-      const oldVeil = makeVeil('1');
-      document.body.appendChild(oldVeil);
-      void oldVeil.offsetWidth;
+    if (!isBrowser || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       apply();
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const nextStyle = getComputedStyle(document.body);
-        const newVeil = makeVeil('0');
-        newVeil.style.backgroundColor = nextStyle.backgroundColor;
-        newVeil.style.backgroundImage = nextStyle.backgroundImage;
-        document.body.appendChild(newVeil);
-        const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
-        oldVeil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 2500, easing, fill: 'forwards' });
-        newVeil.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 2500, easing, fill: 'forwards' });
-        window.setTimeout(() => { oldVeil.remove(); newVeil.remove(); }, 2600);
-      }));
-    } else apply();
+      return;
+    }
+    document.documentElement.classList.add(transitionClass);
+    apply();
+    window.setTimeout(() => document.documentElement.classList.remove(transitionClass), 1050);
   }, [colorMode, setColorMode, toggleColorMode]);
   return { colorMode: (colorMode || color) as Theme, toggleColorMode: toggle };
 };

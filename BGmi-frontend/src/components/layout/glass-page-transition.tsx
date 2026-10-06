@@ -83,9 +83,10 @@ function GlassSurface({ card, progress, opacity }: { card: GlassCard; progress: 
       <motion.div
         style={{
           position: 'absolute', left: titleLeft, top: titleTop, right: 14,
-          color: titleColor, fontWeight: 750, fontSize: titleSize, lineHeight: 1.25,
+          color: titleColor, fontWeight: 700, fontSize: titleSize, lineHeight: 1.25,
+          fontFamily: "'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
           textShadow: '0 2px 12px rgba(0,0,0,0.2)',
-          letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           transformOrigin: 'left center', willChange: 'left, top, font-size, color',
         }}
       >
@@ -125,8 +126,8 @@ export function GlassPageTransitionProvider({ children }: { children: ReactNode 
     const bounds = element.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const desktop = viewportWidth >= 992;
-    const mainInset = viewportWidth >= 1280 ? 32 : desktop ? 24 : viewportWidth >= 768 ? 20 : viewportWidth >= 480 ? 16 : 12;
     const sidebarWidth = desktop ? 240 : 0;
+    const mainPadding = viewportWidth >= 1280 ? 32 : desktop ? 24 : viewportWidth >= 768 ? 20 : viewportWidth >= 480 ? 16 : 12;
     const card: GlassCard = {
       rect: { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height },
       cover, title, destination,
@@ -134,9 +135,8 @@ export function GlassPageTransitionProvider({ children }: { children: ReactNode 
       scrollY: window.scrollY,
       viewport: { width: viewportWidth, height: window.innerHeight, left: sidebarWidth },
       titleTarget: {
-        // Match the actual player heading: desktop content starts after the
-        // sidebar plus `ml=10` (40px); mobile headings start at the viewport edge.
-        left: sidebarWidth + (desktop ? 40 : 0),
+        // Match the player page's main padding and its xl-only heading margin.
+        left: sidebarWidth + mainPadding + (viewportWidth < 1280 && viewportWidth < 992 ? 2.4 : 0) + (viewportWidth >= 1280 ? 40 : 0),
         top: (desktop ? 24 : 12) + 48,
         fontSize: desktop ? 24 : viewportWidth >= 480 ? 18 : 14,
       },
