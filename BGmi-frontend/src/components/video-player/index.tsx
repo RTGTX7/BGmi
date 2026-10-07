@@ -547,7 +547,7 @@ export default function VideoPlayer({
     if (selectedProfile !== 'source') return;
     const preferredProfile = shouldPreferHlsOnIOS
       ? '1080p_TS'
-      : localVideoStatus === 'connected'
+      : localVideoStatus !== 'unavailable'
         ? 'source'
         : 'range';
     const directOption = displayedQualityOptions.find(item => item.profile === preferredProfile)
