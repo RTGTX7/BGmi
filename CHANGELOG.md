@@ -1,4 +1,12 @@
-﻿# Changelog`r`n`r`n## 2026-10-06 — RTGTX7 定制版 2.1.5`r`n`r`n- 优化 Calendar 全屏详情、海报悬浮预览与移动端关闭手势。`r`n- 增强系统/日落主题自动切换及亮暗主题过渡动画。`r`n- 改进播放器展开时番剧标题的对齐和缩放动画。
+﻿# Changelog
+
+## 2026-10-06 — RTGTX7 定制版 2.2.0
+
+- 清理未使用的前端 UI 和工具依赖，减少安装与构建开销。
+- 优化 Docker 构建上下文和运行镜像依赖，保留播放器、HLS、ASS 与弹幕功能。
+- 修复内网媒体源探测、服务器播放状态和公网页面使用内网视频源的逻辑。
+- 保留 Calendar 全屏详情、海报预览和主题切换动画改进。
+# Changelog`r`n`r`n## 2026-10-06 — RTGTX7 定制版 2.1.5`r`n`r`n- 优化 Calendar 全屏详情、海报悬浮预览与移动端关闭手势。`r`n- 增强系统/日落主题自动切换及亮暗主题过渡动画。`r`n- 改进播放器展开时番剧标题的对齐和缩放动画。
 
 ## 2026-10-03 â€” RTGTX7 å®šåˆ¶ç‰ˆ 2.1.0
 
@@ -184,4 +192,5 @@
 - Converted the previously nested `BGmi` gitlink into real source files inside this repository.
 - Added the frontend source as real files instead of leaving it as a nested repository pointer.
 - Updated `.gitignore` to exclude local-only directories such as `_refs`, `BGmi/.bgmi`, `BGmi-frontend/node_modules`, and `BGmi-frontend/dist`.
+
 

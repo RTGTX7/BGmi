@@ -12,3 +12,8 @@ docker-data
 BGmi/.bgmi
 BGmi-frontend/node_modules
 BGmi-frontend/dist
+node_modules
+output
+.playwright-cli
+.playwright-mcp
+**/.cache

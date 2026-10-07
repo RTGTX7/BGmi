@@ -5,7 +5,6 @@ WORKDIR /build/frontend
 RUN corepack enable
 
 COPY BGmi-frontend/package.json BGmi-frontend/pnpm-lock.yaml ./
-COPY BGmi-frontend/patches ./patches
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY BGmi-frontend/ ./
@@ -26,7 +25,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY BGmi /app/BGmi
