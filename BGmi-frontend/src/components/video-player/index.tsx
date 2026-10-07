@@ -388,12 +388,12 @@ export default function VideoPlayer({
     setLocalVideoProbe({ url: localDirectUrl, status: 'checking' });
     fetch(localDirectUrl, {
       method: 'GET',
-      headers: { Range: 'bytes=0-0' },
+      mode: 'no-cors',
       signal: controller.signal,
       cache: 'no-store',
     })
       .then(response => {
-        if (!controller.signal.aborted) setLocalVideoProbe({ url: localDirectUrl, status: response.ok || response.status === 206 ? 'connected' : 'unavailable' });
+        if (!controller.signal.aborted) setLocalVideoProbe({ url: localDirectUrl, status: response.type === 'opaque' || response.ok || response.status === 206 ? 'connected' : 'unavailable' });
         void response.body?.cancel().catch(() => undefined);
       })
       .catch(() => {
