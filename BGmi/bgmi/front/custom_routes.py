@@ -466,7 +466,10 @@ def legacy_player_assets(request: fastapi.Request, bangumi: str, episode: str, p
         data = build_browser_assets(source, bangumi, episode)
     except Exception as error:
         raise fastapi.HTTPException(500, str(error)) from error
-    data["mediaOrigin"] = local_video_origin_candidate()
+    # Only advertise the private media origin when the UI itself was reached
+    # through a configured LAN entry host. Public clients must stay on the
+    # public origin and should never be handed an unreachable LAN URL.
+    data["mediaOrigin"] = resolve_media_origin_for_host(request.headers.get("host", ""))
     data["advancedHlsQualities"] = bool((cfg.player or {}).get("advanced_hls_qualities", False))
     return envelope(data)
 
