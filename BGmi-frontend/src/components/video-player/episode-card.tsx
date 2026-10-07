@@ -14,7 +14,7 @@ interface Props {
     currentEpisode: string;
   };
   embedded?: boolean;
-  localVideoStatus?: 'none' | 'connected' | 'unavailable';
+  localVideoStatus?: 'none' | 'connected' | 'unavailable' | 'disabled';
 }
 
 export default function EpisodeCard({ setPlayState, bangumiData, embedded = false, localVideoStatus = 'none', ...props }: Props & BoxProps) {
@@ -88,8 +88,8 @@ export default function EpisodeCard({ setPlayState, bangumiData, embedded = fals
         {localVideoStatus !== 'none' && (
           <Box
             role="status"
-            aria-label={localVideoStatus === 'connected' ? '正在使用本地服务器播放' : '正在使用公网播放'}
-            title={localVideoStatus === 'connected' ? '正在使用本地服务器播放' : '正在使用公网播放'}
+            aria-label={localVideoStatus === 'connected' ? '正在使用本地服务器播放' : localVideoStatus === 'disabled' ? '本地播放加速未启用' : '本地服务器未连接，正在使用公网播放'}
+            title={localVideoStatus === 'connected' ? '正在使用本地服务器播放' : localVideoStatus === 'disabled' ? '本地播放加速未启用' : '本地服务器未连接，正在使用公网播放'}
             position="relative"
             color={localVideoStatus === 'connected' ? '#22C55E' : isDark ? '#8B95A5' : '#788797'}
             pr="1"

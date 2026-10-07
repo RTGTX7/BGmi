@@ -83,6 +83,7 @@ export interface PlayerAsset {
   source_path: string;
   browser_path: string;
   mediaOrigin?: string;
+  localMediaRouting?: { enabled: boolean; localEntryHosts?: string[]; localMediaOrigin?: string };
   subtitle?: SubtitleAsset;
   subtitles?: SubtitleAsset[];
   qualities?: QualityAsset[];

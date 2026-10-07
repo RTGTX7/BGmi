@@ -359,6 +359,7 @@ export default function VideoPlayer({
   const sourcePath = playerAsset?.source_path ?? rawPath;
   const playbackPath = playerAsset?.browser_path ?? sourcePath;
   const mediaOrigin = playerAsset?.mediaOrigin;
+  const localRoutingEnabled = Boolean(playerAsset?.localMediaRouting?.enabled);
   const localDirectUrl = playbackPath && mediaOrigin ? buildMediaUrl(toBangumiAssetPath(playbackPath), mediaOrigin) : '';
   const localProbeStatus = localVideoProbe.url === localDirectUrl ? localVideoProbe.status : 'checking';
   const effectiveMediaOrigin = localDirectUrl && localProbeStatus === 'connected' ? mediaOrigin : undefined;
@@ -368,8 +369,10 @@ export default function VideoPlayer({
   );
   // Show the LAN server state as soon as the Range probe succeeds; waiting for
   // ArtPlayer's ready event made the indicator disappear during startup.
-  const localVideoStatus = !localDirectUrl || localProbeStatus === 'checking'
-    ? 'none'
+  const localVideoStatus = !localRoutingEnabled
+    ? 'disabled'
+    : !localDirectUrl || localProbeStatus === 'checking'
+    ? 'unavailable'
     : localProbeStatus === 'connected' && (isPlayingLocalSource || !currentSourceUrl)
       ? 'connected'
       : 'unavailable';
