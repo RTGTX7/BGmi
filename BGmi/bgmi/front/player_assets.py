@@ -104,7 +104,11 @@ def resolve_media_origin_for_host(request_host: str) -> str:
     if ":" in host and not host.startswith("["):
         host = host.rsplit(":", 1)[0]
 
-    return state["localMediaOrigin"] if host in set(state["localEntryHosts"]) else ""
+    configured_hosts = set(state["localEntryHosts"])
+    media_host = (urlparse(state["localMediaOrigin"]).hostname or "").lower()
+    # A direct LAN visit commonly uses the same host as localMediaOrigin but
+    # is not repeated in the optional entry-host list. Treat that as local too.
+    return state["localMediaOrigin"] if host in configured_hosts or (media_host and host == media_host) else ""
 
 
 def local_video_origin_candidate() -> str:
