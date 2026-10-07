@@ -366,9 +366,13 @@ export default function VideoPlayer({
   const isPlayingLocalSource = Boolean(
     mediaOrigin && currentSourceUrl && readySourceUrl === currentSourceUrl && currentSourceUrl.startsWith(`${mediaOrigin}/`)
   );
-  const localVideoStatus = !localDirectUrl || !currentSourceUrl || readySourceUrl !== currentSourceUrl
+  // Show the LAN server state as soon as the Range probe succeeds; waiting for
+  // ArtPlayer's ready event made the indicator disappear during startup.
+  const localVideoStatus = !localDirectUrl || localProbeStatus === 'checking'
     ? 'none'
-    : isPlayingLocalSource ? 'connected' : 'unavailable';
+    : localProbeStatus === 'connected' && (isPlayingLocalSource || !currentSourceUrl)
+      ? 'connected'
+      : 'unavailable';
 
   useEffect(() => {
     if (!localDirectUrl || !mediaOrigin) {
