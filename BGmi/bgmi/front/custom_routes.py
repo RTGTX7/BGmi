@@ -469,8 +469,10 @@ def legacy_player_assets(request: fastapi.Request, bangumi: str, episode: str, p
     # Only advertise the private media origin when the UI itself was reached
     # through a configured LAN entry host. Public clients must stay on the
     # public origin and should never be handed an unreachable LAN URL.
-    request_host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    data["mediaOrigin"] = resolve_media_origin_for_host(request_host)
+    # The web UI may be opened through the public address while the browser
+    # can still reach the LAN media server. Media routing is therefore decided
+    # by the browser's Range probe, not by the page request Host.
+    data["mediaOrigin"] = local_video_origin_candidate()
     data["localMediaRouting"] = local_media_routing_state()
     data["advancedHlsQualities"] = bool((cfg.player or {}).get("advanced_hls_qualities", False))
     return envelope(data)

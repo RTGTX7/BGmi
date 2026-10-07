@@ -358,8 +358,14 @@ export default function VideoPlayer({
   const fileVersions = episodeVersions.filter(version => version.groupSource !== 'mikan');
   const sourcePath = playerAsset?.source_path ?? rawPath;
   const playbackPath = playerAsset?.browser_path ?? sourcePath;
-  const mediaOrigin = playerAsset?.mediaOrigin;
-  const localRoutingEnabled = Boolean(playerAsset?.localMediaRouting?.enabled);
+  const routing = playerAsset?.localMediaRouting;
+  const configuredOrigin = routing?.localMediaOrigin?.replace(/\/+$/, '') || '';
+  const browserHost = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
+  const configuredHosts = (routing?.localEntryHosts ?? []).map(host => host.toLowerCase().split(':')[0]);
+  const originHost = configuredOrigin ? new URL(configuredOrigin).hostname.toLowerCase() : '';
+  const isConfiguredLocalHost = Boolean(browserHost && (configuredHosts.includes(browserHost) || browserHost === originHost));
+  const mediaOrigin = playerAsset?.mediaOrigin || (routing?.enabled && isConfiguredLocalHost ? configuredOrigin : '');
+  const localRoutingEnabled = Boolean(routing?.enabled);
   const localDirectUrl = playbackPath && mediaOrigin ? buildMediaUrl(toBangumiAssetPath(playbackPath), mediaOrigin) : '';
   const localProbeStatus = localVideoProbe.url === localDirectUrl ? localVideoProbe.status : 'checking';
   const effectiveMediaOrigin = localDirectUrl && localProbeStatus === 'connected' ? mediaOrigin : undefined;
