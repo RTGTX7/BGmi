@@ -962,6 +962,8 @@ export default function VideoPlayer({
     const swipeEligible = art.template.$player.classList.contains('art-mobile');
     let swipeSeekTarget: number | null = null;
     let suppressClickUntil = 0;
+    let lastTapAt = 0;
+    let singleTapTimer: ReturnType<typeof setTimeout> | null = null;
     const swipeIndicator = document.createElement('div');
     swipeIndicator.className = 'bgmi-swipe-seek-indicator';
     swipeIndicator.setAttribute('aria-live', 'off');
@@ -1058,10 +1060,21 @@ export default function VideoPlayer({
       finishSwipeSeek(true);
       if (wasLongPressActive) return;
       suppressClickUntil = Date.now() + 350;
-      if (art.template.$player.classList.contains('art-control-show')) {
+      const now = Date.now();
+      if (lastTapAt && now - lastTapAt < 300) {
+        if (singleTapTimer) clearTimeout(singleTapTimer);
+        singleTapTimer = null;
+        lastTapAt = 0;
         art.toggle();
         art.controls.show = true;
-      } else art.controls.show = true;
+      } else {
+        lastTapAt = now;
+        singleTapTimer = setTimeout(() => {
+          singleTapTimer = null;
+          lastTapAt = 0;
+          art.controls.toggle();
+        }, 300);
+      }
     };
     const handlePointerCancel = (event: PointerEvent) => {
       if (swipePointerId === event.pointerId) finishSwipeSeek(true);
@@ -1126,6 +1139,7 @@ export default function VideoPlayer({
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      if (singleTapTimer) clearTimeout(singleTapTimer);
       cancelLongPress();
       playerRef.current = null;
       setArtMountSeq(n => n + 1);
