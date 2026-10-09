@@ -21,7 +21,7 @@
 } from '@chakra-ui/react';
 import { getCookie } from 'cookies-next';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiAlertTriangle, FiChevronDown, FiExternalLink } from 'react-icons/fi';
+import { FiAlertTriangle, FiChevronDown, FiExternalLink, FiShare2 } from 'react-icons/fi';
 import useSWR from 'swr';
 
 import Artplayer from 'artplayer';
@@ -852,6 +852,7 @@ export default function VideoPlayer({
           }
         : {},
       screenshot: true,
+      moreVideoAttr: { crossOrigin: 'anonymous' },
       autoplay: false,
       fullscreen: !shouldUseAssWebFullscreen,
       fullscreenWeb: true,
@@ -1793,6 +1794,34 @@ export default function VideoPlayer({
             </HStack>
           ) : null}
           <HStack spacing="1.5">
+            <IconButton
+              aria-label="分享视频链接"
+              title="复制视频页面链接"
+              icon={<FiShare2 />}
+              display={{ base: 'none', lg: 'inline-flex' }}
+              size="sm" minW="2.55rem" h="2.55rem" rounded="full" variant="outline"
+              bg={toolButtonBg} borderColor={toolButtonBorder} boxShadow={toolButtonShadow}
+              color={colorMode === 'light' ? '#516274' : 'rgba(255,255,255,0.92)'}
+              onClick={async () => {
+                try {
+                  const link = window.location.href;
+                  if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(link);
+                  else {
+                    const field = document.createElement('textarea');
+                    field.value = link;
+                    field.style.cssText = 'position:fixed;left:-9999px;top:0';
+                    document.body.appendChild(field);
+                    try {
+                      field.select();
+                      if (!document.execCommand('copy')) throw new Error('copy failed');
+                    } finally { field.remove(); }
+                  }
+                  toast({ title: '视频链接已复制', status: 'success', duration: 2000, position: 'top-right' });
+                } catch {
+                  toast({ title: '复制失败，请复制浏览器地址栏链接', status: 'error', duration: 3000, position: 'top-right' });
+                }
+              }}
+            />
             <IconButton
               aria-label={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}
               title={hasMissingEpisodes ? 'Clear missing-episodes mark' : 'Mark missing episodes'}

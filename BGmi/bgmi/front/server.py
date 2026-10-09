@@ -90,6 +90,8 @@ async def ranged_media(request: Request) -> Response:
     length = max(0, end - start + 1)
     headers = {
         "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Accept-Ranges, Content-Length, Content-Range",
         "Content-Length": str(length),
         "Content-Type": mimetypes.guess_type(target.name)[0] or "application/octet-stream",
     }
