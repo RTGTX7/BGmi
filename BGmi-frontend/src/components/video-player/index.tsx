@@ -1798,8 +1798,7 @@ export default function VideoPlayer({
               aria-label="分享视频链接"
               title="复制视频页面链接"
               icon={<FiShare2 />}
-              display={{ base: 'none', lg: 'inline-flex' }}
-              size="sm" minW="2.55rem" h="2.55rem" rounded="full" variant="outline"
+              size="sm" minW={{ base: '1.82rem', sm: '2.55rem' }} h={{ base: '1.82rem', sm: '2.55rem' }} fontSize={{ base: '0.76rem', sm: '1rem' }} rounded="full" variant="outline"
               bg={toolButtonBg} borderColor={toolButtonBorder} boxShadow={toolButtonShadow}
               color={colorMode === 'light' ? '#516274' : 'rgba(255,255,255,0.92)'}
               onClick={async () => {
