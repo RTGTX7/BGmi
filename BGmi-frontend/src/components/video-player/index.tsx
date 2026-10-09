@@ -877,6 +877,16 @@ export default function VideoPlayer({
       plugins,
     });
 
+    // ArtPlayer omits its built-in screenshot control on mobile.
+    if (art.template.$player.classList.contains('art-mobile')) {
+      art.controls.add({
+        name: 'screenshot', position: 'right', index: 20,
+        html: art.icons.screenshot, tooltip: '截图',
+        click: () => { void art.screenshot().catch(() => {
+          toastRef.current({ title: '截图失败，跨域视频需要媒体服务器允许 CORS', status: 'error', duration: 3000 });
+        }); },
+      });
+    }
     // Let the player shell receive touch gestures instead of the native <video> element,
     // otherwise Chrome on mobile may hijack long-press with the browser's save/download menu.
     // Safari cancels PointerEvents when the browser takes over a horizontal pan.
@@ -1047,7 +1057,11 @@ export default function VideoPlayer({
       cancelLongPress();
       finishSwipeSeek(true);
       if (wasLongPressActive) return;
-      art.controls.toggle();
+      suppressClickUntil = Date.now() + 350;
+      if (art.template.$player.classList.contains('art-control-show')) {
+        art.toggle();
+        art.controls.show = true;
+      } else art.controls.show = true;
     };
     const handlePointerCancel = (event: PointerEvent) => {
       if (swipePointerId === event.pointerId) finishSwipeSeek(true);
@@ -1065,9 +1079,16 @@ export default function VideoPlayer({
       }
     };
     const handlePlayerClickCapture = (event: MouseEvent) => {
-      if (Date.now() >= suppressClickUntil) return;
+      if (Date.now() < suppressClickUntil) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (isGestureBlockedTarget(event.target)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (art.template.$player.classList.contains('art-control-show')) art.toggle();
+      art.controls.show = true;
     };
     const handleVisibilityChange = () => {
       if (document.hidden) cancelLongPress();
@@ -1417,6 +1438,12 @@ export default function VideoPlayer({
             },
             '& .art-bottom': {
               paddingBottom: '4px',
+            },
+            '& .art-player:not(.art-control-show) .art-bottom': {
+              pointerEvents: 'none !important',
+            },
+            '& .art-player.art-mobile .art-control-screenshot, & .art-video-player.art-mobile .art-control-screenshot': {
+              display: 'flex !important',
             },
             '& .art-video-player.art-mobile': {
               touchAction: 'pan-y',
