@@ -232,6 +232,7 @@ function toMediaPath(path: string) {
 }
 
 function extractQualityProfile(item: QualityAsset) {
+  if (item.type === 'range') return 'range';
   if (item.type !== 'customHls') return 'source';
 
   try {
@@ -303,6 +304,7 @@ export default function VideoPlayer({
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const pollTimerRef = useRef<number | null>(null);
+  const qualityRequestRef = useRef(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<Artplayer | null>(null);
   const subtitleRequestRef = useRef(0);
@@ -310,6 +312,7 @@ export default function VideoPlayer({
   const subtitleWidthRef = useRef(960);
   const subtitleHeightRef = useRef(540);
   const autoHlsKeyRef = useRef('');
+  const attemptedProtocolsRef = useRef(new Set<string>());
   const longPressTimerRef = useRef<number | null>(null);
   const longPressPointerIdRef = useRef<number | null>(null);
   const longPressActivatedRef = useRef(false);
@@ -524,7 +527,10 @@ export default function VideoPlayer({
     }
   };
 
-  useEffect(() => stopPolling, []);
+  useEffect(() => () => {
+    qualityRequestRef.current += 1;
+    stopPolling();
+  }, []);
 
   useEffect(
     () => () => {
@@ -537,6 +543,8 @@ export default function VideoPlayer({
   );
 
   useEffect(() => {
+    qualityRequestRef.current += 1;
+    attemptedProtocolsRef.current.clear();
     setSelectedProfile('source');
     setAutoProtocolActive(true);
     setHlsProgress({
@@ -552,9 +560,10 @@ export default function VideoPlayer({
 
   useEffect(() => {
     if (selectedProfile !== 'source') return;
-    const preferredProfile = shouldPreferHlsOnIOS
+    if (autoProtocolActive && attemptedProtocolsRef.current.size > 0) return;
+    const preferredProfile = !autoProtocolActive ? 'source' : shouldPreferHlsOnIOS
       ? '1080p_TS'
-      : localVideoStatus !== 'unavailable'
+      : effectiveMediaOrigin
         ? 'source'
         : 'range';
     const directOption = displayedQualityOptions.find(item => item.profile === preferredProfile)
@@ -564,7 +573,7 @@ export default function VideoPlayer({
 
     setCurrentSourceUrl(nextUrl);
     setCurrentSourceType(nextType);
-  }, [directUrl, displayedQualityOptions, localVideoStatus, selectedProfile, shouldPreferHlsOnIOS]);
+  }, [autoProtocolActive, directUrl, displayedQualityOptions, effectiveMediaOrigin, selectedProfile, shouldPreferHlsOnIOS]);
 
   useEffect(() => {
     if (selectedProfile === 'source' || currentSourceType !== 'customHls') return;
@@ -577,17 +586,22 @@ export default function VideoPlayer({
   }, [currentSourceType, effectiveMediaOrigin, selectedProfile]);
 
   const pollHlsStatus = (option: QualityOption) => {
+    const requestId = qualityRequestRef.current;
+    let pending = false;
     const statusUrl = `./api/player/hls/status?player_group=${encodeURIComponent(playerGroup)}&bangumi=${encodeURIComponent(
       bangumiData.bangumi_name
     )}&episode=${encodeURIComponent(episode)}&profile=${encodeURIComponent(option.profile)}`;
 
     stopPolling();
     pollTimerRef.current = window.setInterval(async () => {
+      if (pending || requestId !== qualityRequestRef.current) return;
+      pending = true;
       try {
         const response = await fetch(statusUrl);
         if (!response.ok) return;
 
         const payload = (await response.json()) as HlsStatusResponse;
+        if (requestId !== qualityRequestRef.current) return;
         const status = payload.data;
 
         setHlsProgress({
@@ -635,11 +649,18 @@ export default function VideoPlayer({
             });
           }
         }
-      } catch {}
+      } catch {
+        // A temporary status request failure is retried on the next tick.
+      } finally {
+        pending = false;
+      }
     }, 1000);
   };
 
   const handleQualitySelect = async (option: QualityOption, automatic = false) => {
+    const requestId = ++qualityRequestRef.current;
+    stopPolling();
+    if (!automatic) attemptedProtocolsRef.current.clear();
     setAutoProtocolActive(automatic);
     setSelectedProfile(option.profile);
 
@@ -674,7 +695,9 @@ export default function VideoPlayer({
 
     try {
       const response = await fetch(startUrl, { method: 'POST' });
+      if (!response.ok) throw new Error(`HLS start failed: ${response.status}`);
       const payload = (await response.json()) as HlsStatusResponse;
+      if (requestId !== qualityRequestRef.current) return;
       const status = payload.data;
 
       if (status.state === 'ready' && status.url) {
@@ -694,6 +717,7 @@ export default function VideoPlayer({
 
       pollHlsStatus(option);
     } catch {
+      if (requestId !== qualityRequestRef.current) return;
       setHlsProgress({
         active: false,
         profile: option.profile,
@@ -706,7 +730,7 @@ export default function VideoPlayer({
   };
 
   useEffect(() => {
-    if (!shouldPreferHlsOnIOS || !iosPreferredHlsOption) {
+    if (!autoProtocolActive || !shouldPreferHlsOnIOS || !iosPreferredHlsOption) {
       autoHlsKeyRef.current = '';
       return;
     }
@@ -714,7 +738,7 @@ export default function VideoPlayer({
     if (autoHlsKeyRef.current === autoKey) return;
     autoHlsKeyRef.current = autoKey;
     void handleQualitySelect(iosPreferredHlsOption, true);
-  }, [bangumiData.bangumi_name, episode, iosPreferredHlsOption, shouldPreferHlsOnIOS]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoProtocolActive, bangumiData.bangumi_name, episode, iosPreferredHlsOption, shouldPreferHlsOnIOS]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleMissingEpisodes = async () => {
     if (!authToken) {
@@ -763,7 +787,7 @@ export default function VideoPlayer({
   };
 
   useEffect(() => {
-    if (!containerRef.current || !currentSourceUrl) return;
+    if (!containerRef.current || !currentSourceUrl || playerAssetLoading) return;
 
     restoredTimeRef.current = false;
     setLoading(true);
@@ -811,6 +835,9 @@ export default function VideoPlayer({
       );
     }
 
+    // BGmi owns transport fallback; ArtPlayer's delayed reconnect otherwise
+    // reloads a failed URL after we already switched or exhausted transports.
+    Artplayer.RECONNECT_TIME_MAX = 0;
     const art = new Artplayer({
       container: containerRef.current,
       url: currentSourceUrl,
@@ -822,12 +849,13 @@ export default function VideoPlayer({
                 hls.loadSource(url);
                 hls.attachMedia(video);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                  video.play().catch(() => undefined);
+                  if (autoPlayRef.current) video.play().catch(() => undefined);
                 });
                 hls.on(Hls.Events.ERROR, (_event, data) => {
                   if (data.fatal) {
                     console.error('HLS fatal error:', data.type, data.details);
-                    fallbackToPublic();
+                    if (mediaOrigin && currentSourceUrl.startsWith(`${mediaOrigin}/`)) fallbackToPublic();
+                    else art.emit('bgmiPlaybackError');
                   }
                 });
               } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -835,7 +863,7 @@ export default function VideoPlayer({
                 video.addEventListener(
                   'loadedmetadata',
                   () => {
-                    video.play().catch(() => undefined);
+                    if (autoPlayRef.current) video.play().catch(() => undefined);
                   },
                   { once: true }
                 );
@@ -921,7 +949,9 @@ export default function VideoPlayer({
     };
     const handleMediaError = () => {
       setReadySourceUrl('');
-      fallbackToPublic();
+      setLoading(false);
+      if (mediaOrigin && currentSourceUrl.startsWith(`${mediaOrigin}/`)) fallbackToPublic();
+      else art.emit('bgmiPlaybackError');
     };
 
     const handleTimeUpdate = () => {
@@ -965,6 +995,13 @@ export default function VideoPlayer({
     let suppressClickUntil = 0;
     let lastTapAt = 0;
     let singleTapTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPendingTap = () => {
+      if (singleTapTimer) clearTimeout(singleTapTimer);
+      singleTapTimer = null;
+      lastTapAt = 0;
+    };
+    const isVideoSurface = (target: EventTarget | null) =>
+      target instanceof Element && target.matches('.art-video-player, .art-mask, video');
     const swipeIndicator = document.createElement('div');
     swipeIndicator.className = 'bgmi-swipe-seek-indicator';
     swipeIndicator.setAttribute('aria-live', 'off');
@@ -997,9 +1034,13 @@ export default function VideoPlayer({
       if (wasActive && wasPlaying && restorePlayback) void art.play().catch(() => undefined);
     };
     const handlePointerDown = (event: PointerEvent) => {
+      if (isGestureBlockedTarget(event.target)) {
+        clearPendingTap();
+        return;
+      }
       if (event.pointerType !== 'touch') return;
       if (event.button !== 0) return;
-      if (isGestureBlockedTarget(event.target)) return;
+      if (!isVideoSurface(event.target) || !event.isPrimary) return;
 
       clearLongPressTimer();
       restoreLongPressRate();
@@ -1014,6 +1055,7 @@ export default function VideoPlayer({
       longPressTimerRef.current = window.setTimeout(() => {
         longPressTimerRef.current = null;
         if (longPressPointerIdRef.current !== event.pointerId) return;
+        clearPendingTap();
         longPressStartRateRef.current = art.playbackRate || 1;
         art.playbackRate = 2;
         longPressActivatedRef.current = true;
@@ -1030,11 +1072,13 @@ export default function VideoPlayer({
       const movedX = Math.abs(deltaX);
       const movedY = Math.abs(deltaY);
       if (longPressPointerIdRef.current === event.pointerId && (movedX > 12 || movedY > 12)) {
-        cancelLongPress();
+        clearLongPressTimer();
+        restoreLongPressRate();
       }
       if (!swipeActive) {
         if (movedX <= 12 || movedX <= movedY || !Number.isFinite(art.duration) || art.duration <= 0) return;
         swipeActive = true;
+        clearPendingTap();
         art.template.$player.setPointerCapture(event.pointerId);
         art.template.$player.classList.add('bgmi-swipe-seeking');
         if (swipeWasPlaying) art.pause();
@@ -1054,13 +1098,17 @@ export default function VideoPlayer({
         cancelLongPress();
         return;
       }
-      if (isGestureBlockedTarget(event.target)) return;
       if (longPressPointerIdRef.current !== event.pointerId) return;
       const wasLongPressActive = longPressActivatedRef.current;
+      const startPoint = longPressStartPointRef.current;
+      const moved = Boolean(startPoint && Math.hypot(event.clientX - startPoint.x, event.clientY - startPoint.y) > 12);
       cancelLongPress();
       finishSwipeSeek(true);
-      if (wasLongPressActive) return;
       suppressClickUntil = Date.now() + 350;
+      if (wasLongPressActive || moved || isGestureBlockedTarget(event.target)) {
+        clearPendingTap();
+        return;
+      }
       const now = Date.now();
       if (lastTapAt && now - lastTapAt < 300) {
         if (singleTapTimer) clearTimeout(singleTapTimer);
@@ -1078,39 +1126,48 @@ export default function VideoPlayer({
       }
     };
     const handlePointerCancel = (event: PointerEvent) => {
+      clearPendingTap();
+      suppressClickUntil = Date.now() + 350;
       if (swipePointerId === event.pointerId) finishSwipeSeek(true);
       if (longPressPointerIdRef.current !== event.pointerId) return;
       cancelLongPress();
     };
     const handleContextMenu = (event: MouseEvent) => {
-      if (event.target instanceof Element && event.target.closest('.art-player')) {
+      if (!isGestureBlockedTarget(event.target) && isVideoSurface(event.target)) {
         event.preventDefault();
       }
     };
     const handleDragStart = (event: DragEvent) => {
-      if (event.target instanceof Element && event.target.closest('.art-player')) {
+      if (!isGestureBlockedTarget(event.target) && isVideoSurface(event.target)) {
         event.preventDefault();
       }
     };
     const handlePlayerClickCapture = (event: MouseEvent) => {
       if (isGestureBlockedTarget(event.target)) return;
-      const target = event.target instanceof Element ? event.target : null;
-      if (!target || !target.matches('.art-video-player, .art-player, .art-mask, video')) return;
+      if (!isVideoSurface(event.target)) return;
       if (Date.now() < suppressClickUntil) {
         event.preventDefault();
         event.stopImmediatePropagation();
         return;
       }
       event.preventDefault();
-      event.stopImmediatePropagation();
+      // Only the video surface is handled here. Keep ArtPlayer's document
+      // focus tracking alive so keyboard controls and menu dismissal work.
       if (art.template.$player.classList.contains('art-control-show')) art.toggle();
       art.controls.show = true;
     };
     const handleVisibilityChange = () => {
-      if (document.hidden) cancelLongPress();
+      if (document.hidden) {
+        clearPendingTap();
+        finishSwipeSeek(true);
+        cancelLongPress();
+      }
     };
     const handleSeeking = () => {
       cancelLongPress();
+    };
+    const handleLostPointerCapture = (event: PointerEvent) => {
+      if (swipePointerId === event.pointerId) handlePointerCancel(event);
     };
 
     const syncControlsVisible = () => {
@@ -1136,13 +1193,14 @@ export default function VideoPlayer({
     art.template.$player.addEventListener('pointermove', handlePointerMove);
     art.template.$player.addEventListener('pointerup', handlePointerUp);
     art.template.$player.addEventListener('pointercancel', handlePointerCancel);
+    art.template.$player.addEventListener('lostpointercapture', handleLostPointerCapture);
     art.template.$player.addEventListener('click', handlePlayerClickCapture, true);
     art.template.$player.addEventListener('contextmenu', handleContextMenu);
     art.template.$player.addEventListener('dragstart', handleDragStart);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (singleTapTimer) clearTimeout(singleTapTimer);
+      clearPendingTap();
       cancelLongPress();
       playerRef.current = null;
       setArtMountSeq(n => n + 1);
@@ -1160,6 +1218,7 @@ export default function VideoPlayer({
       art.template.$player.removeEventListener('pointermove', handlePointerMove);
       art.template.$player.removeEventListener('pointerup', handlePointerUp);
       art.template.$player.removeEventListener('pointercancel', handlePointerCancel);
+      art.template.$player.removeEventListener('lostpointercapture', handleLostPointerCapture);
       art.template.$player.removeEventListener('click', handlePlayerClickCapture, true);
       art.template.$player.removeEventListener('contextmenu', handleContextMenu);
       art.template.$player.removeEventListener('dragstart', handleDragStart);
@@ -1178,10 +1237,34 @@ export default function VideoPlayer({
     getCurrentTime,
     localDirectUrl,
     mediaOrigin,
+    playerAssetLoading,
     selectedProfile,
     shouldUseAssWebFullscreen,
     updateCurrentTime,
   ]);
+
+  useEffect(() => {
+    const art = playerRef.current;
+    if (!art) return;
+    const handlePlaybackError = () => {
+      setLoading(false);
+      if (!autoProtocolActive) return;
+      // Try each original-quality transport once; never start a resolution
+      // transcode or loop between failed transports.
+      const failedProfile = currentSourceType === 'customHls' ? '1080p_TS' : currentSourceType === 'range' ? 'range' : 'source';
+      attemptedProtocolsRef.current.add(failedProfile);
+      const order = iosLike ? ['1080p_TS', 'range', 'source'] : effectiveMediaOrigin ? ['source', 'range', '1080p_TS'] : ['range', '1080p_TS', 'source'];
+      const fallback = order.map(profile => qualityByProfile.get(profile)).find(option => option && !attemptedProtocolsRef.current.has(option.profile));
+      if (fallback) {
+        attemptedProtocolsRef.current.add(fallback.profile);
+        void handleQualitySelect(fallback, true);
+      } else {
+        toastRef.current({ title: '当前视频无法播放，请尝试其他文件版本或本地播放器', status: 'error', id: 'bgmi-playback-failed', duration: 5000 });
+      }
+    };
+    art.on('bgmiPlaybackError', handlePlaybackError);
+    return () => { art.off('bgmiPlaybackError', handlePlaybackError); };
+  }, [artMountSeq, autoProtocolActive, currentSourceType, effectiveMediaOrigin, iosLike, qualityByProfile]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1223,15 +1306,6 @@ export default function VideoPlayer({
     resizeObserver.observe(container);
     art.on('fullscreen', applyResponsiveSubtitleStyle);
     art.on('fullscreenWeb', applyResponsiveSubtitleStyle);
-    art.on('video:loaderror', () => {
-      if (!autoProtocolActive) return;
-      const fallbackProfile = currentSourceType === 'auto' ? 'range' : currentSourceType === 'range' ? '1080p_TS' : 'source';
-      const fallback = displayedQualityOptions.find(option => option.profile === fallbackProfile);
-      if (fallback && fallback.playUrl !== currentSourceUrl) {
-        setCurrentSourceUrl(fallback.playUrl);
-        setCurrentSourceType(fallback.type);
-      }
-    });
 
     return () => {
       art.off('fullscreen', applyResponsiveSubtitleStyle);
@@ -1322,15 +1396,14 @@ export default function VideoPlayer({
     const art = playerRef.current;
     if (!art) return;
 
-    try { art.setting.remove('subtitle'); } catch {}
-
     if (subtitleTracks.length > 0) {
-      art.setting.add({
+      art.setting.update({
         name: 'subtitle',
-        html: 'Subtitle',
+        html: '字幕',
+        tooltip: selectedSubtitleIndex < 0 ? '关闭' : activeSubtitle?.label || '',
         width: 250,
         selector: [
-          { html: 'Off', default: selectedSubtitleIndex < 0, trackIndex: -1 } as Record<string, unknown>,
+          { html: '关闭', default: selectedSubtitleIndex < 0, trackIndex: -1 } as Record<string, unknown>,
           ...subtitleTracks.map((t, i) => ({ html: t.label, default: i === selectedSubtitleIndex, trackIndex: i }) as Record<string, unknown>),
         ] as import('artplayer/types/setting').Setting[],
         onSelect(item) {
@@ -1339,6 +1412,8 @@ export default function VideoPlayer({
           return item.html as string;
         },
       });
+    } else if (art.setting.find('subtitle')) {
+      art.setting.remove('subtitle');
     }
   }, [artMountSeq, selectedSubtitleIndex, subtitleTracks]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1420,7 +1495,7 @@ export default function VideoPlayer({
                 : 'linear-gradient(180deg, rgba(255,255,255,0.52), rgba(206,232,242,0.16) 22%, rgba(255,255,255,0.04) 60%)',
           }}
           sx={{
-            '& .art-player': {
+            '& .art-video-player': {
               width: '100%',
               height: '100%',
               overflow: 'hidden',
@@ -1431,17 +1506,13 @@ export default function VideoPlayer({
               WebkitTapHighlightColor: 'transparent',
               userSelect: 'none',
             },
-            '& .art-player .art-video-player': {
-              touchAction: 'manipulation',
-              WebkitTouchCallout: 'none',
-            },
-            '& .art-player .JASSUB': {
+            '& .art-video-player .JASSUB': {
               position: 'absolute',
               inset: '0',
               pointerEvents: 'none',
               zIndex: 20,
             },
-            '& .art-player video': {
+            '& .art-video-player video': {
               width: '100%',
               height: '100%',
               display: 'block',
@@ -1509,6 +1580,7 @@ export default function VideoPlayer({
           }}
         >
           <Spinner
+            pointerEvents="none"
             display={loading && currentSourceUrl ? 'block' : 'none'}
             zIndex="100"
             position="absolute"
