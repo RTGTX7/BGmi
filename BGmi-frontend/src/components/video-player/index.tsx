@@ -1101,7 +1101,6 @@ export default function VideoPlayer({
         event.stopImmediatePropagation();
         return;
       }
-      if (isGestureBlockedTarget(event.target)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       if (art.template.$player.classList.contains('art-control-show')) art.toggle();
@@ -1457,7 +1456,7 @@ export default function VideoPlayer({
             '& .art-bottom': {
               paddingBottom: '4px',
             },
-            '& .art-player:not(.art-control-show) .art-bottom': {
+            '& .art-video-player:not(.art-control-show) .art-bottom': {
               pointerEvents: 'none !important',
             },
             '& .art-player.art-mobile .art-control-screenshot, & .art-video-player.art-mobile .art-control-screenshot': {
