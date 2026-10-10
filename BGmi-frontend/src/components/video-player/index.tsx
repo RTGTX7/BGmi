@@ -951,7 +951,7 @@ export default function VideoPlayer({
 
       return Boolean(
         element.closest(
-          '.art-controls, .art-control, .art-progress, .art-setting, .art-contextmenu, .bgmi-quality-selector, button, [role="button"], input, select, textarea'
+          '.art-controls, .art-control, .art-progress, .art-setting, .art-settings, .art-contextmenu, .bgmi-quality-selector, button, [role="button"], [role="menu"], [role="menuitem"], input, select, textarea'
         )
       );
     };
@@ -1093,6 +1093,9 @@ export default function VideoPlayer({
       }
     };
     const handlePlayerClickCapture = (event: MouseEvent) => {
+      if (isGestureBlockedTarget(event.target)) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || !target.matches('.art-video-player, .art-player, .art-mask, video')) return;
       if (Date.now() < suppressClickUntil) {
         event.preventDefault();
         event.stopImmediatePropagation();
